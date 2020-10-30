@@ -27,8 +27,6 @@ impl<'a> FileIngester<'a> {
     pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
         for line in self.reader.take().unwrap().lines() {
             if let Ok(line) = line {
-                let line_copy = line.clone();
-
                 let result = match &statement {
                     Statement::Select(select_statement) => {
                         self.process_engine.process_select(&select_statement, line)
@@ -39,7 +37,7 @@ impl<'a> FileIngester<'a> {
                 };
 
                 if let Some(result_row) = result? {
-                    self.print_result(line_copy, result_row);
+                    self.print_result(result_row);
                 }
             } else {
                 break;
@@ -57,7 +55,7 @@ impl<'a> FileIngester<'a> {
         self.process(Statement::Aggregate(aggregate_statement))
     }
 
-    fn print_result(&self, line: String, result_row: ResultRow) {
+    fn print_result(&self, result_row: ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
         for row in result_row.data {
             let columns = result_row.columns

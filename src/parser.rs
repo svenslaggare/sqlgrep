@@ -16,21 +16,8 @@ pub enum Keyword {
     Group,
     By,
     As,
-}
-
-lazy_static! {
-    static ref KEYWORDS: HashMap<String, Keyword> = HashMap::from_iter(
-        vec![
-            ("select".to_owned(), Keyword::Select),
-            ("from".to_owned(), Keyword::From),
-            ("where".to_owned(), Keyword::Where),
-            ("group".to_owned(), Keyword::Group),
-            ("by".to_owned(), Keyword::By),
-            ("as".to_owned(), Keyword::As),
-        ].into_iter()
-    );
-
-    static ref TWO_CHAR_OPERATORS: HashSet<char> = HashSet::from_iter(vec!['<', '>', '!', '='].into_iter());
+    And,
+    Or,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -48,69 +35,7 @@ impl std::fmt::Display for Operator {
     }
 }
 
-pub struct BinaryOperator {
-    pub precedence: i32
-}
-
-impl BinaryOperator {
-    fn new(precedence: i32)-> BinaryOperator {
-        BinaryOperator {
-            precedence
-        }
-    }
-}
-
-pub struct BinaryOperators {
-    operators: HashMap<Operator, BinaryOperator>
-}
-
-impl BinaryOperators {
-    pub fn new() -> BinaryOperators {
-        let mut operators = HashMap::new();
-
-        operators.insert(Operator::Single('^'), BinaryOperator::new(5));
-        operators.insert(Operator::Single('*'), BinaryOperator::new(5));
-        operators.insert(Operator::Single('/'), BinaryOperator::new(5));
-        operators.insert(Operator::Single('+'), BinaryOperator::new(4));
-        operators.insert(Operator::Single('-'), BinaryOperator::new(4));
-        operators.insert(Operator::Single('<'), BinaryOperator::new(3));
-        operators.insert(Operator::Dual('<', '='), BinaryOperator::new(3));
-        operators.insert(Operator::Single('>'), BinaryOperator::new(3));
-        operators.insert(Operator::Dual('>', '='), BinaryOperator::new(3));
-        operators.insert(Operator::Single('='), BinaryOperator::new(2));
-        operators.insert(Operator::Dual('!', '='), BinaryOperator::new(2));
-
-        BinaryOperators {
-            operators
-        }
-    }
-
-    pub fn get(&self, op: &Operator) -> Option<&BinaryOperator> {
-        self.operators.get(op)
-    }
-}
-
-pub struct UnaryOperators {
-    operators: HashSet<Operator>
-}
-
-impl UnaryOperators {
-    pub fn new() -> UnaryOperators {
-        let mut operators = HashSet::<Operator>::new();
-
-        operators.insert(Operator::Single('-'));
-
-        UnaryOperators {
-            operators
-        }
-    }
-
-    pub fn exists(&self, op: &Operator) -> bool {
-        self.operators.contains(op)
-    }
-}
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Int(i64),
     String(String),
@@ -124,6 +49,7 @@ pub enum Token {
     RightParentheses,
     Comma,
     SemiColon,
+    Colon,
     End
 }
 
@@ -148,6 +74,46 @@ impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum ParseExpressionTree {
+    Value(Value),
+    ColumnAccess(String),
+    BinaryOperator { operator: Operator, left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    UnaryOperator { operator: Operator, operand: Box<ParseExpressionTree>},
+    AndExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    OrExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    Call(String, Vec<ParseExpressionTree>)
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum ParseOperationTree {
+    Select {
+        projections: Vec<(Option<String>, ParseExpressionTree)>,
+        from: String,
+        filter: Option<ParseExpressionTree>,
+        group_by: Option<String>
+    }
+}
+
+pub type ParserResult<T> = Result<T, ParserError>;
+
+lazy_static! {
+    static ref KEYWORDS: HashMap<String, Keyword> = HashMap::from_iter(
+        vec![
+            ("select".to_owned(), Keyword::Select),
+            ("from".to_owned(), Keyword::From),
+            ("where".to_owned(), Keyword::Where),
+            ("group".to_owned(), Keyword::Group),
+            ("by".to_owned(), Keyword::By),
+            ("as".to_owned(), Keyword::As),
+            ("and".to_owned(), Keyword::And),
+            ("or".to_owned(), Keyword::Or),
+        ].into_iter()
+    );
+
+    static ref TWO_CHAR_OPERATORS: HashSet<char> = HashSet::from_iter(vec!['<', '>', '!', '='].into_iter());
 }
 
 pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
@@ -231,6 +197,8 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             tokens.push(Token::Comma);
         } else if current == ';' {
             tokens.push(Token::SemiColon);
+        } else if current == ':' {
+            tokens.push(Token::Colon);
         } else if current.is_whitespace() {
             // Skip
         } else {
@@ -388,24 +356,65 @@ fn test_tokenize8() {
     );
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub enum ParseExpressionTree {
-    Value(Value),
-    ColumnAccess(String),
-    BinaryOperator { operator: Operator, left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    UnaryOperator { operator: Operator, operand: Box<ParseExpressionTree>},
-    AndExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    OrExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    Call(String, Vec<ParseExpressionTree>)
+pub struct BinaryOperator {
+    pub precedence: i32
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub enum ParseOperationTree {
-    Select {
-        projections: Vec<(Option<String>, ParseExpressionTree)>,
-        from: String,
-        filter: Option<ParseExpressionTree>,
-        group_by: Option<String>
+impl BinaryOperator {
+    fn new(precedence: i32)-> BinaryOperator {
+        BinaryOperator {
+            precedence
+        }
+    }
+}
+
+pub struct BinaryOperators {
+    operators: HashMap<Operator, BinaryOperator>
+}
+
+impl BinaryOperators {
+    pub fn new() -> BinaryOperators {
+        let mut operators = HashMap::new();
+
+        operators.insert(Operator::Single('^'), BinaryOperator::new(5));
+        operators.insert(Operator::Single('*'), BinaryOperator::new(5));
+        operators.insert(Operator::Single('/'), BinaryOperator::new(5));
+        operators.insert(Operator::Single('+'), BinaryOperator::new(4));
+        operators.insert(Operator::Single('-'), BinaryOperator::new(4));
+        operators.insert(Operator::Single('<'), BinaryOperator::new(3));
+        operators.insert(Operator::Dual('<', '='), BinaryOperator::new(3));
+        operators.insert(Operator::Single('>'), BinaryOperator::new(3));
+        operators.insert(Operator::Dual('>', '='), BinaryOperator::new(3));
+        operators.insert(Operator::Single('='), BinaryOperator::new(2));
+        operators.insert(Operator::Dual('!', '='), BinaryOperator::new(2));
+
+        BinaryOperators {
+            operators
+        }
+    }
+
+    pub fn get(&self, op: &Operator) -> Option<&BinaryOperator> {
+        self.operators.get(op)
+    }
+}
+
+pub struct UnaryOperators {
+    operators: HashSet<Operator>
+}
+
+impl UnaryOperators {
+    pub fn new() -> UnaryOperators {
+        let mut operators = HashSet::<Operator>::new();
+
+        operators.insert(Operator::Single('-'));
+
+        UnaryOperators {
+            operators
+        }
+    }
+
+    pub fn exists(&self, op: &Operator) -> bool {
+        self.operators.contains(op)
     }
 }
 
@@ -415,8 +424,6 @@ pub struct Parser<'a> {
     binary_operators: &'a BinaryOperators,
     unary_operators: &'a UnaryOperators
 }
-
-pub type ParserResult<T> = Result<T, ParserError>;
 
 impl<'a> Parser<'a> {
     pub fn new(binary_operators: &'a BinaryOperators,
@@ -512,6 +519,7 @@ impl<'a> Parser<'a> {
             }
         }
 
+
         Ok(
             ParseOperationTree::Select {
                 projections,
@@ -541,7 +549,7 @@ impl<'a> Parser<'a> {
                 return Ok(lhs);
             }
 
-            let op = self.current_to_op()?;
+            let op = self.current().clone();
             self.next()?;
 
             let mut rhs = self.parse_unary_operator()?;
@@ -549,12 +557,23 @@ impl<'a> Parser<'a> {
                 rhs = self.parse_binary_operator_rhs(token_precedence + 1, rhs)?;
             }
 
-            lhs = ParseExpressionTree::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) };
+            match op {
+                Token::Operator(op) => {
+                    lhs = ParseExpressionTree::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) };
+                }
+                Token::Keyword(Keyword::And) => {
+                    lhs = ParseExpressionTree::AndExpression { left: Box::new(lhs), right: Box::new(rhs) };
+                }
+                Token::Keyword(Keyword::Or) => {
+                    lhs = ParseExpressionTree::OrExpression { left: Box::new(lhs), right: Box::new(rhs) };
+                }
+                _ => { return Err(ParserError::ExpectedOperator); }
+            }
         }
     }
 
     fn parse_primary_expression(&mut self) -> ParserResult<ParseExpressionTree> {
-        match self.current().clone() {
+        match self.current() {
             Token::Int(value) => {
                 let value = *value;
                 self.next()?;
@@ -674,14 +693,17 @@ impl<'a> Parser<'a> {
     }
 
     fn get_token_precedence(&self) -> Result<i32, ParserError> {
-        if let Token::Operator(op) = self.current() {
-            return match self.binary_operators.get(op) {
-                Some(bin_op) => Ok(bin_op.precedence),
-                None => Err(ParserError::NotDefinedBinaryOperator(op.clone()))
-            };
+        match self.current() {
+            Token::Operator(op) => {
+                match self.binary_operators.get(op) {
+                    Some(bin_op) => Ok(bin_op.precedence),
+                    None => Err(ParserError::NotDefinedBinaryOperator(op.clone()))
+                }
+            }
+            Token::Keyword(Keyword::And) => Ok(1),
+            Token::Keyword(Keyword::Or) => Ok(1),
+            _ => Ok(-1)
         }
-
-        Ok(-1)
     }
 }
 
@@ -706,7 +728,6 @@ fn test_advance_parser() {
     assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
     assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
 }
-
 
 #[test]
 fn test_parse_values() {
@@ -811,7 +832,6 @@ fn test_parse_expression1() {
     );
 }
 
-
 #[test]
 fn test_parse_expression2() {
     let binary_operators = BinaryOperators::new();
@@ -902,6 +922,32 @@ fn test_parse_expression4() {
                 ParseExpressionTree::ColumnAccess("a".to_string()),
             ]
         ),
+        tree
+    );
+}
+
+#[test]
+fn test_parse_expression5() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::True,
+            Token::Keyword(Keyword::And),
+            Token::False,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::AndExpression {
+            left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
+            right: Box::new(ParseExpressionTree::Value(Value::Bool(false)))
+        },
         tree
     );
 }
@@ -1020,7 +1066,7 @@ fn test_parse_select_and_filter2() {
 
 #[test]
 fn test_parse_select_and_filter3() {
-    let mut binary_operators = BinaryOperators::new();
+    let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
     let mut parser = Parser::new(

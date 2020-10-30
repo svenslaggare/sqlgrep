@@ -15,7 +15,7 @@ use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::ValueType;
 use crate::ingest::FileIngester;
 use crate::process_engine::ProcessEngine;
-use crate::parser::{ParserError, tokenize, Parser, BinaryOperators, UnaryOperators, ParserResult, ParseOperationTree};
+use crate::parser::{tokenize, Parser, BinaryOperators, UnaryOperators, ParserResult, ParseOperationTree};
 
 struct ReadLinePrompt {
     prompt: String

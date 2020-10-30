@@ -118,9 +118,19 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
                 _ => { return Err(ConvertParseTreeError::UndefinedOperator); }
             }
         }
-        ParseExpressionTree::UnaryOperator { .. } =>  Err(ConvertParseTreeError::UndefinedExpression),
-        ParseExpressionTree::AndExpression { .. } =>  Err(ConvertParseTreeError::UndefinedExpression),
-        ParseExpressionTree::OrExpression { .. } =>  Err(ConvertParseTreeError::UndefinedExpression),
+        ParseExpressionTree::UnaryOperator { .. } => Err(ConvertParseTreeError::UndefinedExpression),
+        ParseExpressionTree::AndExpression { left, right } => {
+            let left = Box::new(transform_expression(*left)?);
+            let right = Box::new(transform_expression(*right)?);
+
+            Ok(ExpressionTree::And { left, right })
+        }
+        ParseExpressionTree::OrExpression { left, right } => {
+            let left = Box::new(transform_expression(*left)?);
+            let right = Box::new(transform_expression(*right)?);
+
+            Ok(ExpressionTree::Or { left, right })
+        }
         ParseExpressionTree::Call(_, _) => Err(ConvertParseTreeError::UndefinedExpression)
     }
 }
