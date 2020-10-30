@@ -25,6 +25,9 @@ impl<'a> FileIngester<'a> {
     }
 
     pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
+        let mut print_only_last = false;
+        let mut last_result_raw = None;
+
         for line in self.reader.take().unwrap().lines() {
             if let Ok(line) = line {
                 let result = match &statement {
@@ -32,15 +35,25 @@ impl<'a> FileIngester<'a> {
                         self.process_engine.process_select(&select_statement, line)
                     }
                     Statement::Aggregate(aggregate_statement) => {
+                        print_only_last = true;
                         self.process_engine.process_aggregate(&aggregate_statement, line)
                     }
                 };
 
                 if let Some(result_row) = result? {
-                    self.print_result(result_row);
+                    if !print_only_last {
+                        self.print_result(&result_row);
+                    }
+                    last_result_raw = Some(result_row);
                 }
             } else {
                 break;
+            }
+        }
+
+        if print_only_last {
+            if let Some(result_row) = last_result_raw {
+                self.print_result(&result_row);
             }
         }
 
@@ -55,9 +68,9 @@ impl<'a> FileIngester<'a> {
         self.process(Statement::Aggregate(aggregate_statement))
     }
 
-    fn print_result(&self, result_row: ResultRow) {
+    fn print_result(&self, result_row: &ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
-        for row in result_row.data {
+        for row in &result_row.data {
             let columns = result_row.columns
                 .iter()
                 .enumerate()

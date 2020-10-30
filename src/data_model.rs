@@ -54,6 +54,8 @@ impl TableDefinition {
                 } else {
                     columns.push(Value::Null);
                 }
+            } else {
+                columns.push(Value::Null);
             }
         }
 
@@ -129,6 +131,58 @@ fn test_table_extract2() {
     let result = table_definition.extract("A: 4711");
     assert_eq!(Value::Int(4711), result.columns[0]);
     assert_eq!(Value::String("A".to_owned()), result.columns[1]);
+}
+
+#[test]
+fn test_table_extract3() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9]+)")],
+        vec![
+            ColumnDefinition::new("line", 1, "x", ValueType::Int)
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("B: aba");
+    assert!(!result.any_result());
+}
+
+#[test]
+fn test_table_extract_multiple1() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![
+            ("line1", "A: ([0-9]+)"),
+            ("line2", "B: ([a-z]+)")
+        ],
+        vec![
+            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::new("line2", 1, "y", ValueType::String)
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711");
+    assert_eq!(Value::Int(4711), result.columns[0]);
+    assert_eq!(Value::Null, result.columns[1]);
+}
+
+#[test]
+fn test_table_extract_multiple2() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![
+            ("line1", "A: ([0-9]+)"),
+            ("line2", "B: ([a-z]+)")
+        ],
+        vec![
+            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::new("line2", 1, "y", ValueType::String)
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711 B: aba");
+    assert_eq!(Value::Int(4711), result.columns[0]);
+    assert_eq!(Value::String("aba".to_owned()), result.columns[1]);
 }
 
 #[test]

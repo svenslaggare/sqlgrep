@@ -155,7 +155,7 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
 
             loop {
                 match char_iterator.peek() {
-                    Some(next) if next.is_alphanumeric() => {
+                    Some(next) if next.is_alphanumeric() || next == &'_' => {
                         identifier.push(char_iterator.next().unwrap());
                     }
                     _ => {
