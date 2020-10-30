@@ -114,9 +114,23 @@ fn test_ingest() {
     //     })
     // });
     //
+    // let result = ingester.process_aggregate(AggregateStatement {
+    //     aggregates: vec![
+    //         ("hour".to_owned(), Aggregate::GroupKey),
+    //         ("count".to_owned(), Aggregate::Count),
+    //         ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
+    //     ],
+    //     from: "connections".to_string(),
+    //     filter: Some(ExpressionTree::Compare {
+    //         left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
+    //         right: Box::new(ExpressionTree::Value(Value::Int(15))),
+    //         operator: CompareOperator::GreaterThanOrEqual
+    //     }),
+    //     group_by: "hour".to_owned()
+    // });
+
     let result = ingester.process_aggregate(AggregateStatement {
         aggregates: vec![
-            ("hour".to_owned(), Aggregate::GroupKey),
             ("count".to_owned(), Aggregate::Count),
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
         ],
@@ -126,8 +140,9 @@ fn test_ingest() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: "hour".to_owned()
+        group_by: None
     });
+
 
     // let result = ingester.process_select_group_by(AggregateStatement {
     //     aggregates: vec![

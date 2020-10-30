@@ -31,7 +31,7 @@ pub enum ExecutionError {
     Expression(EvaluationError),
     TableNotFound,
     ColumnNotFound,
-    Generic
+    GroupKeyNotAvailable
 }
 
 impl From<EvaluationError> for ExecutionError {

@@ -83,10 +83,19 @@ impl AggregateExecutionEngine {
                                                           aggregate_statement: &AggregateStatement,
                                                           row: &TColumnProvider,
                                                           expression_execution_engine: &ExpressionExecutionEngine<TColumnProvider>) -> ExecutionResult<()> {
-        let group = row.get(&aggregate_statement.group_by).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?;
+        let group = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
+            row.get(group_by).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?
+        } else {
+            Value::Null
+        };
+
         for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
             match aggregate.1 {
-                Aggregate::GroupKey => {}
+                Aggregate::GroupKey => {
+                    if aggregate_statement.group_by.is_none() {
+                        return Err(ExecutionError::GroupKeyNotAvailable);
+                    }
+                }
                 Aggregate::Count => {
                     *self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(0) += 1;
                 }
@@ -127,7 +136,7 @@ fn test_group_by_and_count() {
         ],
         from: "test".to_owned(),
         filter: None,
-        group_by: "x".to_string()
+        group_by: Some("x".to_string())
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -198,7 +207,7 @@ fn test_group_by_and_count_and_filter() {
                 operator: CompareOperator::GreaterThan
             }
         ),
-        group_by: "x".to_string()
+        group_by: Some("x".to_string())
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -244,7 +253,7 @@ fn test_group_by_and_max() {
         ],
         from: "test".to_owned(),
         filter: None,
-        group_by: "name".to_string()
+        group_by: Some("name".to_string())
     };
 
     for i in 1..6 {
@@ -299,7 +308,7 @@ fn test_group_by_and_count_and_max() {
         ],
         from: "test".to_owned(),
         filter: None,
-        group_by: "name".to_string()
+        group_by: Some("name".to_string())
     };
 
     for i in 1..6 {
@@ -342,4 +351,46 @@ fn test_group_by_and_count_and_max() {
     assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
     assert_eq!(Value::Int(1), result.data[1].columns[1]);
     assert_eq!(Value::Int(0), result.data[1].columns[2]);
+}
+
+#[test]
+fn test_count() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("count".to_owned(), Aggregate::Count)
+        ],
+        from: "test".to_owned(),
+        filter: None,
+        group_by: None
+    };
+
+    let column_values = vec![Value::Int(1000)];
+    let columns = create_test_columns(vec!["x"], &column_values);
+
+    for _ in 0..5 {
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(columns.clone())
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(1, result.data.len());
+    assert_eq!(Value::Int(6), result.data[0].columns[0]);
 }

@@ -130,5 +130,5 @@ pub struct AggregateStatement {
     pub aggregates: Vec<(String, Aggregate)>,
     pub from: String,
     pub filter: Option<ExpressionTree>,
-    pub group_by: String
+    pub group_by: Option<String>
 }
