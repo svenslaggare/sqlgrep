@@ -113,6 +113,7 @@ impl UnaryOperators {
 #[derive(Debug, PartialEq)]
 pub enum Token {
     Int(i64),
+    Null,
     Operator(Operator),
     Identifier(String),
     Keyword(Keyword),
@@ -166,6 +167,8 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
 
             if let Some(keyword) = KEYWORDS.get(&identifier.to_lowercase()) {
                 tokens.push(Token::Keyword(keyword.clone()));
+            } else if identifier.to_lowercase() == "null" {
+                tokens.push(Token::Null);
             } else {
                 tokens.push(Token::Identifier(identifier));
             }
@@ -472,6 +475,10 @@ impl<'a> Parser<'a> {
                 let value_copy = value.clone();
                 self.next()?;
                 Ok(ParseExpressionTree::Value(Value::Int(value_copy)))
+            }
+            Token::Null => {
+                self.next()?;
+                Ok(ParseExpressionTree::Value(Value::Null))
             }
             Token::Identifier(identifier) => self.parse_identifier_expression(identifier.clone()),
             Token::LeftParentheses => {
