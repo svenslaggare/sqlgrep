@@ -113,7 +113,10 @@ impl UnaryOperators {
 #[derive(Debug, PartialEq)]
 pub enum Token {
     Int(i64),
+    String(String),
     Null,
+    True,
+    False,
     Operator(Operator),
     Identifier(String),
     Keyword(Keyword),
@@ -149,7 +152,34 @@ impl std::fmt::Display for ParserError {
 pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
     let mut tokens = Vec::new();
     let mut char_iterator = text.chars().peekable();
+
+    let mut current_str: Option<String> = None;
+    let mut is_escaped = false;
     while let Some(current) = char_iterator.next() {
+        if current == '\\' {
+            is_escaped = true;
+            continue;
+        }
+
+        let is_string_start = current == '\'' && !is_escaped;
+        is_escaped = false;
+
+        if is_string_start {
+            if current_str.is_some() {
+                tokens.push(Token::String(current_str.unwrap()));
+                current_str = None;
+            } else {
+                current_str = Some(String::new());
+            }
+
+            continue;
+        } else {
+            if let Some(current_str) = current_str.as_mut() {
+                current_str.push(current);
+                continue;
+            }
+        }
+
         if current.is_alphabetic() {
             let mut identifier = String::new();
             identifier.push(current);
@@ -169,6 +199,10 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
                 tokens.push(Token::Keyword(keyword.clone()));
             } else if identifier.to_lowercase() == "null" {
                 tokens.push(Token::Null);
+            } else if identifier.to_lowercase() == "true" {
+                tokens.push(Token::True);
+            } else if identifier.to_lowercase() == "false" {
+                tokens.push(Token::False);
             } else {
                 tokens.push(Token::Identifier(identifier));
             }
@@ -301,6 +335,52 @@ fn test_tokenize5() {
             Token::Identifier("a".to_string()),
             Token::Operator(Operator::Dual('<', '=')),
             Token::Int(4),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize6() {
+    let tokens = tokenize("NULL true FALSE");
+    assert_eq!(
+        vec![
+            Token::Null,
+            Token::True,
+            Token::False,
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize7() {
+    let tokens = tokenize("x + 'test 4711.1337' + y");
+    assert_eq!(
+        vec![
+            Token::Identifier("x".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::String("test 4711.1337".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("y".to_owned()),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize8() {
+    let tokens = tokenize("x + 'test \\'4711\\'.1337' + y");
+    assert_eq!(
+        vec![
+            Token::Identifier("x".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::String("test '4711'.1337".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("y".to_owned()),
             Token::End
         ],
         tokens.unwrap()
@@ -472,13 +552,26 @@ impl<'a> Parser<'a> {
     fn parse_primary_expression(&mut self) -> ParserResult<ParseExpressionTree> {
         match self.current().clone() {
             Token::Int(value) => {
+                let value = *value;
+                self.next()?;
+                Ok(ParseExpressionTree::Value(Value::Int(value)))
+            }
+            Token::String(value) => {
                 let value_copy = value.clone();
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::Int(value_copy)))
+                Ok(ParseExpressionTree::Value(Value::String(value_copy)))
             }
             Token::Null => {
                 self.next()?;
                 Ok(ParseExpressionTree::Value(Value::Null))
+            }
+            Token::True => {
+                self.next()?;
+                Ok(ParseExpressionTree::Value(Value::Bool(true)))
+            }
+            Token::False => {
+                self.next()?;
+                Ok(ParseExpressionTree::Value(Value::Bool(false)))
             }
             Token::Identifier(identifier) => self.parse_identifier_expression(identifier.clone()),
             Token::LeftParentheses => {
@@ -608,6 +701,83 @@ fn test_advance_parser() {
     assert_eq!(&Token::Int(4), parser.next().unwrap());
     assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
     assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
+}
+
+
+#[test]
+fn test_parse_values() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let tree = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Int(4711),
+            Token::End
+        ]
+    ).parse_expression().unwrap();
+
+    assert_eq!(
+        ParseExpressionTree::Value(Value::Int(4711)),
+        tree
+    );
+
+    let tree = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Null,
+            Token::End
+        ]
+    ).parse_expression().unwrap();
+
+    assert_eq!(
+        ParseExpressionTree::Value(Value::Null),
+        tree
+    );
+
+    let tree = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::True,
+            Token::End
+        ]
+    ).parse_expression().unwrap();
+
+    assert_eq!(
+        ParseExpressionTree::Value(Value::Bool(true)),
+        tree
+    );
+
+    let tree = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::False,
+            Token::End
+        ]
+    ).parse_expression().unwrap();
+
+    assert_eq!(
+        ParseExpressionTree::Value(Value::Bool(false)),
+        tree
+    );
+
+    let tree = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::String("hello world!".to_owned()),
+            Token::End
+        ]
+    ).parse_expression().unwrap();
+
+    assert_eq!(
+        ParseExpressionTree::Value(Value::String("hello world!".to_owned())),
+        tree
+    );
 }
 
 #[test]

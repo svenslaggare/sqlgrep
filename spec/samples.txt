@@ -1,0 +1,5 @@
+SELECT hostname, COUNT() as count FROM connections GROUP BY hostname;
+SELECT ip FROM connections WHERE day >= 15;
+SELECT ip, day, hostname FROM connections WHERE hostname != NULL
+SELECT ip, day FROM connections WHERE hostname = 'aml-sfh-3310b.adsl.wanadoo.nl'
+SELECT ip, day, hostname FROM connections WHERE hostname != 'aml-sfh-3310b.adsl.wanadoo.nl'
