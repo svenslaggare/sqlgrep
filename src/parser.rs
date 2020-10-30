@@ -65,7 +65,9 @@ pub enum ParserError {
     NotDefinedBinaryOperator(Operator),
     NotDefinedUnaryOperator(Operator),
     ExpectedIdentifier,
+    ExpectedString,
     ExpectedOperator,
+    ExpectedColon,
     ReachedEndOfTokens,
     TooManyTokens
 }
@@ -91,7 +93,7 @@ pub enum ParseExpressionTree {
 pub enum ParseOperationTree {
     Select {
         projections: Vec<(Option<String>, ParseExpressionTree)>,
-        from: String,
+        from: (String, Option<String>),
         filter: Option<ParseExpressionTree>,
         group_by: Option<String>
     }
@@ -486,6 +488,18 @@ impl<'a> Parser<'a> {
         }
 
         let table_name = self.consume_identifier()?;
+        let mut filename = None;
+        if self.current() == &Token::Colon {
+            self.next()?;
+
+            if self.current() != &Token::Colon {
+                return Err(ParserError::ExpectedColon);
+            }
+
+            self.next()?;
+            filename = Some(self.consume_string()?);
+        }
+
         let mut filter = None;
         let mut group_by = None;
 
@@ -523,7 +537,7 @@ impl<'a> Parser<'a> {
         Ok(
             ParseOperationTree::Select {
                 projections,
-                from: table_name,
+                from: (table_name, filename),
                 filter,
                 group_by
             }
@@ -668,6 +682,16 @@ impl<'a> Parser<'a> {
             Ok(identifier)
         } else {
             Err(ParserError::ExpectedIdentifier)
+        }
+    }
+
+    fn consume_string(&mut self) -> ParserResult<String> {
+        if let Token::String(string) = self.current() {
+            let string = string.clone();
+            self.next()?;
+            Ok(string)
+        } else {
+            Err(ParserError::ExpectedString)
         }
     }
 
@@ -974,7 +998,7 @@ fn test_parse_select1() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
-            from: "test".to_string(),
+            from: ("test".to_string(), None),
             filter: None,
             group_by: None
         },
@@ -1008,7 +1032,7 @@ fn test_parse_select_and_filter1() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
-            from: "test".to_string(),
+            from: ("test".to_string(), None),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
                     operator: Operator::Single('>'),
@@ -1050,7 +1074,7 @@ fn test_parse_select_and_filter2() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![(Some("xxx".to_owned()), ParseExpressionTree::ColumnAccess("x".to_owned()))],
-            from: "test".to_string(),
+            from: ("test".to_string(), None),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
                     operator: Operator::Single('>'),
@@ -1093,7 +1117,7 @@ fn test_parse_select_and_filter3() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![(None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))],
-            from: "test".to_string(),
+            from: ("test".to_string(), None),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
                     operator: Operator::Single('>'),
@@ -1101,6 +1125,39 @@ fn test_parse_select_and_filter3() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
+            group_by: None
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_with_filename() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Colon,
+            Token::Colon,
+            Token::String("test.log".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            from: ("test".to_string(), Some("test.log".to_owned())),
+            filter: None,
             group_by: None
         },
         tree
@@ -1136,7 +1193,7 @@ fn test_parse_select_group_by1() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
-            from: "test".to_string(),
+            from: ("test".to_string(), None),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
                     operator: Operator::Single('>'),
@@ -1174,7 +1231,45 @@ fn test_parse_str1() {
                 (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
                 (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))
             ],
-            from: "test".to_string(),
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Dual('>', '='),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
+                }
+            ),
+            group_by: Some("x".to_owned())
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_str2() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let tokens = tokenize("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE x >= 13 GROUP BY x");
+    assert!(tokens.is_ok());
+
+    let tokens = tokens.unwrap();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        tokens
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![
+                (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
+                (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))
+            ],
+            from: ("test".to_string(), Some("/haha/test.log".to_owned())),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
                     operator: Operator::Dual('>', '='),

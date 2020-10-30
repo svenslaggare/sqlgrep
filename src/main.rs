@@ -96,7 +96,7 @@ fn main() {
 
         let statement = statement.unwrap();
         let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
-        if let Err(result) = ingester.process(statement) {
+        if let Err(result) = ingester.process(statement.statement) {
             println!("{}", result);
         }
     }
