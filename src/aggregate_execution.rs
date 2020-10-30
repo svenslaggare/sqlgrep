@@ -100,12 +100,12 @@ impl AggregateExecutionEngine {
                     *self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(0) += 1;
                 }
                 Aggregate::Min(ref expression) => {
-                    let column_value = expression_execution_engine.evaluate(expression)?.int().unwrap();
+                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
                     let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(0);
                     *entry = (*entry).min(column_value);
                 }
                 Aggregate::Max(ref expression) => {
-                    let column_value = expression_execution_engine.evaluate(expression)?.int().unwrap();
+                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
                     let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(0);
                     *entry = (*entry).max(column_value);
                 }
