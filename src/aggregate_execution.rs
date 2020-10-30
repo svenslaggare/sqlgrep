@@ -32,7 +32,7 @@ impl AggregateExecutionEngine {
         }
 
         self.update_aggregates(aggregate_statement, &row, &expression_execution_engine)?;
-        self.create_aggregate_result(aggregate_statement).map(|result| Some(result))
+        self.execute_result_only(aggregate_statement).map(|result| Some(result))
     }
 
     fn update_aggregates<TColumnProvider: ColumnProvider>(&mut self,
@@ -71,7 +71,7 @@ impl AggregateExecutionEngine {
         Ok(())
     }
 
-    fn create_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+    pub fn execute_result_only(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         let mut result_rows_by_column = Vec::new();
         let mut columns = Vec::new();
 

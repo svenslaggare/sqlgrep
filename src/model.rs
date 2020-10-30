@@ -84,7 +84,7 @@ impl ValueType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CompareOperator {
     Equal,
     NotEqual,
@@ -94,7 +94,7 @@ pub enum CompareOperator {
     LessThanOrEqual
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ArithmeticOperator {
     Add,
     Subtract,
@@ -102,7 +102,7 @@ pub enum ArithmeticOperator {
     Divide
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
@@ -112,7 +112,7 @@ pub enum ExpressionTree {
     Arithmetic { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: ArithmeticOperator }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Aggregate {
     GroupKey,
     Count,
@@ -131,4 +131,25 @@ pub struct AggregateStatement {
     pub from: String,
     pub filter: Option<ExpressionTree>,
     pub group_by: Option<String>
+}
+
+pub enum Statement {
+    Select(SelectStatement),
+    Aggregate(AggregateStatement)
+}
+
+impl Statement {
+    pub fn extract_select(self) -> Option<SelectStatement> {
+        match self {
+            Statement::Select(statement) => Some(statement),
+            _ => None
+        }
+    }
+
+    pub fn extract_aggregate(self) -> Option<AggregateStatement> {
+        match self {
+            Statement::Aggregate(statement) => Some(statement),
+            _ => None
+        }
+    }
 }

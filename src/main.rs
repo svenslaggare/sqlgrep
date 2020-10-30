@@ -4,6 +4,8 @@ mod expression_execution;
 mod data_model;
 mod select_execution;
 mod aggregate_execution;
+mod parser;
+mod parse_tree_converter;
 mod process_engine;
 mod ingest;
 
