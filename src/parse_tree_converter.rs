@@ -17,7 +17,7 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, Conver
     match tree {
         ParseOperationTree::Select { projections, from, filter, group_by } => {
             if let Some(group_by) = group_by {
-                return create_aggregate_statement(projections, from, filter, Some(group_by));
+                create_aggregate_statement(projections, from, filter, Some(group_by))
             } else {
                 let any_aggregates = projections.iter().any(|(_, projection)| {
                     match projection {
@@ -44,15 +44,13 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, Conver
                         filter: transformed_filter
                     };
 
-                    return Ok(Statement::Select(select_statement));
+                    Ok(Statement::Select(select_statement))
                 } else {
-                    return create_aggregate_statement(projections, from, filter, None);
+                    create_aggregate_statement(projections, from, filter, None)
                 }
             }
         }
     }
-
-    return Err(ConvertParseTreeError::UndefinedStatement);
 }
 
 fn create_aggregate_statement(projections: Vec<(String, ParseExpressionTree)>,

@@ -7,6 +7,7 @@ use std::fmt::Formatter;
 use lazy_static::lazy_static;
 
 use crate::model::Value;
+use std::string::ParseError;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -90,17 +91,15 @@ impl BinaryOperators {
     }
 }
 
-type UnaryOperator = ();
-
 pub struct UnaryOperators {
-    operators: HashMap<Operator, UnaryOperator>
+    operators: HashSet<Operator>
 }
 
 impl UnaryOperators {
     pub fn new() -> UnaryOperators {
-        let mut operators = HashMap::<Operator, UnaryOperator>::new();
+        let mut operators = HashSet::<Operator>::new();
 
-        operators.insert(Operator::Single('-'), ());
+        operators.insert(Operator::Single('-'));
 
         UnaryOperators {
             operators
@@ -108,11 +107,7 @@ impl UnaryOperators {
     }
 
     pub fn exists(&self, op: &Operator) -> bool {
-        self.operators.contains_key(op)
-    }
-
-    pub fn get(&self, op: &Operator) -> Option<&UnaryOperator> {
-        self.operators.get(op)
+        self.operators.contains(op)
     }
 }
 
@@ -128,7 +123,27 @@ pub enum Token {
     End
 }
 
-type ParserError = String;
+#[derive(Debug, PartialEq, Clone)]
+pub enum ParserError {
+    IntConvertError,
+    ExpectedKeyword(Keyword),
+    ExpectedAnyKeyword(Vec<Keyword>),
+    ExpectedRightParentheses,
+    ExpectedExpression,
+    ExpectedArgumentListContinuation,
+    NotDefinedBinaryOperator(Operator),
+    NotDefinedUnaryOperator(Operator),
+    ExpectedIdentifier,
+    ExpectedOperator,
+    ReachedEndOfTokens,
+    TooManyTokens
+}
+
+impl std::fmt::Display for ParserError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
     let mut tokens = Vec::new();
@@ -169,7 +184,7 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
                 };
             }
 
-            tokens.push(Token::Int(i64::from_str(&number).map_err(|err| format!("{}", err))?));
+            tokens.push(Token::Int(i64::from_str(&number).map_err(|_err| ParserError::IntConvertError)?));
         } else if current == '(' {
             tokens.push(Token::LeftParentheses);
         } else if current == ')' {
@@ -336,11 +351,11 @@ impl<'a> Parser<'a> {
             Token::Keyword(Keyword::Select) => {
                 self.parse_select()
             }
-            _=> { return Err("Expected: SELECT.".to_owned()); }
+            _=> { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Select])); }
         };
 
         if (self.index as usize) + 1 != self.tokens.len() {
-            Err("Too many tokens.".to_string())
+            Err(ParserError::TooManyTokens)
         } else {
             operation
         }
@@ -384,14 +399,14 @@ impl<'a> Parser<'a> {
                     Token::Keyword(Keyword::Group) => {
                         self.next()?;
                         if self.current() != &Token::Keyword(Keyword::By) {
-                            return Err("Expected 'BY'.".to_owned());
+                            return Err(ParserError::ExpectedKeyword(Keyword::By));
                         }
 
                         self.next()?;
 
                         group_by = Some(self.consume_identifier()?);
                     }
-                    _ => { return Err("Expected WHERE or GROUP BY clause.".to_owned()); }
+                    _ => { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Where, Keyword::Group])); }
                 }
 
                 if self.current() == &Token::End {
@@ -455,13 +470,13 @@ impl<'a> Parser<'a> {
 
                 match self.current() {
                     Token::RightParentheses => {},
-                    _ => return Err("Expected ')'.".to_string())
+                    _ => return Err(ParserError::ExpectedRightParentheses)
                 }
 
                 self.next()?;
                 expression
             }
-            _ => Err("Expected an expression.".to_string())
+            _ => Err(ParserError::ExpectedExpression)
         }
     }
 
@@ -484,7 +499,7 @@ impl<'a> Parser<'a> {
                     match self.current() {
                         Token::RightParentheses => { break; }
                         Token::Comma => {}
-                        _ => return Err("Expected ')' or ',' in argument list.".to_string())
+                        _ => return Err(ParserError::ExpectedArgumentListContinuation)
                     }
 
                     self.next()?;
@@ -507,7 +522,7 @@ impl<'a> Parser<'a> {
 
         let operand = self.parse_unary_operator()?;
         if !self.unary_operators.exists(&op) {
-            return Err(format!("'{}' is not a defined unary operator.", op));
+            return Err(ParserError::NotDefinedUnaryOperator(op));
         }
 
         Ok(ParseExpressionTree::UnaryOperator { operator: op, operand: Box::new(operand) })
@@ -519,7 +534,7 @@ impl<'a> Parser<'a> {
             self.next()?;
             Ok(identifier)
         } else {
-            Err("Expected identifier.".to_owned())
+            Err(ParserError::ExpectedIdentifier)
         }
     }
 
@@ -530,7 +545,7 @@ impl<'a> Parser<'a> {
     fn next(&mut self) -> Result<&Token, ParserError> {
         self.index += 1;
         if self.index >= self.tokens.len() as isize {
-            return Err("Reached end of tokens.".to_string());
+            return Err(ParserError::ReachedEndOfTokens);
         }
 
         Ok(&self.tokens[self.index as usize])
@@ -540,7 +555,7 @@ impl<'a> Parser<'a> {
         if let Token::Operator(op) = self.current() {
             Ok(*op)
         } else {
-            Err("Not an operator.".to_string())
+            Err(ParserError::ExpectedOperator)
         }
     }
 
@@ -548,7 +563,7 @@ impl<'a> Parser<'a> {
         if let Token::Operator(op) = self.current() {
             return match self.binary_operators.get(op) {
                 Some(bin_op) => Ok(bin_op.precedence),
-                None => Err(format!("'{}' is not a defined binary operator.", op))
+                None => Err(ParserError::NotDefinedBinaryOperator(op.clone()))
             };
         }
 
@@ -574,8 +589,8 @@ fn test_advance_parser() {
     assert_eq!(&Token::Identifier("a".to_string()), parser.next().unwrap());
     assert_eq!(&Token::Operator(Operator::Single('+')), parser.next().unwrap());
     assert_eq!(&Token::Int(4), parser.next().unwrap());
-    assert_eq!(Err("Reached end of tokens.".to_string()), parser.next());
-    assert_eq!(Err("Reached end of tokens.".to_string()), parser.next());
+    assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
+    assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
 }
 
 #[test]
