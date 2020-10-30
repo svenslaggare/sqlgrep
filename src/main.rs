@@ -88,15 +88,17 @@ fn main() {
 
         let parse_tree = parse_tree.unwrap();
 
-        let statement = parse_tree_converter::transform_statement(parse_tree);
-        if let Err(err) = statement {
+        let parsed_statement = parse_tree_converter::transform_statement(parse_tree);
+        if let Err(err) = parsed_statement {
             println!("{}", err);
             continue;
         }
 
-        let statement = statement.unwrap();
-        let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
-        if let Err(result) = ingester.process(statement.statement) {
+        let parsed_statement = parsed_statement.unwrap();
+        let filename = parsed_statement.filename.unwrap_or("testdata/test1.log".to_owned());
+
+        let mut ingester = FileIngester::new(&filename, ProcessEngine::new(&tables)).unwrap();
+        if let Err(result) = ingester.process(parsed_statement.statement) {
             println!("{}", result);
         }
     }
