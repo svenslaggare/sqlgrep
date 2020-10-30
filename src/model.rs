@@ -121,7 +121,7 @@ pub enum Aggregate {
 }
 
 pub struct SelectStatement {
-    pub projection: Vec<(String, ExpressionTree)>,
+    pub projections: Vec<(String, ExpressionTree)>,
     pub from: String,
     pub filter: Option<ExpressionTree>
 }

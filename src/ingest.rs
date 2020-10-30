@@ -95,7 +95,7 @@ fn test_ingest1() {
 
     let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
     let result = ingester.process_select(SelectStatement {
-        projection: vec![
+        projections: vec![
             // ("input".to_owned(), ExpressionTree::ColumnAccess("input".to_owned())),
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
             ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
@@ -116,6 +116,7 @@ fn test_ingest1() {
 
     if let Err(err) = result {
         println!("{:?}", err);
+        assert!(false);
     }
 }
 
@@ -160,6 +161,7 @@ fn test_ingest2() {
 
     if let Err(err) = result {
         println!("{:?}", err);
+        assert!(false);
     }
 }
 
@@ -199,8 +201,10 @@ fn test_ingest3() {
         }),
         group_by: None
     });
+
     if let Err(err) = result {
         println!("{:?}", err);
+        assert!(false);
     }
 }
 
@@ -240,5 +244,6 @@ fn test_ingest4() {
 
     if let Err(err) = result {
         println!("{:?}", err);
+        assert!(false);
     }
 }

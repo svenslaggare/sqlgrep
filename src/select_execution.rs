@@ -29,13 +29,13 @@ impl<TColumnProvider> SelectExecutionEngine<TColumnProvider> where TColumnProvid
         if valid {
             let mut result_columns = Vec::new();
 
-            for (_, projection) in &select_statement.projection {
+            for (_, projection) in &select_statement.projections {
                 result_columns.push(expression_execution_engine.evaluate(projection)?);
             }
 
             let result_row = ResultRow {
                 data: vec![Row { columns: result_columns }],
-                columns: select_statement.projection.iter().map(|projection| projection.0.clone()).collect()
+                columns: select_statement.projections.iter().map(|projection| projection.0.clone()).collect()
             };
 
             Ok(Some(result_row))
@@ -58,7 +58,7 @@ fn test_project1() {
 
     let result = select_execution_engine.execute(
         &SelectStatement {
-            projection: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
             filter: None,
         },
@@ -87,7 +87,7 @@ fn test_project2() {
 
     let result = select_execution_engine.execute(
         &SelectStatement {
-            projection: vec![
+            projections: vec![
                 (
                     "p0".to_owned(),
                     ExpressionTree::Arithmetic {
@@ -125,7 +125,7 @@ fn test_project3() {
 
     let result = select_execution_engine.execute(
         &SelectStatement {
-            projection: vec![
+            projections: vec![
                 (
                     "p0".to_owned(),
                     ExpressionTree::ColumnAccess("x".to_owned())
@@ -168,7 +168,7 @@ fn test_filter1() {
 
     let result = select_execution_engine.execute(
         &SelectStatement {
-            projection: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
             filter: Some(
                 ExpressionTree::Compare {
@@ -200,7 +200,7 @@ fn test_filter2() {
 
     let result = select_execution_engine.execute(
         &SelectStatement {
-            projection: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
             filter: Some(
                 ExpressionTree::Compare {
