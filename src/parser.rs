@@ -135,6 +135,7 @@ pub enum ParserError {
     ExpectedRightParentheses,
     ExpectedExpression,
     ExpectedArgumentListContinuation,
+    ExpectedProjectionContinuation,
     NotDefinedBinaryOperator(Operator),
     NotDefinedUnaryOperator(Operator),
     ExpectedIdentifier,
@@ -469,8 +470,11 @@ impl<'a> Parser<'a> {
 
             match self.current() {
                 Token::Comma => { self.next()?; }
-                Token::Keyword(Keyword::From) => { self.next()?; break; }
-                _ => {}
+                Token::Keyword(Keyword::From) => {
+                    self.next()?;
+                    break;
+                }
+                _ => { return Err(ParserError::ExpectedProjectionContinuation); }
             }
         }
 
