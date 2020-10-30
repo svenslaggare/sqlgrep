@@ -32,7 +32,46 @@ impl AggregateExecutionEngine {
         }
 
         self.update_aggregates(aggregate_statement, &row, &expression_execution_engine)?;
+        self.create_aggregate_result(aggregate_statement).map(|result| Some(result))
+    }
 
+    fn update_aggregates<TColumnProvider: ColumnProvider>(&mut self,
+                                                          aggregate_statement: &AggregateStatement,
+                                                          row: &TColumnProvider,
+                                                          expression_execution_engine: &ExpressionExecutionEngine<TColumnProvider>) -> ExecutionResult<()> {
+        let group = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
+            row.get(group_by).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?
+        } else {
+            Value::Null
+        };
+
+        for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
+            match aggregate.1 {
+                Aggregate::GroupKey => {
+                    if aggregate_statement.group_by.is_none() {
+                        return Err(ExecutionError::GroupKeyNotAvailable);
+                    }
+                }
+                Aggregate::Count => {
+                    *self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(0) += 1;
+                }
+                Aggregate::Min(ref expression) => {
+                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
+                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
+                    *entry = (*entry).min(column_value);
+                }
+                Aggregate::Max(ref expression) => {
+                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
+                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
+                    *entry = (*entry).max(column_value);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         let mut result_rows_by_column = Vec::new();
         let mut columns = Vec::new();
 
@@ -70,49 +109,11 @@ impl AggregateExecutionEngine {
         }
 
         Ok(
-            Some(
-                ResultRow {
-                    data: result_rows,
-                    columns
-                }
-            )
-        )
-    }
-
-    fn update_aggregates<TColumnProvider: ColumnProvider>(&mut self,
-                                                          aggregate_statement: &AggregateStatement,
-                                                          row: &TColumnProvider,
-                                                          expression_execution_engine: &ExpressionExecutionEngine<TColumnProvider>) -> ExecutionResult<()> {
-        let group = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
-            row.get(group_by).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?
-        } else {
-            Value::Null
-        };
-
-        for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
-            match aggregate.1 {
-                Aggregate::GroupKey => {
-                    if aggregate_statement.group_by.is_none() {
-                        return Err(ExecutionError::GroupKeyNotAvailable);
-                    }
-                }
-                Aggregate::Count => {
-                    *self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(0) += 1;
-                }
-                Aggregate::Min(ref expression) => {
-                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
-                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
-                    *entry = (*entry).min(column_value);
-                }
-                Aggregate::Max(ref expression) => {
-                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
-                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
-                    *entry = (*entry).max(column_value);
-                }
+            ResultRow {
+                data: result_rows,
+                columns
             }
-        }
-
-        Ok(())
+        )
     }
 }
 
