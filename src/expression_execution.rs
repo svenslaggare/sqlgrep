@@ -9,6 +9,12 @@ pub enum EvaluationError {
     UndefinedOperation
 }
 
+impl std::fmt::Display for EvaluationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 pub type EvaluationResult = Result<Value, EvaluationError>;
 
 pub struct ExpressionExecutionEngine<'a, T: ColumnProvider> {

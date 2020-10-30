@@ -1,7 +1,7 @@
 use std::io::{BufReader, BufRead};
 use std::fs::File;
 
-use crate::model::{CompareOperator, Aggregate, AggregateStatement};
+use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
 use crate::process_engine::{ProcessEngine};
@@ -24,26 +24,21 @@ impl<'a> FileIngester<'a> {
         )
     }
 
-    pub fn process_select(&mut self, select_statement: SelectStatement) -> ExecutionResult<()> {
+    pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
         for line in self.reader.take().unwrap().lines() {
             if let Ok(line) = line {
                 let line_copy = line.clone();
-                if let Some(result_row) = self.process_engine.process_select(&select_statement, line)? {
-                    self.print_result(line_copy, result_row);
-                }
-            } else {
-                 break;
-            }
-        }
 
-        Ok(())
-    }
+                let result = match &statement {
+                    Statement::Select(select_statement) => {
+                        self.process_engine.process_select(&select_statement, line)
+                    }
+                    Statement::Aggregate(aggregate_statement) => {
+                        self.process_engine.process_aggregate(&aggregate_statement, line)
+                    }
+                };
 
-    pub fn process_aggregate(&mut self, aggregate_statement: AggregateStatement) -> ExecutionResult<()> {
-        for line in self.reader.take().unwrap().lines() {
-            if let Ok(line) = line {
-                let line_copy = line.clone();
-                if let Some(result_row) = self.process_engine.process_aggregate(&aggregate_statement, line)? {
+                if let Some(result_row) = result? {
                     self.print_result(line_copy, result_row);
                 }
             } else {
@@ -54,19 +49,28 @@ impl<'a> FileIngester<'a> {
         Ok(())
     }
 
-    fn print_result(&self, line: String, result_row: ResultRow) {
-        println!("{}", line);
-        let mut is_first = true;
-        for row in result_row.data {
-            if !is_first {
-                println!();
-            } else {
-                is_first = false;
-            }
+    pub fn process_select(&mut self, select_statement: SelectStatement) -> ExecutionResult<()> {
+        self.process(Statement::Select(select_statement))
+    }
 
-            for (projection_index, projection_name) in result_row.columns.iter().enumerate() {
-                println!("\t * {}: {}", projection_name, row.columns[projection_index]);
-            }
+    pub fn process_aggregate(&mut self, aggregate_statement: AggregateStatement) -> ExecutionResult<()> {
+        self.process(Statement::Aggregate(aggregate_statement))
+    }
+
+    fn print_result(&self, line: String, result_row: ResultRow) {
+        let multiple_rows = result_row.data.len() > 1;
+        for row in result_row.data {
+            let columns = result_row.columns
+                .iter()
+                .enumerate()
+                .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
+                .collect::<Vec<_>>();
+
+            println!("{}", columns.join(", "));
+        }
+
+        if multiple_rows {
+            println!();
         }
     }
 }

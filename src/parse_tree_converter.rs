@@ -1,5 +1,6 @@
 use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement};
+use std::fmt::Formatter;
 
 #[derive(Debug)]
 pub enum ConvertParseTreeError {
@@ -11,6 +12,12 @@ pub enum ConvertParseTreeError {
     UndefinedAggregate,
     UndefinedStatement,
     UndefinedExpression
+}
+
+impl std::fmt::Display for ConvertParseTreeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
 pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, ConvertParseTreeError> {
@@ -28,8 +35,16 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, Conver
 
                 if !any_aggregates {
                     let mut transformed_projections = Vec::new();
-                    for (name, tree) in projections {
-                        transformed_projections.push((name, transform_expression(tree)?));
+                    for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
+                        let expression = transform_expression(tree)?;
+
+                        let mut default_name = format!("p{}", projection_index);
+                        if let ExpressionTree::ColumnAccess(column) = &expression {
+                            default_name = column.clone();
+                        }
+
+                        let name = name.unwrap_or(default_name);
+                        transformed_projections.push((name, expression));
                     }
 
                     let transformed_filter = if let Some(filter) = filter {
@@ -53,14 +68,14 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, Conver
     }
 }
 
-fn create_aggregate_statement(projections: Vec<(String, ParseExpressionTree)>,
+fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionTree)>,
                               from: String,
                               filter: Option<ParseExpressionTree>,
                               group_by: Option<String>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
-    for (name, tree) in projections {
-        let (override_name, aggregate) = transform_aggregate(tree)?;
-        let name = override_name.unwrap_or(name);
+    for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
+        let (default_name, aggregate) = transform_aggregate(tree)?;
+        let name = name.or(default_name).unwrap_or(format!("p{}", projection_index));
 
         transformed_aggregates.push((name, aggregate));
     }
@@ -110,7 +125,7 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
     }
 }
 
-pub fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
+fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
     match tree {
         ParseExpressionTree::ColumnAccess(name) => Ok((Some(name), Aggregate::GroupKey)),
         ParseExpressionTree::Call(name, mut arguments) => {
@@ -157,7 +172,7 @@ fn transform_column_access(tree: ParseExpressionTree) -> Result<String, ConvertP
 #[test]
 fn test_select_statement1() {
     let tree = ParseOperationTree::Select {
-        projections: vec![("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
         from: "test".to_string(),
         filter: None,
         group_by: None
@@ -172,7 +187,7 @@ fn test_select_statement1() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.projections.len());
-    assert_eq!("p0", statement.projections[0].0.as_str());
+    assert_eq!("x", statement.projections[0].0.as_str());
     assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
 
     assert_eq!("test", statement.from);
@@ -181,7 +196,31 @@ fn test_select_statement1() {
 #[test]
 fn test_select_statement2() {
     let tree = ParseOperationTree::Select {
-        projections: vec![("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        projections: vec![(Some("x".to_owned()), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        from: "test".to_string(),
+        filter: None,
+        group_by: None
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("x", statement.projections[0].0.as_str());
+    assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
+
+    assert_eq!("test", statement.from);
+}
+
+#[test]
+fn test_select_statement3() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
         from: "test".to_string(),
         filter: Some(
             ParseExpressionTree::BinaryOperator {
@@ -202,7 +241,7 @@ fn test_select_statement2() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.projections.len());
-    assert_eq!("p0", statement.projections[0].0.as_str());
+    assert_eq!("x", statement.projections[0].0.as_str());
     assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
 
     assert_eq!("test", statement.from);
@@ -218,11 +257,11 @@ fn test_select_statement2() {
 }
 
 #[test]
-fn test_select_statement3() {
+fn test_select_statement4() {
     let tree = ParseOperationTree::Select {
         projections: vec![
             (
-                "p0".to_owned(),
+                None,
                 ParseExpressionTree::BinaryOperator {
                     operator: Operator::Single('*'),
                     left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
@@ -276,8 +315,8 @@ fn test_select_statement3() {
 fn test_aggregate_statement1() {
     let tree = ParseOperationTree::Select {
         projections: vec![
-            ("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned())),
-            ("p1".to_owned(), ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+            (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
+            (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
         ],
         from: "test".to_string(),
         filter: None,
@@ -308,8 +347,8 @@ fn test_aggregate_statement1() {
 fn test_aggregate_statement2() {
     let tree = ParseOperationTree::Select {
         projections: vec![
-            ("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned())),
-            ("p1".to_owned(), ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
+            (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
+            (None, ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
         ],
         from: "test".to_string(),
         filter: None,
@@ -339,7 +378,7 @@ fn test_aggregate_statement2() {
 fn test_aggregate_statement3() {
     let tree = ParseOperationTree::Select {
         projections: vec![
-            ("p0".to_owned(), ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
+            (None, ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
         ],
         from: "test".to_string(),
         filter: None,

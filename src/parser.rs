@@ -7,7 +7,6 @@ use std::fmt::Formatter;
 use lazy_static::lazy_static;
 
 use crate::model::Value;
-use std::string::ParseError;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -120,6 +119,7 @@ pub enum Token {
     LeftParentheses,
     RightParentheses,
     Comma,
+    SemiColon,
     End
 }
 
@@ -191,6 +191,8 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             tokens.push(Token::RightParentheses);
         } else if current == ',' {
             tokens.push(Token::Comma);
+        } else if current == ';' {
+            tokens.push(Token::SemiColon);
         } else if current.is_whitespace() {
             // Skip
         } else {
@@ -316,7 +318,7 @@ pub enum ParseExpressionTree {
 #[derive(PartialEq, Debug, Clone)]
 pub enum ParseOperationTree {
     Select {
-        projections: Vec<(String, ParseExpressionTree)>,
+        projections: Vec<(Option<String>, ParseExpressionTree)>,
         from: String,
         filter: Option<ParseExpressionTree>,
         group_by: Option<String>
@@ -354,6 +356,10 @@ impl<'a> Parser<'a> {
             _=> { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Select])); }
         };
 
+        if self.current() == &Token::SemiColon {
+            self.next()?;
+        }
+
         if (self.index as usize) + 1 != self.tokens.len() {
             Err(ParserError::TooManyTokens)
         } else {
@@ -366,12 +372,12 @@ impl<'a> Parser<'a> {
         self.next()?;
 
         loop {
-            let mut projection_name = format!("p{}", projections.len());
+            let mut projection_name = None;
             let projection = self.parse_expression_internal()?;
             match self.current() {
                 Token::Keyword(Keyword::As) => {
                     self.next()?;
-                    projection_name = self.consume_identifier()?;
+                    projection_name = Some(self.consume_identifier()?);
                 }
                 _ => {}
             }
@@ -405,6 +411,10 @@ impl<'a> Parser<'a> {
                         self.next()?;
 
                         group_by = Some(self.consume_identifier()?);
+                    },
+                    Token::SemiColon => {
+                        self.next()?;
+                        break;
                     }
                     _ => { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Where, Keyword::Group])); }
                 }
@@ -717,7 +727,7 @@ fn test_parse_expression4() {
 
 #[test]
 fn test_parse_select1() {
-    let mut binary_operators = BinaryOperators::new();
+    let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
     let mut parser = Parser::new(
@@ -736,7 +746,7 @@ fn test_parse_select1() {
 
     assert_eq!(
         ParseOperationTree::Select {
-            projections: vec![("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_string(),
             filter: None,
             group_by: None
@@ -747,7 +757,7 @@ fn test_parse_select1() {
 
 #[test]
 fn test_parse_select_and_filter1() {
-    let mut binary_operators = BinaryOperators::new();
+    let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
     let mut parser = Parser::new(
@@ -770,7 +780,7 @@ fn test_parse_select_and_filter1() {
 
     assert_eq!(
         ParseOperationTree::Select {
-            projections: vec![("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_string(),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
@@ -787,7 +797,7 @@ fn test_parse_select_and_filter1() {
 
 #[test]
 fn test_parse_select_and_filter2() {
-    let mut binary_operators = BinaryOperators::new();
+    let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
     let mut parser = Parser::new(
@@ -812,7 +822,7 @@ fn test_parse_select_and_filter2() {
 
     assert_eq!(
         ParseOperationTree::Select {
-            projections: vec![("xxx".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![(Some("xxx".to_owned()), ParseExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_string(),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
@@ -855,7 +865,7 @@ fn test_parse_select_and_filter3() {
 
     assert_eq!(
         ParseOperationTree::Select {
-            projections: vec![("p0".to_owned(), ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))],
+            projections: vec![(None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))],
             from: "test".to_string(),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
@@ -898,7 +908,7 @@ fn test_parse_select_group_by1() {
 
     assert_eq!(
         ParseOperationTree::Select {
-            projections: vec![("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_string(),
             filter: Some(
                 ParseExpressionTree::BinaryOperator {
@@ -934,8 +944,8 @@ fn test_parse_str1() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![
-                ("p0".to_owned(), ParseExpressionTree::ColumnAccess("x".to_owned())),
-                ("p1".to_owned(), ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))
+                (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
+                (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))
             ],
             from: "test".to_string(),
             filter: Some(
