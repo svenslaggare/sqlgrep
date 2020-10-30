@@ -58,6 +58,7 @@ impl AggregateExecutionEngine {
 
         let num_columns = result_rows_by_column.len();
         let num_rows = result_rows_by_column[0].len();
+
         let mut result_rows = Vec::new();
         for row_index in 0..num_rows {
             let mut result_columns = Vec::new();
@@ -284,4 +285,61 @@ fn test_group_by_and_max() {
 
     assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
     assert_eq!(Value::Int(0), result.data[1].columns[1]);
+}
+
+#[test]
+fn test_group_by_and_count_and_max() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("name".to_owned(), Aggregate::GroupKey),
+            ("count".to_owned(), Aggregate::Count),
+            ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())))
+        ],
+        from: "test".to_owned(),
+        filter: None,
+        group_by: "name".to_string()
+    };
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Int(i * 1000),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Int(0),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Int(5), result.data[0].columns[1]);
+    assert_eq!(Value::Int(5000), result.data[0].columns[2]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Int(1), result.data[1].columns[1]);
+    assert_eq!(Value::Int(0), result.data[1].columns[2]);
 }
