@@ -11,12 +11,12 @@ pub enum EvaluationError {
 
 pub type EvaluationResult = Result<Value, EvaluationError>;
 
-pub struct ExpressionExecutionEngine<T: ColumnProvider> {
-    column_access: T
+pub struct ExpressionExecutionEngine<'a, T: ColumnProvider> {
+    column_access: &'a T
 }
 
-impl<T: ColumnProvider> ExpressionExecutionEngine<T> {
-    pub fn new(column_access: T) -> ExpressionExecutionEngine<T> {
+impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
+    pub fn new(column_access: &T) -> ExpressionExecutionEngine<T> {
         ExpressionExecutionEngine {
             column_access
         }
@@ -102,7 +102,7 @@ fn test_evaluate_column() {
     let mut column_provider = TestColumnProvider::new();
     column_provider.add_column("x".to_owned(), Value::Int(1337));
 
-    let expression_execution_engine = ExpressionExecutionEngine::new(column_provider);
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
     assert_eq!(
         Ok(Value::Int(1337)),
@@ -119,7 +119,7 @@ fn test_evaluate_column() {
 fn test_evaluate_compare() {
     let column_provider = TestColumnProvider::new();
 
-    let expression_execution_engine = ExpressionExecutionEngine::new(column_provider);
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
     assert_eq!(
         Ok(Value::Bool(true)),
@@ -144,7 +144,7 @@ fn test_evaluate_compare() {
 fn test_evaluate_and() {
     let column_provider = TestColumnProvider::new();
 
-    let expression_execution_engine = ExpressionExecutionEngine::new(column_provider);
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
     assert_eq!(
         Ok(Value::Bool(true)),
@@ -183,7 +183,7 @@ fn test_evaluate_and() {
 fn test_evaluate_or() {
     let column_provider = TestColumnProvider::new();
 
-    let expression_execution_engine = ExpressionExecutionEngine::new(column_provider);
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
     assert_eq!(
         Ok(Value::Bool(true)),
@@ -222,7 +222,7 @@ fn test_evaluate_or() {
 fn test_arithmetic() {
     let column_provider = TestColumnProvider::new();
 
-    let expression_execution_engine = ExpressionExecutionEngine::new(column_provider);
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
     assert_eq!(
         Ok(Value::Int(5000)),
@@ -238,7 +238,7 @@ fn test_arithmetic() {
 fn test_arithmetic_fail() {
     let column_provider = TestColumnProvider::new();
 
-    let expression_execution_engine = ExpressionExecutionEngine::new(column_provider);
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
     assert_eq!(
         Err(EvaluationError::UndefinedOperation),

@@ -1,8 +1,7 @@
 use std::str::FromStr;
-use std::collections::HashMap;
 use std::fmt::Formatter;
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Hash, Ord)]
 pub enum Value {
     Null,
     Int(i64),
@@ -33,6 +32,13 @@ impl Value {
         match self {
             Value::Bool(value) => *value,
             _ => false,
+        }
+    }
+
+    pub fn int(&self) -> Option<i64> {
+        match self {
+            Value::Int(x) => Some(*x),
+            _ => None
         }
     }
 
@@ -106,19 +112,23 @@ pub enum ExpressionTree {
     Arithmetic { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: ArithmeticOperator }
 }
 
+#[derive(Debug)]
+pub enum Aggregate {
+    GroupKey,
+    Count,
+    Min(ExpressionTree),
+    Max(ExpressionTree)
+}
+
 pub struct SelectStatement {
     pub projection: Vec<(String, ExpressionTree)>,
     pub from: String,
     pub filter: Option<ExpressionTree>
 }
 
-impl SelectStatement {
-    pub fn create_projection_name_mapping(&self) -> HashMap<String, usize> {
-        let mut name_mapping = HashMap::new();
-        for (index, projection) in self.projection.iter().enumerate() {
-            name_mapping.insert(projection.0.clone(), index);
-        }
-
-        name_mapping
-    }
+pub struct AggregateStatement {
+    pub aggregates: Vec<(String, Aggregate)>,
+    pub from: String,
+    pub filter: Option<ExpressionTree>,
+    pub group_by: String
 }

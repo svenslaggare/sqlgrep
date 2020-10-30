@@ -1,31 +1,10 @@
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::marker::PhantomData;
 
 use crate::model::{SelectStatement, Value, ExpressionTree, ArithmeticOperator, CompareOperator};
-use crate::execution_model::{ColumnProvider, RowsProvider, HashMapRowsProvider, HashMapRefColumnProvider};
-use crate::expression_execution::{ExpressionExecutionEngine, EvaluationError};
+use crate::execution_model::{ColumnProvider, HashMapColumnProvider, ExecutionResult, ResultRow};
+use crate::expression_execution::{ExpressionExecutionEngine};
 use crate::data_model::Row;
-
-#[derive(Debug, PartialEq)]
-pub enum SelectExecutionError {
-    Expression(EvaluationError),
-    TableNotFound,
-    Generic
-}
-
-impl From<EvaluationError> for SelectExecutionError {
-    fn from(error: EvaluationError) -> Self {
-        SelectExecutionError::Expression(error)
-    }
-}
-
-pub struct RowsResult {
-    column_name_mapping: HashMap<String, usize>,
-    rows: Vec<Row>
-}
-
-pub type SelectExecutionResult<T> = Result<T, SelectExecutionError>;
 
 pub struct SelectExecutionEngine<TColumnProvider> where TColumnProvider: ColumnProvider {
     _phantom: PhantomData<TColumnProvider>
@@ -38,11 +17,11 @@ impl<TColumnProvider> SelectExecutionEngine<TColumnProvider> where TColumnProvid
         }
     }
 
-    pub fn execute(&self, select_statement: &SelectStatement, row: TColumnProvider) -> SelectExecutionResult<Option<Row>> {
-        let expression_engine = ExpressionExecutionEngine::new(row);
+    pub fn execute(&self, select_statement: &SelectStatement, row: TColumnProvider) -> ExecutionResult<Option<ResultRow>> {
+        let expression_execution_engine = ExpressionExecutionEngine::new(&row);
 
         let valid = if let Some(filter) = select_statement.filter.as_ref() {
-            expression_engine.evaluate(filter)?.bool()
+            expression_execution_engine.evaluate(filter)?.bool()
         } else {
             true
         };
@@ -51,10 +30,15 @@ impl<TColumnProvider> SelectExecutionEngine<TColumnProvider> where TColumnProvid
             let mut result_columns = Vec::new();
 
             for (_, projection) in &select_statement.projection {
-                result_columns.push(expression_engine.evaluate(projection)?);
+                result_columns.push(expression_execution_engine.evaluate(projection)?);
             }
 
-            Ok(Some(Row { columns: result_columns }))
+            let result_row = ResultRow {
+                data: vec![Row { columns: result_columns }],
+                columns: select_statement.projection.iter().map(|projection| projection.0.clone()).collect()
+            };
+
+            Ok(Some(result_row))
         } else {
             Ok(None)
         }
@@ -76,9 +60,9 @@ fn test_project1() {
         &SelectStatement {
             projection: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
-            filter: None
+            filter: None,
         },
-        HashMapRefColumnProvider::new(columns)
+        HashMapColumnProvider::new(columns)
     );
 
     assert!(result.is_ok());
@@ -87,7 +71,7 @@ fn test_project1() {
     assert!(result.is_some());
     let result = result.unwrap();
 
-    assert_eq!(Value::Int(1337), result.columns[0]);
+    assert_eq!(Value::Int(1337), result.data[0].columns[0]);
 }
 
 #[test]
@@ -114,9 +98,9 @@ fn test_project2() {
                 )
             ],
             from: "test".to_owned(),
-            filter: None
+            filter: None,
         },
-        HashMapRefColumnProvider::new(columns)
+        HashMapColumnProvider::new(columns)
     );
 
     assert!(result.is_ok());
@@ -125,7 +109,7 @@ fn test_project2() {
     assert!(result.is_some());
     let result = result.unwrap();
 
-    assert_eq!(Value::Int(2000), result.columns[0]);
+    assert_eq!(Value::Int(2000), result.data[0].columns[0]);
 }
 
 #[test]
@@ -156,9 +140,9 @@ fn test_project3() {
                 )
             ],
             from: "test".to_owned(),
-            filter: None
+            filter: None,
         },
-        HashMapRefColumnProvider::new(columns)
+        HashMapColumnProvider::new(columns)
     );
 
     assert!(result.is_ok());
@@ -167,8 +151,8 @@ fn test_project3() {
     assert!(result.is_some());
     let result = result.unwrap();
 
-    assert_eq!(Value::Int(1000), result.columns[0]);
-    assert_eq!(Value::Int(2000), result.columns[1]);
+    assert_eq!(Value::Int(1000), result.data[0].columns[0]);
+    assert_eq!(Value::Int(2000), result.data[0].columns[1]);
 }
 
 #[test]
@@ -192,9 +176,9 @@ fn test_filter1() {
                     right: Box::new(ExpressionTree::Value(Value::Int(2000))),
                     operator: CompareOperator::GreaterThan
                 }
-            )
+            ),
         },
-        HashMapRefColumnProvider::new(columns)
+        HashMapColumnProvider::new(columns)
     );
 
     assert!(result.is_ok());
@@ -224,9 +208,9 @@ fn test_filter2() {
                     right: Box::new(ExpressionTree::Value(Value::Int(1000))),
                     operator: CompareOperator::GreaterThan
                 }
-            )
+            ),
         },
-        HashMapRefColumnProvider::new(columns)
+        HashMapColumnProvider::new(columns)
     );
 
     assert!(result.is_ok());
@@ -235,5 +219,5 @@ fn test_filter2() {
     assert!(result.is_some());
     let result = result.unwrap();
 
-    assert_eq!(Value::Int(1337), result.columns[0]);
+    assert_eq!(Value::Int(1337), result.data[0].columns[0]);
 }
