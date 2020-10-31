@@ -89,6 +89,10 @@ impl<'a> FollowFileIngester<'a> {
                 break;
             }
 
+            if line.len() > 0 {
+                line.remove(line.len() - 1);
+            }
+
             let (result, _) = self.execution_engine.execute(&statement, line);
             if let Some(result_row) = result? {
                 OutputPrinter::new(false).print(&result_row)
