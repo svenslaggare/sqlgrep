@@ -1,29 +1,39 @@
 use std::collections::HashMap;
 
 use crate::data_model::{Tables, TableDefinition};
-use crate::model::{SelectStatement, Value, AggregateStatement};
+use crate::model::{SelectStatement, Value, AggregateStatement, Statement};
 use crate::execution_model::{HashMapColumnProvider, ExecutionResult, ExecutionError, ResultRow};
 use crate::aggregate_execution::AggregateExecutionEngine;
 use crate::select_execution::SelectExecutionEngine;
 
-pub struct ProcessEngine<'a> {
+pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
     aggregate_execution_engine: AggregateExecutionEngine
 }
 
-impl<'a> ProcessEngine<'a> {
-    pub fn new(tables: &'a Tables) -> ProcessEngine<'a> {
-        ProcessEngine {
+impl<'a> ExecutionEngine<'a> {
+    pub fn new(tables: &'a Tables) -> ExecutionEngine<'a> {
+        ExecutionEngine {
             tables,
             aggregate_execution_engine: AggregateExecutionEngine::new()
         }
     }
 
-    pub fn get_table(&self, name: &str) -> ExecutionResult<&TableDefinition> {
-        self.tables.get(&name).ok_or(ExecutionError::TableNotFound)
+    pub fn execute(&mut self, statement: &Statement, line: String) -> (ExecutionResult<Option<ResultRow>>, bool) {
+        match statement {
+            Statement::Select(select_statement) => {
+                (self.execute_select(&select_statement, line), false)
+            }
+            Statement::Aggregate(aggregate_statement) => {
+                (self.execute_aggregate(&aggregate_statement, line), true)
+            }
+            Statement::CreateTable(_) => {
+                (Err(ExecutionError::NotSupportedOperation), false)
+            }
+        }
     }
 
-    pub fn process_select(&mut self,
+    pub fn execute_select(&mut self,
                           select_statement: &SelectStatement,
                           line: String) -> ExecutionResult<Option<ResultRow>> {
         let table_definition = self.get_table(&select_statement.from)?;
@@ -48,7 +58,7 @@ impl<'a> ProcessEngine<'a> {
         Ok(None)
     }
 
-    pub fn process_aggregate(&mut self,
+    pub fn execute_aggregate(&mut self,
                              aggregate_statement: &AggregateStatement,
                              line: String) -> ExecutionResult<Option<ResultRow>> {
         let table_definition = self.tables.get(&aggregate_statement.from).ok_or(ExecutionError::TableNotFound)?;
@@ -70,5 +80,9 @@ impl<'a> ProcessEngine<'a> {
         }
 
         Ok(None)
+    }
+
+    fn get_table(&self, name: &str) -> ExecutionResult<&TableDefinition> {
+        self.tables.get(&name).ok_or(ExecutionError::TableNotFound)
     }
 }

@@ -6,7 +6,7 @@ mod select_execution;
 mod aggregate_execution;
 mod parser;
 mod parse_tree_converter;
-mod process_engine;
+mod execution_engine;
 mod ingest;
 
 use std::io::Write;
@@ -15,8 +15,8 @@ use structopt::StructOpt;
 
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::{ValueType, Statement};
-use crate::ingest::FileIngester;
-use crate::process_engine::ProcessEngine;
+use crate::ingest::{FileIngester, FollowFileIngester};
+use crate::execution_engine::ExecutionEngine;
 use crate::parser::{tokenize, Parser, BinaryOperators, UnaryOperators, ParserResult, ParseOperationTree};
 
 #[derive(Debug, StructOpt)]
@@ -27,7 +27,7 @@ struct CommandLineInput {
     #[structopt(short, long("data-file"), help="The data definition file")]
     data_definition_file: Option<String>,
     #[structopt(short("f"), long("follow"), help="Tail-follows the input file")]
-    tail_follow: Option<bool>
+    tail_follow: bool
 }
 
 struct ReadLinePrompt {
@@ -115,15 +115,23 @@ fn main() {
     }
 
     let default_input_filename = command_line_input.input_file;
+    let tail_follow = command_line_input.tail_follow;
 
     for line in ReadLinePrompt::new("> ") {
         match parse_statement(&line) {
             Some(statement) => {
                 let filename = statement.filename().map(|x| x.to_owned()).or(default_input_filename.clone()).unwrap();
 
-                let mut ingester = FileIngester::new(&filename, ProcessEngine::new(&tables)).unwrap();
-                if let Err(result) = ingester.process(statement) {
-                    println!("Execution error: {}", result);
+                let result = if tail_follow {
+                    let mut ingester = FollowFileIngester::new(&filename, ExecutionEngine::new(&tables)).unwrap();
+                    ingester.process(statement)
+                } else {
+                    let mut ingester = FileIngester::new(&filename, ExecutionEngine::new(&tables)).unwrap();
+                    ingester.process(statement)
+                };
+
+                if let Err(err) = result {
+                    println!("Execution error: {}", err);
                 }
             }
             _ => {}

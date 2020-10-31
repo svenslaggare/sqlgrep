@@ -4,22 +4,22 @@ use std::fs::File;
 use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
-use crate::process_engine::{ProcessEngine};
+use crate::execution_engine::{ExecutionEngine};
 use crate::execution_model::{ExecutionResult, ResultRow, ExecutionError};
 
 pub struct FileIngester<'a> {
     reader: Option<BufReader<File>>,
-    process_engine: ProcessEngine<'a>
+    execution_engine: ExecutionEngine<'a>
 }
 
 impl<'a> FileIngester<'a> {
-    pub fn new(filename: &str, process_engine: ProcessEngine<'a>) -> std::io::Result<FileIngester<'a>> {
+    pub fn new(filename: &str, execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
         let reader = BufReader::new(File::open(filename)?);
 
         Ok(
             FileIngester {
                 reader: Some(reader),
-                process_engine
+                execution_engine
             }
         )
     }
@@ -30,22 +30,12 @@ impl<'a> FileIngester<'a> {
 
         for line in self.reader.take().unwrap().lines() {
             if let Ok(line) = line {
-                let result = match &statement {
-                    Statement::Select(select_statement) => {
-                        self.process_engine.process_select(&select_statement, line)
-                    }
-                    Statement::Aggregate(aggregate_statement) => {
-                        print_only_last = true;
-                        self.process_engine.process_aggregate(&aggregate_statement, line)
-                    }
-                    Statement::CreateTable(_) => {
-                        Err(ExecutionError::NotSupportedOperation)
-                    }
-                };
+                let (result, print_only_last_this) = self.execution_engine.execute(&statement, line);
+                print_only_last = print_only_last_this;
 
                 if let Some(result_row) = result? {
                     if !print_only_last {
-                        self.print_result(&result_row);
+                        OutputPrinter::new().print(&result_row)
                     }
                     last_result_raw = Some(result_row);
                 }
@@ -56,22 +46,62 @@ impl<'a> FileIngester<'a> {
 
         if print_only_last {
             if let Some(result_row) = last_result_raw {
-                self.print_result(&result_row);
+                OutputPrinter::new().print(&result_row)
             }
         }
 
         Ok(())
     }
+}
 
-    pub fn process_select(&mut self, select_statement: SelectStatement) -> ExecutionResult<()> {
-        self.process(Statement::Select(select_statement))
+pub struct FollowFileIngester<'a> {
+    reader: Option<BufReader<File>>,
+    execution_engine: ExecutionEngine<'a>
+}
+
+impl<'a> FollowFileIngester<'a> {
+    pub fn new(filename: &str, execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
+        let reader = BufReader::new(File::open(filename)?);
+
+        Ok(
+            FollowFileIngester {
+                reader: Some(reader),
+                execution_engine
+            }
+        )
     }
 
-    pub fn process_aggregate(&mut self, aggregate_statement: AggregateStatement) -> ExecutionResult<()> {
-        self.process(Statement::Aggregate(aggregate_statement))
+    pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
+        let mut reader = self.reader.take().unwrap();
+        loop {
+            let mut line = String::new();
+            if let Err(_) = reader.read_line(&mut line) {
+                break;
+            }
+
+            let (result, _) = self.execution_engine.execute(&statement, line);
+            if let Some(result_row) = result? {
+                OutputPrinter::new().print(&result_row)
+            }
+        }
+
+        Ok(())
+    }
+}
+
+
+struct OutputPrinter {
+
+}
+
+impl OutputPrinter {
+    pub fn new() -> OutputPrinter {
+        OutputPrinter {
+
+        }
     }
 
-    fn print_result(&self, result_row: &ResultRow) {
+    pub fn print(&self, result_row: &ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
             let columns = result_row.columns
@@ -90,7 +120,7 @@ impl<'a> FileIngester<'a> {
 }
 
 #[test]
-fn test_ingest1() {
+fn test_file_ingest1() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -111,10 +141,9 @@ fn test_ingest1() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
-    let result = ingester.process_select(SelectStatement {
+    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let result = ingester.process(Statement::Select(SelectStatement {
         projections: vec![
-            // ("input".to_owned(), ExpressionTree::ColumnAccess("input".to_owned())),
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
             ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
             ("year".to_owned(), ExpressionTree::ColumnAccess("year".to_owned())),
@@ -131,7 +160,7 @@ fn test_ingest1() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         })
-    });
+    }));
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -140,7 +169,7 @@ fn test_ingest1() {
 }
 
 #[test]
-fn test_ingest2() {
+fn test_file_ingest2() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -161,9 +190,9 @@ fn test_ingest2() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
 
-    let result = ingester.process_aggregate(AggregateStatement {
+    let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hour".to_owned(), Aggregate::GroupKey),
             ("count".to_owned(), Aggregate::Count),
@@ -177,7 +206,7 @@ fn test_ingest2() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         group_by: Some("hour".to_owned())
-    });
+    }));
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -186,7 +215,7 @@ fn test_ingest2() {
 }
 
 #[test]
-fn test_ingest3() {
+fn test_file_ingest3() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -207,8 +236,8 @@ fn test_ingest3() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
-    let result = ingester.process_aggregate(AggregateStatement {
+    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("count".to_owned(), Aggregate::Count),
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
@@ -221,7 +250,7 @@ fn test_ingest3() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         group_by: None
-    });
+    }));
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -230,7 +259,7 @@ fn test_ingest3() {
 }
 
 #[test]
-fn test_ingest4() {
+fn test_file_ingest4() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -251,8 +280,8 @@ fn test_ingest4() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ProcessEngine::new(&tables)).unwrap();
-    let result = ingester.process_aggregate(AggregateStatement {
+    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hostname".to_owned(), Aggregate::GroupKey),
             ("count".to_owned(), Aggregate::Count),
@@ -262,7 +291,7 @@ fn test_ingest4() {
         filename: None,
         filter: None,
         group_by: Some("hostname".to_owned())
-    });
+    }));
 
     if let Err(err) = result {
         println!("{:?}", err);
