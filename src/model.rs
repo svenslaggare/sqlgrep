@@ -89,7 +89,7 @@ impl ValueType {
         match text {
             "int" => Some(ValueType::Int),
             "text" => Some(ValueType::String),
-            "bool" => Some(ValueType::Bool),
+            "boolean" => Some(ValueType::Bool),
             _ => None
         }
     }

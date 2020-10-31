@@ -49,10 +49,15 @@ impl TableDefinition {
         let mut columns = Vec::new();
         for column in &self.columns {
             if let Some(capture_result) = extracted_results.get(&column.pattern_name) {
-                if let Some(group_result) = capture_result.get(column.group_index) {
-                    columns.push(Value::from_option(column.column_type.parse(group_result.as_str())));
+                let group_result = capture_result.get(column.group_index);
+                if column.column_type == ValueType::Bool {
+                    columns.push(Value::Bool(group_result.is_some()));
                 } else {
-                    columns.push(Value::Null);
+                    if let Some(group) = group_result {
+                        columns.push(Value::from_option(column.column_type.parse(group.as_str())));
+                    } else {
+                        columns.push(Value::Null);
+                    }
                 }
             } else {
                 columns.push(Value::Null);
@@ -145,6 +150,23 @@ fn test_table_extract3() {
 
     let result = table_definition.extract("B: aba");
     assert!(!result.any_result());
+}
+
+#[test]
+fn test_table_extract4() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "A: ([0-9]+)?")],
+        vec![
+            ColumnDefinition::new("line", 1, "x", ValueType::Bool),
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711");
+    assert_eq!(Value::Bool(true), result.columns[0]);
+
+    let result = table_definition.extract("A: aba");
+    assert_eq!(Value::Bool(false), result.columns[0]);
 }
 
 #[test]
