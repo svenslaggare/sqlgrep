@@ -5,7 +5,7 @@ use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
 use crate::process_engine::{ProcessEngine};
-use crate::execution_model::{ExecutionResult, ResultRow};
+use crate::execution_model::{ExecutionResult, ResultRow, ExecutionError};
 
 pub struct FileIngester<'a> {
     reader: Option<BufReader<File>>,
@@ -37,6 +37,9 @@ impl<'a> FileIngester<'a> {
                     Statement::Aggregate(aggregate_statement) => {
                         print_only_last = true;
                         self.process_engine.process_aggregate(&aggregate_statement, line)
+                    }
+                    Statement::CreateTable(_) => {
+                        Err(ExecutionError::NotSupportedOperation)
                     }
                 };
 
@@ -122,6 +125,7 @@ fn test_ingest1() {
             ("second".to_owned(), ExpressionTree::ColumnAccess("second".to_owned()))
         ],
         from: "connections".to_string(),
+        filename: None,
         filter: Some(ExpressionTree::Compare {
             left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
@@ -166,6 +170,7 @@ fn test_ingest2() {
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
         ],
         from: "connections".to_string(),
+        filename: None,
         filter: Some(ExpressionTree::Compare {
             left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
@@ -209,6 +214,7 @@ fn test_ingest3() {
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
         ],
         from: "connections".to_string(),
+        filename: None,
         filter: Some(ExpressionTree::Compare {
             left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
@@ -253,6 +259,7 @@ fn test_ingest4() {
             ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned()))),
         ],
         from: "connections".to_string(),
+        filename: None,
         filter: None,
         group_by: Some("hostname".to_owned())
     });

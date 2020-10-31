@@ -1,0 +1,12 @@
+CREATE TABLE connections(
+    line => 'connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
+
+    line[1] => ip TEXT,
+    line[2] => hostname TEXT,
+    line[9] => year INT,
+    line[4] => month TEXT,
+    line[5] => day INT,
+    line[6] => hour INT,
+    line[7] => minute INT,
+    line[8] => second INT
+);

@@ -6,7 +6,7 @@ use std::fmt::Formatter;
 
 use lazy_static::lazy_static;
 
-use crate::model::Value;
+use crate::model::{Value, ValueType};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -18,6 +18,8 @@ pub enum Keyword {
     As,
     And,
     Or,
+    Create,
+    Table,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -47,9 +49,12 @@ pub enum Token {
     Keyword(Keyword),
     LeftParentheses,
     RightParentheses,
+    LeftSquareParentheses,
+    RightSquareParentheses,
     Comma,
     SemiColon,
     Colon,
+    RightArrow,
     End
 }
 
@@ -58,16 +63,24 @@ pub enum ParserError {
     IntConvertError,
     ExpectedKeyword(Keyword),
     ExpectedAnyKeyword(Vec<Keyword>),
+    ExpectedLeftParentheses,
     ExpectedRightParentheses,
+    ExpectedLeftSquareParentheses,
+    ExpectedRightSquareParentheses,
     ExpectedExpression,
     ExpectedArgumentListContinuation,
     ExpectedProjectionContinuation,
+    ExpectedColumnDefinitionStart,
+    ExpectedColumnDefinitionContinuation,
     NotDefinedBinaryOperator(Operator),
     NotDefinedUnaryOperator(Operator),
+    NotDefinedType(String),
     ExpectedIdentifier,
     ExpectedString,
+    ExpectedInt,
     ExpectedOperator,
     ExpectedColon,
+    ExpectedRightArrow,
     ReachedEndOfTokens,
     TooManyTokens
 }
@@ -96,6 +109,11 @@ pub enum ParseOperationTree {
         from: (String, Option<String>),
         filter: Option<ParseExpressionTree>,
         group_by: Option<String>
+    },
+    CreateTable {
+        name: String,
+        patterns: Vec<(String, String)>,
+        columns: Vec<(String, ValueType, String, usize)>
     }
 }
 
@@ -112,6 +130,8 @@ lazy_static! {
             ("as".to_owned(), Keyword::As),
             ("and".to_owned(), Keyword::And),
             ("or".to_owned(), Keyword::Or),
+            ("create".to_owned(), Keyword::Create),
+            ("table".to_owned(), Keyword::Table),
         ].into_iter()
     );
 
@@ -125,7 +145,7 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
     let mut current_str: Option<String> = None;
     let mut is_escaped = false;
     while let Some(current) = char_iterator.next() {
-        if current == '\\' {
+        if current == '\\' && !is_escaped {
             is_escaped = true;
             continue;
         }
@@ -195,6 +215,10 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             tokens.push(Token::LeftParentheses);
         } else if current == ')' {
             tokens.push(Token::RightParentheses);
+        } else if current == '[' {
+            tokens.push(Token::LeftSquareParentheses);
+        } else if current == ']' {
+            tokens.push(Token::RightSquareParentheses);
         } else if current == ',' {
             tokens.push(Token::Comma);
         } else if current == ';' {
@@ -208,6 +232,10 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             let mut is_dual = false;
             if !tokens.is_empty() {
                 match tokens.last().unwrap() {
+                    Token::Operator(Operator::Single('=')) if current == '>' => {
+                        *tokens.last_mut().unwrap() = Token::RightArrow;
+                        is_dual = true;
+                    },
                     Token::Operator(Operator::Single(operator)) if TWO_CHAR_OPERATORS.contains(operator) => {
                         *tokens.last_mut().unwrap() = Token::Operator(Operator::Dual(*operator, current));
                         is_dual = true;
@@ -358,6 +386,34 @@ fn test_tokenize8() {
     );
 }
 
+#[test]
+fn test_tokenize9() {
+    let tokens = tokenize("a => 4");
+    assert_eq!(
+        vec![
+            Token::Identifier("a".to_string()),
+            Token::RightArrow,
+            Token::Int(4),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize10() {
+    let tokens = tokenize("line => 'connection from ([0-9.]+) \\\\((.*)\\\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)'");
+    assert_eq!(
+        vec![
+            Token::Identifier("line".to_owned()),
+            Token::RightArrow,
+            Token::String("connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned()),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
 pub struct BinaryOperator {
     pub precedence: i32
 }
@@ -446,17 +502,25 @@ impl<'a> Parser<'a> {
             Token::Keyword(Keyword::Select) => {
                 self.parse_select()
             }
-            _=> { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Select])); }
+            Token::Keyword(Keyword::Create) => {
+                self.parse_create_table()
+            }
+            _=> { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Select, Keyword::Create])); }
         };
 
         if self.current() == &Token::SemiColon {
             self.next()?;
         }
 
-        if (self.index as usize) + 1 != self.tokens.len() {
-            Err(ParserError::TooManyTokens)
-        } else {
-            operation
+        match operation {
+            Ok(operation) => {
+                if (self.index as usize) + 1 == self.tokens.len() {
+                    Ok(operation)
+                } else {
+                    Err(ParserError::TooManyTokens)
+                }
+            }
+            Err(err) => Err(err)
         }
     }
 
@@ -540,6 +604,76 @@ impl<'a> Parser<'a> {
                 from: (table_name, filename),
                 filter,
                 group_by
+            }
+        )
+    }
+
+    fn parse_create_table(&mut self) -> ParserResult<ParseOperationTree> {
+        self.next()?;
+
+        if self.current() != &Token::Keyword(Keyword::Table) {
+            return Err(ParserError::ExpectedKeyword(Keyword::Table));
+        }
+
+        self.next()?;
+
+        let table_name = self.consume_identifier()?;
+
+        if self.current() != &Token::LeftParentheses {
+            return Err(ParserError::ExpectedLeftParentheses);
+        }
+
+        self.next()?;
+
+        let mut patterns = Vec::new();
+        let mut columns = Vec::new();
+
+        loop {
+            let pattern_name = self.consume_identifier()?;
+            match self.current() {
+                Token::RightArrow => {
+                    self.next()?;
+                    let pattern = self.consume_string()?;
+                    patterns.push((pattern_name, pattern));
+                }
+                Token::LeftSquareParentheses => {
+                    self.next()?;
+                    let pattern_index = self.consume_int()?;
+
+                    if self.current() != &Token::RightSquareParentheses {
+                        return Err(ParserError::ExpectedRightSquareParentheses);
+                    }
+                    self.next()?;
+
+                    if self.current() != &Token::RightArrow {
+                        return Err(ParserError::ExpectedRightArrow);
+                    }
+                    self.next()?;
+
+                    let column_name = self.consume_identifier()?;
+                    let column_type = self.consume_identifier()?;
+                    let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
+
+                    columns.push((column_name, column_type, pattern_name, pattern_index as usize));
+                }
+                _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
+            }
+
+            match self.current() {
+                Token::Comma => { self.next()?; }
+                Token::RightParentheses => {
+                    self.next()?;
+                    break;
+                }
+                _ => { return Err(ParserError::ExpectedColumnDefinitionContinuation); }
+            }
+        }
+
+        Ok(
+            ParseOperationTree::CreateTable {
+                name: table_name,
+                patterns,
+                columns
             }
         )
     }
@@ -695,6 +829,16 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn consume_int(&mut self) -> ParserResult<i64> {
+        if let Token::Int(value) = self.current() {
+            let value = *value;
+            self.next()?;
+            Ok(value)
+        } else {
+            Err(ParserError::ExpectedInt)
+        }
+    }
+
     fn current(&self) -> &Token {
         &self.tokens[self.index as usize]
     }
@@ -729,6 +873,19 @@ impl<'a> Parser<'a> {
             _ => Ok(-1)
         }
     }
+}
+
+pub fn parse_str(text: &str) -> ParserResult<ParseOperationTree> {
+    let tokens = tokenize(text)?;
+
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    Parser::new(
+        &binary_operators,
+        &unary_operators,
+        tokens
+    ).parse()
 }
 
 #[test]
@@ -1208,6 +1365,108 @@ fn test_parse_select_group_by1() {
 }
 
 #[test]
+fn test_parse_create_table1() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::RightArrow,
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+            columns: vec![("x".to_owned(), ValueType::Int, "line".to_owned(), 1)]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_create_table2() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::RightArrow,
+            Token::String("A: ([0-9]+), B: ([A-Z]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(2),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("y".to_owned()),
+            Token::Identifier("TEXT".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned())],
+            columns: vec![
+                ("x".to_owned(), ValueType::Int, "line".to_owned(), 1),
+                ("y".to_owned(), ValueType::String, "line".to_owned(), 2)
+            ]
+        },
+        tree
+    );
+}
+
+#[test]
 fn test_parse_str1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
@@ -1278,6 +1537,57 @@ fn test_parse_str2() {
                 }
             ),
             group_by: Some("x".to_owned())
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_str3() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let tokens = tokenize(r"
+    CREATE TABLE connections(
+        line => 'connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
+
+        line[1] => ip TEXT,
+        line[2] => hostname TEXT,
+        line[9] => year INT,
+        line[4] => month TEXT,
+        line[5] => day INT,
+        line[6] => hour INT,
+        line[7] => minute INT,
+        line[8] => second INT
+    );");
+    assert!(tokens.is_ok());
+
+    let tokens = tokens.unwrap();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        tokens
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "connections".to_string(),
+            patterns: vec![
+                ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
+            ],
+            columns: vec![
+                ("ip".to_owned(), ValueType::String, "line".to_owned(), 1),
+                ("hostname".to_owned(), ValueType::String, "line".to_owned(), 2),
+                ("year".to_owned(), ValueType::Int, "line".to_owned(), 9),
+                ("month".to_owned(), ValueType::String, "line".to_owned(), 4),
+                ("day".to_owned(), ValueType::Int, "line".to_owned(), 5),
+                ("hour".to_owned(), ValueType::Int, "line".to_owned(), 6),
+                ("minute".to_owned(), ValueType::Int, "line".to_owned(), 7),
+                ("second".to_owned(), ValueType::Int, "line".to_owned(), 8),
+            ]
         },
         tree
     );

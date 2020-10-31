@@ -136,6 +136,7 @@ fn test_group_by_and_count() {
             ("count".to_owned(), Aggregate::Count)
         ],
         from: "test".to_owned(),
+        filename: None,
         filter: None,
         group_by: Some("x".to_string())
     };
@@ -201,6 +202,7 @@ fn test_group_by_and_count_and_filter() {
             ("count".to_owned(), Aggregate::Count)
         ],
         from: "test".to_owned(),
+        filename: None,
         filter: Some(
             ExpressionTree::Compare {
                 left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
@@ -253,6 +255,7 @@ fn test_group_by_and_max() {
             ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())))
         ],
         from: "test".to_owned(),
+        filename: None,
         filter: None,
         group_by: Some("name".to_string())
     };
@@ -308,6 +311,7 @@ fn test_group_by_and_count_and_max() {
             ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())))
         ],
         from: "test".to_owned(),
+        filename: None,
         filter: None,
         group_by: Some("name".to_string())
     };
@@ -363,6 +367,7 @@ fn test_count() {
             ("count".to_owned(), Aggregate::Count)
         ],
         from: "test".to_owned(),
+        filename: None,
         filter: None,
         group_by: None
     };

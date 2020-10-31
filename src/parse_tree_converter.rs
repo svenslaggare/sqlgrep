@@ -1,7 +1,8 @@
 use std::fmt::Formatter;
 
 use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator};
-use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement};
+use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, CreateTableStatement};
+use crate::data_model::{ColumnDefinition, TableDefinition};
 
 #[derive(Debug)]
 pub enum ConvertParseTreeError {
@@ -12,7 +13,8 @@ pub enum ConvertParseTreeError {
     ExpectedColumnAccess,
     UndefinedAggregate,
     UndefinedStatement,
-    UndefinedExpression
+    UndefinedExpression,
+    InvalidPattern
 }
 
 impl std::fmt::Display for ConvertParseTreeError {
@@ -21,12 +23,7 @@ impl std::fmt::Display for ConvertParseTreeError {
     }
 }
 
-pub struct ParsedStatement {
-    pub statement: Statement,
-    pub filename: Option<String>
-}
-
-pub fn transform_statement(tree: ParseOperationTree) -> Result<ParsedStatement, ConvertParseTreeError> {
+pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, ConvertParseTreeError> {
     match tree {
         ParseOperationTree::Select { projections, from, filter, group_by } => {
             if let Some(group_by) = group_by {
@@ -46,12 +43,13 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<ParsedStatement, 
                 }
             }
         }
+        ParseOperationTree::CreateTable { name, patterns, columns } => create_create_table_statement(name, patterns, columns)
     }
 }
 
 fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree)>,
                            from: (String, Option<String>),
-                           filter: Option<ParseExpressionTree>) -> Result<ParsedStatement, ConvertParseTreeError> {
+                           filter: Option<ParseExpressionTree>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_projections = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let expression = transform_expression(tree)?;
@@ -74,21 +72,17 @@ fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree
     let select_statement = SelectStatement {
         projections: transformed_projections,
         from: from.0,
+        filename: from.1,
         filter: transformed_filter
     };
 
-    Ok(
-        ParsedStatement {
-            statement: Statement::Select(select_statement),
-            filename: from.1
-        }
-    )
+    Ok(Statement::Select(select_statement))
 }
 
 fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionTree)>,
                               from: (String, Option<String>),
                               filter: Option<ParseExpressionTree>,
-                              group_by: Option<String>) -> Result<ParsedStatement, ConvertParseTreeError> {
+                              group_by: Option<String>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let (default_name, aggregate) = transform_aggregate(tree)?;
@@ -106,16 +100,29 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
     let aggregate_statement = AggregateStatement {
         aggregates: transformed_aggregates,
         from: from.0,
+        filename: from.1,
         filter: transformed_filter,
         group_by
     };
 
-    Ok(
-        ParsedStatement {
-            statement: Statement::Aggregate(aggregate_statement),
-            filename: from.1
-        }
-    )
+    Ok(Statement::Aggregate(aggregate_statement))
+}
+
+fn create_create_table_statement(name: String,
+                                 patterns: Vec<(String, String)>,
+                                 columns: Vec<(String, ValueType, String, usize)>) -> Result<Statement, ConvertParseTreeError> {
+    let column_definitions = columns
+        .into_iter()
+        .map(|column| ColumnDefinition::new(&column.2, column.3, &column.0, column.1))
+        .collect::<Vec<_>>();
+
+    let table_definition = TableDefinition::new(
+        &name,
+        patterns.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect(),
+        column_definitions,
+    ).ok_or(ConvertParseTreeError::InvalidPattern)?;
+
+    Ok(Statement::CreateTable(table_definition))
 }
 
 pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree, ConvertParseTreeError> {
@@ -210,11 +217,11 @@ fn test_select_statement1() {
         group_by: None
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_select();
+    let statement = statement.extract_select();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -234,11 +241,11 @@ fn test_select_statement2() {
         group_by: None
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let parsed_statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_select();
+    let statement = parsed_statement.extract_select();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -264,11 +271,11 @@ fn test_select_statement3() {
         group_by: None
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let parsed_statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_select();
+    let statement = parsed_statement.extract_select();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -312,11 +319,11 @@ fn test_select_statement4() {
         group_by: None
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_select();
+    let statement = statement.extract_select();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -352,11 +359,11 @@ fn test_select_statement5() {
         group_by: None
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_select();
+    let statement = statement.extract_select();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -365,7 +372,7 @@ fn test_select_statement5() {
     assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some("test.log".to_owned()), parsed_statement.filename);
+    assert_eq!(Some("test.log".to_owned()), statement.filename);
 }
 
 #[test]
@@ -380,11 +387,11 @@ fn test_aggregate_statement1() {
         group_by: Some("x".to_owned())
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statemnt = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_aggregate();
+    let statement = statemnt.extract_aggregate();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -412,11 +419,11 @@ fn test_aggregate_statement2() {
         group_by: Some("x".to_owned())
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_aggregate();
+    let statement = statement.extract_aggregate();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -442,15 +449,44 @@ fn test_aggregate_statement3() {
         group_by: None
     };
 
-    let parsed_statement = transform_statement(tree);
-    assert!(parsed_statement.is_ok());
-    let parsed_statement = parsed_statement.unwrap();
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
 
-    let statement = parsed_statement.statement.extract_aggregate();
+    let statement = statement.extract_aggregate();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
     assert_eq!("p0", statement.aggregates[0].0);
     assert_eq!(Aggregate::Count, statement.aggregates[0].1);
+}
+
+#[test]
+fn test_create_table_statement1() {
+    let tree = ParseOperationTree::CreateTable {
+        name: "test".to_string(),
+        patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+        columns: vec![("x".to_owned(), ValueType::Int, "line".to_owned(), 1)]
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_create_table();
+    assert!(statement.is_some());
+    let table_definition = statement.unwrap();
+
+    assert_eq!("test", table_definition.name);
+
+    assert_eq!(1, table_definition.patterns.len());
+    assert_eq!("line", table_definition.patterns[0].0);
+    assert_eq!("A: ([0-9]+)", table_definition.patterns[0].1.as_str());
+
+    assert_eq!(1, table_definition.columns.len());
+    assert_eq!("x", table_definition.columns[0].name);
+    assert_eq!(ValueType::Int, table_definition.columns[0].column_type);
+    assert_eq!("line", table_definition.columns[0].pattern_name);
+    assert_eq!(1, table_definition.columns[0].group_index);
 }

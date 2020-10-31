@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use std::fmt::Formatter;
+use crate::data_model::TableDefinition;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Hash, Ord)]
 pub enum Value {
@@ -82,6 +83,15 @@ impl ValueType {
             ValueType::String => Some(Value::String(value_str.to_owned()))
         }
     }
+
+    pub fn from_str(text: &str) -> Option<ValueType> {
+        match text {
+            "int" => Some(ValueType::Int),
+            "text" => Some(ValueType::String),
+            "bool" => Some(ValueType::Bool),
+            _ => None
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -123,22 +133,39 @@ pub enum Aggregate {
 pub struct SelectStatement {
     pub projections: Vec<(String, ExpressionTree)>,
     pub from: String,
+    pub filename: Option<String>,
     pub filter: Option<ExpressionTree>
 }
 
 pub struct AggregateStatement {
     pub aggregates: Vec<(String, Aggregate)>,
     pub from: String,
+    pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
     pub group_by: Option<String>
 }
 
+pub struct CreateTableStatement {
+    pub name: String,
+    pub patterns: Vec<(String, String)>,
+    pub columns: Vec<(String, ValueType, String, usize)>
+}
+
 pub enum Statement {
     Select(SelectStatement),
-    Aggregate(AggregateStatement)
+    Aggregate(AggregateStatement),
+    CreateTable(TableDefinition)
 }
 
 impl Statement {
+    pub fn filename(&self) -> Option<&str> {
+        match self {
+            Statement::Select(statement) => statement.filename.as_ref().map(|x| x.as_str()),
+            Statement::Aggregate(statement) => statement.filename.as_ref().map(|x| x.as_str()),
+            Statement::CreateTable(_) => None
+        }
+    }
+
     pub fn extract_select(self) -> Option<SelectStatement> {
         match self {
             Statement::Select(statement) => Some(statement),
@@ -149,6 +176,13 @@ impl Statement {
     pub fn extract_aggregate(self) -> Option<AggregateStatement> {
         match self {
             Statement::Aggregate(statement) => Some(statement),
+            _ => None
+        }
+    }
+
+    pub fn extract_create_table(self) -> Option<TableDefinition> {
+        match self {
+            Statement::CreateTable(statement) => Some(statement),
             _ => None
         }
     }

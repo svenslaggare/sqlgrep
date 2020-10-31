@@ -60,6 +60,7 @@ fn test_project1() {
         &SelectStatement {
             projections: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
+            filename: None,
             filter: None,
         },
         HashMapColumnProvider::new(columns)
@@ -98,6 +99,7 @@ fn test_project2() {
                 )
             ],
             from: "test".to_owned(),
+            filename: None,
             filter: None,
         },
         HashMapColumnProvider::new(columns)
@@ -140,6 +142,7 @@ fn test_project3() {
                 )
             ],
             from: "test".to_owned(),
+            filename: None,
             filter: None,
         },
         HashMapColumnProvider::new(columns)
@@ -170,6 +173,7 @@ fn test_filter1() {
         &SelectStatement {
             projections: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
+            filename: None,
             filter: Some(
                 ExpressionTree::Compare {
                     left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
@@ -202,6 +206,7 @@ fn test_filter2() {
         &SelectStatement {
             projections: vec![("p0".to_owned(), ExpressionTree::ColumnAccess("x".to_owned()))],
             from: "test".to_owned(),
+            filename: None,
             filter: Some(
                 ExpressionTree::Compare {
                     left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),

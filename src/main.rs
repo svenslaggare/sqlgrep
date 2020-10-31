@@ -45,42 +45,52 @@ impl std::iter::Iterator for ReadLinePrompt {
     }
 }
 
-fn parse_statement(line: String) -> ParserResult<ParseOperationTree> {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
+fn define_table(text: String) -> Option<TableDefinition> {
+    let table_definition_tree = parser::parse_str(&text);
+    if let Err(err) = table_definition_tree {
+        println!("Failed to parse definition: {}", err);
+        return None;
+    }
+    let table_definition_tree = table_definition_tree.unwrap();
 
-    let mut parser = Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokenize(&line)?
-    );
+    let create_table_statement = parse_tree_converter::transform_statement(table_definition_tree);
+    if let Err(err) = create_table_statement {
+        println!("Failed to create table: {}", err);
+        return None;
+    }
+    let create_table_statement = create_table_statement.unwrap();
 
-    parser.parse()
+    let table_definition = create_table_statement.extract_create_table();
+    if table_definition.is_none() {
+        println!("Expected create table statement.");
+        return None;
+    }
+
+     table_definition
 }
 
 fn main() {
-    let table_definition = TableDefinition::new(
-        "connections",
-        vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
-        ],
-        vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
-        ]
-    ).unwrap();
-
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+
+    let default_input_filename = "data/test1.log";
+    let table_definition_filename = "data/definition1.txt";
+
+    // let default_input_filename = "testdata/test1.log";
+    // let table_definition_filename = "testdata/definition1.txt";
+
+    let table_definition_str = std::fs::read_to_string(table_definition_filename).unwrap();
+    let table_definition = define_table(table_definition_str);
+    if table_definition.is_none() {
+        return;
+    }
+
+    let table_definition = table_definition.unwrap();
+
+    let table_name = table_definition.name.clone();
+    tables.add_table(&table_name, table_definition);
 
     for line in ReadLinePrompt::new("> ") {
-        let parse_tree = parse_statement(line);
+        let parse_tree = parser::parse_str(&line);
         if let Err(err) = parse_tree {
             println!("{}", err);
             continue;
@@ -88,17 +98,17 @@ fn main() {
 
         let parse_tree = parse_tree.unwrap();
 
-        let parsed_statement = parse_tree_converter::transform_statement(parse_tree);
-        if let Err(err) = parsed_statement {
+        let statement = parse_tree_converter::transform_statement(parse_tree);
+        if let Err(err) = statement {
             println!("{}", err);
             continue;
         }
 
-        let parsed_statement = parsed_statement.unwrap();
-        let filename = parsed_statement.filename.unwrap_or("testdata/test1.log".to_owned());
+        let statement = statement.unwrap();
+        let filename = statement.filename().unwrap_or(default_input_filename);
 
         let mut ingester = FileIngester::new(&filename, ProcessEngine::new(&tables)).unwrap();
-        if let Err(result) = ingester.process(parsed_statement.statement) {
+        if let Err(result) = ingester.process(statement) {
             println!("{}", result);
         }
     }

@@ -17,7 +17,7 @@ impl Row {
 
 pub struct TableDefinition {
     pub name: String,
-    patterns: Vec<(String, Regex)>,
+    pub patterns: Vec<(String, Regex)>,
     pub columns: Vec<ColumnDefinition>
 }
 
