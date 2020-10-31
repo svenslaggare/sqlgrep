@@ -9,16 +9,20 @@ use crate::execution_model::{ExecutionResult, ResultRow, ExecutionError};
 
 pub struct FileIngester<'a> {
     reader: Option<BufReader<File>>,
+    single_result: bool,
     execution_engine: ExecutionEngine<'a>
 }
 
 impl<'a> FileIngester<'a> {
-    pub fn new(filename: &str, execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
+    pub fn new(filename: &str,
+               single_result: bool,
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
         let reader = BufReader::new(File::open(filename)?);
 
         Ok(
             FileIngester {
                 reader: Some(reader),
+                single_result,
                 execution_engine
             }
         )
@@ -35,7 +39,7 @@ impl<'a> FileIngester<'a> {
 
                 if let Some(result_row) = result? {
                     if !print_only_last {
-                        OutputPrinter::new().print(&result_row)
+                        OutputPrinter::new(self.single_result).print(&result_row)
                     }
                     last_result_raw = Some(result_row);
                 }
@@ -46,7 +50,7 @@ impl<'a> FileIngester<'a> {
 
         if print_only_last {
             if let Some(result_row) = last_result_raw {
-                OutputPrinter::new().print(&result_row)
+                OutputPrinter::new(true).print(&result_row)
             }
         }
 
@@ -60,7 +64,9 @@ pub struct FollowFileIngester<'a> {
 }
 
 impl<'a> FollowFileIngester<'a> {
-    pub fn new(filename: &str, head: bool, execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
+    pub fn new(filename: &str,
+               head: bool,
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
         let mut reader = BufReader::new(File::open(filename)?);
 
         if !head {
@@ -85,7 +91,7 @@ impl<'a> FollowFileIngester<'a> {
 
             let (result, _) = self.execution_engine.execute(&statement, line);
             if let Some(result_row) = result? {
-                OutputPrinter::new().print(&result_row)
+                OutputPrinter::new(false).print(&result_row)
             }
         }
 
@@ -95,13 +101,13 @@ impl<'a> FollowFileIngester<'a> {
 
 
 struct OutputPrinter {
-
+    single_result: bool
 }
 
 impl OutputPrinter {
-    pub fn new() -> OutputPrinter {
+    pub fn new(single_result: bool) -> OutputPrinter {
         OutputPrinter {
-
+            single_result
         }
     }
 
@@ -117,7 +123,7 @@ impl OutputPrinter {
             println!("{}", columns.join(", "));
         }
 
-        if multiple_rows {
+        if multiple_rows && !self.single_result {
             println!();
         }
     }
@@ -145,7 +151,7 @@ fn test_file_ingest1() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
     let result = ingester.process(Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
@@ -194,7 +200,7 @@ fn test_file_ingest2() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
@@ -240,7 +246,7 @@ fn test_file_ingest3() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("count".to_owned(), Aggregate::Count),
@@ -284,7 +290,7 @@ fn test_file_ingest4() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hostname".to_owned(), Aggregate::GroupKey),

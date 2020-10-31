@@ -29,7 +29,9 @@ struct CommandLineInput {
     #[structopt(short("f"), long("follow"), help="Follows the input file")]
     follow: bool,
     #[structopt(long, help="Starts following the file from the start instead of the end")]
-    head: bool
+    head: bool,
+    #[structopt(short, long, help="Executes the given query")]
+    command: Option<String>,
 }
 
 struct ReadLinePrompt {
@@ -106,40 +108,50 @@ fn parse_statement(line: &str) -> Option<Statement> {
     statement.ok()
 }
 
+fn execute(command_line_input: &CommandLineInput, tables: &Tables, line: String, single_result: bool) {
+    match parse_statement(&line) {
+        Some(statement) => {
+            let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone()).unwrap();
+
+            let result = if command_line_input.follow {
+                let mut ingester = FollowFileIngester::new(
+                    &filename,
+                    command_line_input.head,
+                    ExecutionEngine::new(&tables)
+                ).unwrap();
+                ingester.process(statement)
+            } else {
+                let mut ingester = FileIngester::new(
+                    &filename,
+                    single_result,
+                    ExecutionEngine::new(&tables),
+                ).unwrap();
+                ingester.process(statement)
+            };
+
+            if let Err(err) = result {
+                println!("Execution error: {}", err);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn main() {
     let command_line_input: CommandLineInput = CommandLineInput::from_args();
 
     let mut tables = Tables::new();
-    if let Some(table_definition_filename) = command_line_input.data_definition_file {
+    if let Some(table_definition_filename) = command_line_input.data_definition_file.clone() {
         if !define_table(&mut tables, std::fs::read_to_string(table_definition_filename).unwrap()) {
             return;
         }
     }
 
-    let default_input_filename = command_line_input.input_file;
-
-    for line in ReadLinePrompt::new("> ") {
-        match parse_statement(&line) {
-            Some(statement) => {
-                let filename = statement.filename().map(|x| x.to_owned()).or(default_input_filename.clone()).unwrap();
-
-                let result = if command_line_input.follow {
-                    let mut ingester = FollowFileIngester::new(
-                        &filename,
-                        command_line_input.head,
-                        ExecutionEngine::new(&tables)
-                    ).unwrap();
-                    ingester.process(statement)
-                } else {
-                    let mut ingester = FileIngester::new(&filename, ExecutionEngine::new(&tables)).unwrap();
-                    ingester.process(statement)
-                };
-
-                if let Err(err) = result {
-                    println!("Execution error: {}", err);
-                }
-            }
-            _ => {}
+    if let Some(command) = command_line_input.command.clone() {
+        execute(&command_line_input, &tables, command, true);
+    } else {
+        for line in ReadLinePrompt::new("> ") {
+            execute(&command_line_input, &tables, line, false);
         }
     }
 }
