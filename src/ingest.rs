@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufRead};
+use std::io::{BufReader, BufRead, Seek, SeekFrom};
 use std::fs::File;
 
 use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
@@ -60,8 +60,12 @@ pub struct FollowFileIngester<'a> {
 }
 
 impl<'a> FollowFileIngester<'a> {
-    pub fn new(filename: &str, execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
-        let reader = BufReader::new(File::open(filename)?);
+    pub fn new(filename: &str, head: bool, execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
+        let mut reader = BufReader::new(File::open(filename)?);
+
+        if !head {
+            reader.seek(SeekFrom::End(0))?;
+        }
 
         Ok(
             FollowFileIngester {

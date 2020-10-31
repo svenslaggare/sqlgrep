@@ -26,8 +26,10 @@ struct CommandLineInput {
     input_file: Option<String>,
     #[structopt(short, long("data-file"), help="The data definition file")]
     data_definition_file: Option<String>,
-    #[structopt(short("f"), long("follow"), help="Tail-follows the input file")]
-    tail_follow: bool
+    #[structopt(short("f"), long("follow"), help="Follows the input file")]
+    follow: bool,
+    #[structopt(long, help="Starts following the file from the start instead of the end")]
+    head: bool
 }
 
 struct ReadLinePrompt {
@@ -115,15 +117,18 @@ fn main() {
     }
 
     let default_input_filename = command_line_input.input_file;
-    let tail_follow = command_line_input.tail_follow;
 
     for line in ReadLinePrompt::new("> ") {
         match parse_statement(&line) {
             Some(statement) => {
                 let filename = statement.filename().map(|x| x.to_owned()).or(default_input_filename.clone()).unwrap();
 
-                let result = if tail_follow {
-                    let mut ingester = FollowFileIngester::new(&filename, ExecutionEngine::new(&tables)).unwrap();
+                let result = if command_line_input.follow {
+                    let mut ingester = FollowFileIngester::new(
+                        &filename,
+                        command_line_input.head,
+                        ExecutionEngine::new(&tables)
+                    ).unwrap();
                     ingester.process(statement)
                 } else {
                     let mut ingester = FileIngester::new(&filename, ExecutionEngine::new(&tables)).unwrap();
