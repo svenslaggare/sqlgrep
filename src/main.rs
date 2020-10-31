@@ -77,16 +77,31 @@ fn define_table(tables: &mut Tables, text: String) -> bool {
     }
     let create_table_statement = create_table_statement.unwrap();
 
-    let table_definition = create_table_statement.extract_create_table();
-    if table_definition.is_none() {
-        println!("Expected create table statement.");
-        return false;
+    match create_table_statement {
+        Statement::CreateTable(table_definition) => {
+            let table_name = table_definition.name.clone();
+            tables.add_table(&table_name, table_definition);
+        }
+        Statement::Multiple(table_definitions) => {
+            for table_definition in table_definitions {
+                match table_definition {
+                    Statement::CreateTable(table_definition) => {
+                        let table_name = table_definition.name.clone();
+                        tables.add_table(&table_name, table_definition);
+                    }
+                    _ => {
+                        println!("Expected create table statement.");
+                        return false;
+                    }
+                }
+            }
+        }
+        _ => {
+            println!("Expected create table statement.");
+            return false;
+        }
     }
 
-    let table_definition = table_definition.unwrap();
-
-    let table_name = table_definition.name.clone();
-    tables.add_table(&table_name, table_definition);
     true
 }
 

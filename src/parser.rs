@@ -81,6 +81,7 @@ pub enum ParserError {
     ExpectedOperator,
     ExpectedColon,
     ExpectedRightArrow,
+    ExpectedSemiColon,
     ReachedEndOfTokens,
     TooManyTokens
 }
@@ -114,7 +115,8 @@ pub enum ParseOperationTree {
         name: String,
         patterns: Vec<(String, String)>,
         columns: Vec<(String, ValueType, String, usize)>
-    }
+    },
+    Multiple(Vec<ParseOperationTree>)
 }
 
 pub type ParserResult<T> = Result<T, ParserError>;
@@ -503,7 +505,7 @@ impl<'a> Parser<'a> {
                 self.parse_select()
             }
             Token::Keyword(Keyword::Create) => {
-                self.parse_create_table()
+                self.parse_multiple_create_table()
             }
             _=> { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Select, Keyword::Create])); }
         };
@@ -597,7 +599,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-
         Ok(
             ParseOperationTree::Select {
                 projections,
@@ -606,6 +607,24 @@ impl<'a> Parser<'a> {
                 group_by
             }
         )
+    }
+
+    fn parse_multiple_create_table(&mut self) -> ParserResult<ParseOperationTree> {
+        let mut operations = Vec::new();
+
+        loop {
+            operations.push(self.parse_create_table()?);
+
+            if self.current() != &Token::Keyword(Keyword::Create) {
+                break;
+            }
+        }
+
+        if operations.len() == 1 {
+            Ok(operations.remove(0))
+        } else {
+            Ok(ParseOperationTree::Multiple(operations))
+        }
     }
 
     fn parse_create_table(&mut self) -> ParserResult<ParseOperationTree> {
@@ -668,6 +687,12 @@ impl<'a> Parser<'a> {
                 _ => { return Err(ParserError::ExpectedColumnDefinitionContinuation); }
             }
         }
+
+        if self.current() != &Token::SemiColon {
+            return Err(ParserError::ExpectedSemiColon);
+        }
+
+        self.next()?;
 
         Ok(
             ParseOperationTree::CreateTable {
@@ -1462,6 +1487,92 @@ fn test_parse_create_table2() {
                 ("y".to_owned(), ValueType::String, "line".to_owned(), 2)
             ]
         },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_create_table3() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test1".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::RightArrow,
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test2".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::RightArrow,
+            Token::String("A: ([0-9]+), B: ([A-Z]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(2),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("y".to_owned()),
+            Token::Identifier("TEXT".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Multiple(vec![
+            ParseOperationTree::CreateTable {
+                name: "test1".to_string(),
+                patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+                columns: vec![("x".to_owned(), ValueType::Int, "line".to_owned(), 1)]
+            },
+            ParseOperationTree::CreateTable {
+                name: "test2".to_string(),
+                patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned())],
+                columns: vec![
+                    ("x".to_owned(), ValueType::Int, "line".to_owned(), 1),
+                    ("y".to_owned(), ValueType::String, "line".to_owned(), 2)
+                ]
+            },
+        ]),
         tree
     );
 }

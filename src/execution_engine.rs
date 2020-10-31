@@ -30,6 +30,9 @@ impl<'a> ExecutionEngine<'a> {
             Statement::CreateTable(_) => {
                 (Err(ExecutionError::NotSupportedOperation), false)
             }
+            Statement::Multiple(_) => {
+                (Err(ExecutionError::NotSupportedOperation), false)
+            }
         }
     }
 

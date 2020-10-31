@@ -43,7 +43,15 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, Conver
                 }
             }
         }
-        ParseOperationTree::CreateTable { name, patterns, columns } => create_create_table_statement(name, patterns, columns)
+        ParseOperationTree::CreateTable { name, patterns, columns } => create_create_table_statement(name, patterns, columns),
+        ParseOperationTree::Multiple(statements) => {
+            let mut transformed_statements = Vec::new();
+            for statement in statements {
+                transformed_statements.push(transform_statement(statement)?);
+            }
+
+            Ok(Statement::Multiple(transformed_statements))
+        }
     }
 }
 

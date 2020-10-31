@@ -157,7 +157,8 @@ pub struct CreateTableStatement {
 pub enum Statement {
     Select(SelectStatement),
     Aggregate(AggregateStatement),
-    CreateTable(TableDefinition)
+    CreateTable(TableDefinition),
+    Multiple(Vec<Statement>)
 }
 
 impl Statement {
@@ -165,7 +166,8 @@ impl Statement {
         match self {
             Statement::Select(statement) => statement.filename.as_ref().map(|x| x.as_str()),
             Statement::Aggregate(statement) => statement.filename.as_ref().map(|x| x.as_str()),
-            Statement::CreateTable(_) => None
+            Statement::CreateTable(_) => None,
+            Statement::Multiple(_) => None,
         }
     }
 
@@ -186,6 +188,13 @@ impl Statement {
     pub fn extract_create_table(self) -> Option<TableDefinition> {
         match self {
             Statement::CreateTable(statement) => Some(statement),
+            _ => None
+        }
+    }
+
+    pub fn extract_multiple(self) -> Option<Vec<Statement>> {
+        match self {
+            Statement::Multiple(statements) => Some(statements),
             _ => None
         }
     }
