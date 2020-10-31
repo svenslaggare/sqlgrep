@@ -59,40 +59,48 @@ impl AggregateExecutionEngine {
                 }
                 Aggregate::Min(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
-                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
-                    *entry = (*entry).min(column_value);
+                    let group_value = self.get_group(group.clone(), aggregate_index, column_value);
+                    *group_value = (*group_value).min(column_value);
                 }
                 Aggregate::Max(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
-                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
-                    *entry = (*entry).max(column_value);
+                    let group_value = self.get_group(group.clone(), aggregate_index, column_value);
+                    *group_value = (*group_value).max(column_value);
                 }
                 Aggregate::Average(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
-                    let average_entry = self.summary_statistics.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((0, 0));
+                    let average_entry = self.get_summary_group(group.clone(), aggregate_index);
                     average_entry.0 += column_value;
                     average_entry.1 += 1;
 
                     let average = average_entry.0 / average_entry.1;
 
-                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(average);
-                    *entry = average;
+                    let group_value = self.get_group(group.clone(), aggregate_index, average);
+                    *group_value = average;
                 }
                 Aggregate::Sum(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
-                    let average_entry = self.summary_statistics.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((0, 0));
-                    average_entry.0 += column_value;
-                    average_entry.1 += 1;
+                    let sum_entry = self.get_summary_group(group.clone(), aggregate_index);
+                    sum_entry.0 += column_value;
+                    sum_entry.1 += 1;
 
-                    let sum = average_entry.0;
+                    let sum = sum_entry.0;
 
-                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(sum);
-                    *entry = sum;
+                    let group_value = self.get_group(group.clone(), aggregate_index, sum);
+                    *group_value = sum;
                 }
             }
         }
 
         Ok(())
+    }
+
+    fn get_group(&mut self, group: Value, aggregate_index: usize, default_value: i64) -> &mut i64 {
+        self.groups.entry(group).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
+    }
+
+    fn get_summary_group(&mut self, group: Value, aggregate_index: usize) -> &mut (i64, i64) {
+        self.summary_statistics.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((0, 0))
     }
 
     pub fn execute_result_only(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
