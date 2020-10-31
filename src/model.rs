@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use std::fmt::Formatter;
+
 use crate::data_model::TableDefinition;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Hash, Ord)]

@@ -48,7 +48,7 @@ impl std::iter::Iterator for ReadLinePrompt {
 fn define_table(text: String) -> Option<TableDefinition> {
     let table_definition_tree = parser::parse_str(&text);
     if let Err(err) = table_definition_tree {
-        println!("Failed to parse definition: {}", err);
+        println!("Failed to parse data definition: {}", err);
         return None;
     }
     let table_definition_tree = table_definition_tree.unwrap();
@@ -92,7 +92,7 @@ fn main() {
     for line in ReadLinePrompt::new("> ") {
         let parse_tree = parser::parse_str(&line);
         if let Err(err) = parse_tree {
-            println!("{}", err);
+            println!("Failed parsing input: {}", err);
             continue;
         }
 
@@ -100,7 +100,7 @@ fn main() {
 
         let statement = parse_tree_converter::transform_statement(parse_tree);
         if let Err(err) = statement {
-            println!("{}", err);
+            println!("Failed parsing input: {}", err);
             continue;
         }
 
@@ -109,7 +109,7 @@ fn main() {
 
         let mut ingester = FileIngester::new(&filename, ProcessEngine::new(&tables)).unwrap();
         if let Err(result) = ingester.process(statement) {
-            println!("{}", result);
+            println!("Execution error: {}", result);
         }
     }
 }
