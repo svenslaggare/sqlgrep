@@ -114,19 +114,37 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, line: String,
             let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone()).unwrap();
 
             let result = if command_line_input.follow {
-                let mut ingester = FollowFileIngester::new(
+                let ingester = FollowFileIngester::new(
                     &filename,
                     command_line_input.head,
                     ExecutionEngine::new(&tables)
-                ).unwrap();
-                ingester.process(statement)
+                );
+
+                match ingester {
+                    Ok(mut ingester) => {
+                        ingester.process(statement)
+                    }
+                    Err(err) => {
+                        println!("{}", err);
+                        return;
+                    }
+                }
             } else {
-                let mut ingester = FileIngester::new(
+                let ingester = FileIngester::new(
                     &filename,
                     single_result,
                     ExecutionEngine::new(&tables),
-                ).unwrap();
-                ingester.process(statement)
+                );
+
+                match ingester {
+                    Ok(mut ingester) => {
+                        ingester.process(statement)
+                    }
+                    Err(err) => {
+                        println!("{}", err);
+                        return;
+                    }
+                }
             };
 
             if let Err(err) = result {
