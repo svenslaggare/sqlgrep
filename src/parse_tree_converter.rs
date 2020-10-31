@@ -168,7 +168,8 @@ fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Agg
     match tree {
         ParseExpressionTree::ColumnAccess(name) => Ok((Some(name), Aggregate::GroupKey)),
         ParseExpressionTree::Call(name, mut arguments) => {
-            match name.to_lowercase().as_str() {
+            let name_lowercase = name.to_lowercase();
+            match name_lowercase.as_str() {
                 "count" => {
                     if arguments.is_empty() {
                         Ok((None, Aggregate::Count))
@@ -176,24 +177,24 @@ fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Agg
                         Err(ConvertParseTreeError::UnexpectedArguments)
                     }
                 },
-                "max" => {
+                "max" | "min" | "avg" | "sum" => {
                     if arguments.len() == 1 {
-                        Ok((None, Aggregate::Max(transform_expression(arguments.remove(0))?)))
+                        let expression = transform_expression(arguments.remove(0))?;
+                        let aggregate = match name_lowercase.as_str() {
+                            "max" => Aggregate::Max(expression),
+                            "min" => Aggregate::Min(expression),
+                            "avg" => Aggregate::Average(expression),
+                            "sum" => Aggregate::Sum(expression),
+                            _ => { panic!("should not happen") }
+                        };
+
+                        Ok((None, aggregate))
                     } else if arguments.is_empty() {
                         Err(ConvertParseTreeError::ExpectedArgument)
                     } else {
                         Err(ConvertParseTreeError::TooManyArguments)
                     }
                 },
-                "min" => {
-                    if arguments.len() == 1 {
-                        Ok((None, Aggregate::Min(transform_expression(arguments.remove(0))?)))
-                    } else if arguments.is_empty() {
-                        Err(ConvertParseTreeError::ExpectedArgument)
-                    } else {
-                        Err(ConvertParseTreeError::TooManyArguments)
-                    }
-                }
                 _ => Err(ConvertParseTreeError::UndefinedAggregate)
             }
         }
@@ -412,6 +413,38 @@ fn test_aggregate_statement2() {
     let tree = ParseOperationTree::Select {
         projections: vec![
             (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
+            (None, ParseExpressionTree::Call("SUM".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: Some("x".to_owned())
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statemnt = statement.unwrap();
+
+    let statement = statemnt.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(2, statement.aggregates.len());
+    assert_eq!("x", statement.aggregates[0].0);
+    assert_eq!(Aggregate::GroupKey, statement.aggregates[0].1);
+
+    assert_eq!("p1", statement.aggregates[1].0);
+    assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
+
+
+    assert_eq!("test", statement.from);
+    assert_eq!(Some("x".to_owned()), statement.group_by);
+}
+
+#[test]
+fn test_aggregate_statement3() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![
+            (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
             (None, ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
         ],
         from: ("test".to_string(), None),
@@ -439,7 +472,7 @@ fn test_aggregate_statement2() {
 }
 
 #[test]
-fn test_aggregate_statement3() {
+fn test_aggregate_statement4() {
     let tree = ParseOperationTree::Select {
         projections: vec![
             (None, ParseExpressionTree::Call("COUNT".to_owned(), vec![])),

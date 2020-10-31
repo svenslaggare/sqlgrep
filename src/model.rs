@@ -128,7 +128,9 @@ pub enum Aggregate {
     GroupKey,
     Count,
     Min(ExpressionTree),
-    Max(ExpressionTree)
+    Max(ExpressionTree),
+    Average(ExpressionTree),
+    Sum(ExpressionTree)
 }
 
 pub struct SelectStatement {

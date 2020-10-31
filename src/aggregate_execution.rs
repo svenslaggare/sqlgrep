@@ -6,13 +6,15 @@ use crate::execution_model::{ColumnProvider, ExecutionResult, ExecutionError, Re
 use crate::expression_execution::ExpressionExecutionEngine;
 
 pub struct AggregateExecutionEngine {
-    groups: BTreeMap<Value, HashMap<usize, i64>>
+    groups: BTreeMap<Value, HashMap<usize, i64>>,
+    summary_statistics: BTreeMap<Value, HashMap<usize, (i64, i64)>>
 }
 
 impl AggregateExecutionEngine {
     pub fn new() -> AggregateExecutionEngine {
         AggregateExecutionEngine {
             groups: BTreeMap::new(),
+            summary_statistics: BTreeMap::new()
         }
     }
 
@@ -65,6 +67,28 @@ impl AggregateExecutionEngine {
                     let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(column_value);
                     *entry = (*entry).max(column_value);
                 }
+                Aggregate::Average(ref expression) => {
+                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
+                    let average_entry = self.summary_statistics.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((0, 0));
+                    average_entry.0 += column_value;
+                    average_entry.1 += 1;
+
+                    let average = average_entry.0 / average_entry.1;
+
+                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(average);
+                    *entry = average;
+                }
+                Aggregate::Sum(ref expression) => {
+                    let column_value = expression_execution_engine.evaluate(expression)?.int().ok_or(ExecutionError::ExpectedNumericValue)?;
+                    let average_entry = self.summary_statistics.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((0, 0));
+                    average_entry.0 += column_value;
+                    average_entry.1 += 1;
+
+                    let sum = average_entry.0;
+
+                    let entry = self.groups.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(sum);
+                    *entry = sum;
+                }
             }
         }
 
@@ -85,7 +109,7 @@ impl AggregateExecutionEngine {
                         result_rows_by_column.last_mut().unwrap().push(group_key.clone());
                     }
                 }
-                Aggregate::Count | Aggregate::Max(_) | Aggregate::Min(_)  => {
+                Aggregate::Count | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
                     for subgroups in self.groups.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_rows_by_column.last_mut().unwrap().push(Value::Int(*group_value));
@@ -356,6 +380,116 @@ fn test_group_by_and_count_and_max() {
     assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
     assert_eq!(Value::Int(1), result.data[1].columns[1]);
     assert_eq!(Value::Int(0), result.data[1].columns[2]);
+}
+
+#[test]
+fn test_group_by_and_average() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("name".to_owned(), Aggregate::GroupKey),
+            ("max".to_owned(), Aggregate::Average(ExpressionTree::ColumnAccess("x".to_owned())))
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: Some("name".to_string())
+    };
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Int(i * 1000),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Int(1000),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Int(3000), result.data[0].columns[1]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Int(1000), result.data[1].columns[1]);
+}
+
+#[test]
+fn test_group_by_and_sum() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("name".to_owned(), Aggregate::GroupKey),
+            ("max".to_owned(), Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())))
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: Some("name".to_string())
+    };
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Int(i * 1000),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Int(1000),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Int(15000), result.data[0].columns[1]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Int(1000), result.data[1].columns[1]);
 }
 
 #[test]
