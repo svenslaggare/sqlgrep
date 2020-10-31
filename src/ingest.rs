@@ -114,13 +114,17 @@ impl OutputPrinter {
     pub fn print(&self, result_row: &ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
-            let columns = result_row.columns
-                .iter()
-                .enumerate()
-                .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
-                .collect::<Vec<_>>();
+            if row.columns.len() == 1 && result_row.columns[0] == "input" {
+                println!("{}", row.columns[0]);
+            } else {
+                let columns = result_row.columns
+                    .iter()
+                    .enumerate()
+                    .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
+                    .collect::<Vec<_>>();
 
-            println!("{}", columns.join(", "));
+                println!("{}", columns.join(", "));
+            }
         }
 
         if multiple_rows && !self.single_result {
