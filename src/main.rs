@@ -19,6 +19,7 @@ use crate::data_model::{Tables};
 use crate::model::{ Statement};
 use crate::ingest::{FileIngester, FollowFileIngester};
 use crate::execution_engine::ExecutionEngine;
+use rustyline::Editor;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -208,7 +209,9 @@ fn main() {
     if let Some(command) = command_line_input.command.clone() {
         execute(&command_line_input, &tables, running.clone(), command, true);
     } else {
-        for line in ReadLinePrompt::new("> ") {
+        let mut line_editor = Editor::<()>::new();
+        while let Ok(line) = line_editor.readline("> ") {
+            line_editor.add_history_entry(line.clone());
             if execute(&command_line_input, &tables, running.clone(), line, false) {
                 break;
             }
