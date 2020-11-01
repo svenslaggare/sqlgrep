@@ -1,5 +1,5 @@
 # sqlgrep
-Combines SQL with regular expressions to provide a new way of filtering and aggregating of text files.
+Combines SQL with regular expressions to provide a new way to filter and process text files.
 
 ## Build
 Requires cargo (https://rustup.rs/).
