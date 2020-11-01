@@ -563,9 +563,10 @@ impl<'a> Parser<'a> {
         if self.current() == &Token::Colon {
             self.next()?;
 
-            if self.current() != &Token::Colon {
-                return Err(ParserError::ExpectedColon);
-            }
+            self.expect_token(
+                Token::Colon,
+                ParserError::ExpectedColon
+            )?;
 
             self.next()?;
             filename = Some(self.consume_string()?);
@@ -583,10 +584,11 @@ impl<'a> Parser<'a> {
                     }
                     Token::Keyword(Keyword::Group) => {
                         self.next()?;
-                        if self.current() != &Token::Keyword(Keyword::By) {
-                            return Err(ParserError::ExpectedKeyword(Keyword::By));
-                        }
 
+                        self.expect_token(
+                            Token::Keyword(Keyword::By)
+                            , ParserError::ExpectedKeyword(Keyword::By)
+                        )?;
                         self.next()?;
 
                         group_by = Some(self.consume_identifier()?);
@@ -635,18 +637,18 @@ impl<'a> Parser<'a> {
     fn parse_create_table(&mut self) -> ParserResult<ParseOperationTree> {
         self.next()?;
 
-        if self.current() != &Token::Keyword(Keyword::Table) {
-            return Err(ParserError::ExpectedKeyword(Keyword::Table));
-        }
-
+        self.expect_token(
+            Token::Keyword(Keyword::Table),
+            ParserError::ExpectedKeyword(Keyword::Table)
+        )?;
         self.next()?;
 
         let table_name = self.consume_identifier()?;
 
-        if self.current() != &Token::LeftParentheses {
-            return Err(ParserError::ExpectedLeftParentheses);
-        }
-
+        self.expect_token(
+            Token::LeftParentheses,
+            ParserError::ExpectedLeftParentheses
+        )?;
         self.next()?;
 
         let mut patterns = Vec::new();
@@ -664,14 +666,16 @@ impl<'a> Parser<'a> {
                     self.next()?;
                     let pattern_index = self.consume_int()?;
 
-                    if self.current() != &Token::RightSquareParentheses {
-                        return Err(ParserError::ExpectedRightSquareParentheses);
-                    }
+                    self.expect_token(
+                        Token::RightSquareParentheses,
+                        ParserError::ExpectedRightSquareParentheses
+                    )?;
                     self.next()?;
 
-                    if self.current() != &Token::RightArrow {
-                        return Err(ParserError::ExpectedRightArrow);
-                    }
+                    self.expect_token(
+                        Token::RightArrow,
+                        ParserError::ExpectedRightArrow
+                    )?;
                     self.next()?;
 
                     let column_name = self.consume_identifier()?;
@@ -693,10 +697,10 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if self.current() != &Token::SemiColon {
-            return Err(ParserError::ExpectedSemiColon);
-        }
-
+        self.expect_token(
+            Token::SemiColon,
+            ParserError::ExpectedSemiColon
+        )?;
         self.next()?;
 
         Ok(
@@ -779,10 +783,10 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 let expression = self.parse_expression_internal();
 
-                match self.current() {
-                    Token::RightParentheses => {},
-                    _ => return Err(ParserError::ExpectedRightParentheses)
-                }
+                self.expect_token(
+                    Token::RightParentheses,
+                    ParserError::ExpectedRightParentheses
+                )?;
 
                 self.next()?;
                 expression
@@ -884,11 +888,19 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn expect_token(&self, token: Token, error: ParserError) -> ParserResult<()> {
+        if self.current() != &token {
+            return Err(error);
+        }
+
+        Ok(())
+    }
+
     fn current(&self) -> &Token {
         &self.tokens[self.index as usize]
     }
 
-    fn next(&mut self) -> Result<&Token, ParserError> {
+    fn next(&mut self) -> ParserResult<&Token> {
         self.index += 1;
         if self.index >= self.tokens.len() as isize {
             return Err(ParserError::ReachedEndOfTokens);
@@ -897,7 +909,7 @@ impl<'a> Parser<'a> {
         Ok(&self.tokens[self.index as usize])
     }
 
-    fn current_to_op(&self) -> Result<Operator, ParserError> {
+    fn current_to_op(&self) -> ParserResult<Operator> {
         if let Token::Operator(op) = self.current() {
             Ok(*op)
         } else {
@@ -905,7 +917,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn get_token_precedence(&self) -> Result<i32, ParserError> {
+    fn get_token_precedence(&self) -> ParserResult<i32> {
         match self.current() {
             Token::Operator(op) => {
                 match self.binary_operators.get(op) {
