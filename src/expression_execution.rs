@@ -54,6 +54,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 
                 left_value.map_same_type(
                     &right_value,
+                    || { Some(Value::Null) },
                     |x, y| {
                         Some(
                             match operator {
@@ -74,24 +75,15 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             }
                         )
                     },
-                    |_, _| {
-                        None
-                    },
-                    |_, _| {
-                        None
-                    }
+                    |_, _| { None },
+                    |_, _| { None }
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
             ExpressionTree::UnaryArithmetic { operand, operator } => {
                 let operand_value = self.evaluate(operand)?;
 
                 operand_value.map(
-                    || {
-                        match operator {
-                            UnaryArithmeticOperator::Negative => Some(Value::Null),
-                            UnaryArithmeticOperator::Invert => Some(Value::Null)
-                        }
-                    },
+                    || { Some(Value::Null) },
                     |x| {
                         match operator {
                             UnaryArithmeticOperator::Negative => Some(-x),
@@ -324,6 +316,22 @@ fn test_null1() {
         expression_execution_engine.evaluate(&ExpressionTree::UnaryArithmetic {
             operand: Box::new(ExpressionTree::Value(Value::Null)),
             operator: UnaryArithmeticOperator::Invert
+        })
+    );
+}
+
+#[test]
+fn test_null2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Null),
+        expression_execution_engine.evaluate(&ExpressionTree::Arithmetic {
+            left: Box::new(ExpressionTree::Value(Value::Null)),
+            right: Box::new(ExpressionTree::Value(Value::Null)),
+            operator: ArithmeticOperator::Add
         })
     );
 }

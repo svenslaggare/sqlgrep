@@ -101,12 +101,15 @@ impl Value {
     }
 
     pub fn map_same_type<
-        F1: Fn(i64, i64) -> Option<i64>,
-        F2: Fn(f64, f64) -> Option<f64>,
-        F3: Fn(bool, bool) -> Option<bool>,
-        F4: Fn(&str, &str) -> Option<String>
-    >(&self, other: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) -> Option<Value> {
+        F1: Fn() -> Option<Value>,
+        F2: Fn(i64, i64) -> Option<i64>,
+        F3: Fn(f64, f64) -> Option<f64>,
+        F4: Fn(bool, bool) -> Option<bool>,
+        F5: Fn(&str, &str) -> Option<String>
+    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5) -> Option<Value> {
         match (self, other) {
+            (Value::Null, _) => null_f(),
+            (_, Value::Null) => null_f(),
             (Value::Int(x), Value::Int(y)) => int_f(*x, *y).map(|x| Value::Int(x)),
             (Value::Float(x), Value::Float(y)) => float_f(x.0, y.0).map(|x| Value::Float(Float(x))),
             (Value::Bool(x), Value::Bool(y)) => bool_f(*x, *y).map(|x| Value::Bool(x)),
