@@ -1,12 +1,51 @@
 use std::str::FromStr;
 use std::fmt::Formatter;
 
+use std::cmp::Ordering;
+use std::hash::{Hash, Hasher};
+
 use crate::data_model::TableDefinition;
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Float(pub f64);
+
+impl Eq for Float {}
+impl Ord for Float {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.0 < other.0 {
+            Ordering::Less
+        } else if self.0 > other.0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl Hash for Float {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let bits: u64 = unsafe { std::mem::transmute(self.0) };
+        bits.hash(state)
+    }
+}
+
+impl std::fmt::Display for Float {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<f64> for Float {
+    fn from(x: f64) -> Self {
+        Float(x)
+    }
+}
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Hash, Ord)]
 pub enum Value {
     Null,
     Int(i64),
+    Float(Float),
     Bool(bool),
     String(String)
 }
@@ -44,16 +83,80 @@ impl Value {
         }
     }
 
+    pub fn int_mut(&mut self) -> Option<&mut i64> {
+        match self {
+            Value::Int(x) => Some(x),
+            _ => None
+        }
+    }
+
+    pub fn value_type(&self) -> Option<ValueType> {
+        match self {
+            Value::Null => None,
+            Value::Int(_) => Some(ValueType::Int),
+            Value::Float(_) => Some(ValueType::Float),
+            Value::Bool(_) => Some(ValueType::Bool),
+            Value::String(_) => Some(ValueType::String)
+        }
+    }
+
     pub fn map_same_type<
         F1: Fn(i64, i64) -> Option<i64>,
-        F2: Fn(bool, bool) -> Option<bool>,
-        F3: Fn(&str, &str) -> Option<String>
-    >(&self, other: &Value, int_f: F1, bool_f: F2, string_f: F3) -> Option<Value> {
+        F2: Fn(f64, f64) -> Option<f64>,
+        F3: Fn(bool, bool) -> Option<bool>,
+        F4: Fn(&str, &str) -> Option<String>
+    >(&self, other: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) -> Option<Value> {
         match (self, other) {
             (Value::Int(x), Value::Int(y)) => int_f(*x, *y).map(|x| Value::Int(x)),
+            (Value::Float(x), Value::Float(y)) => float_f(x.0, y.0).map(|x| Value::Float(Float(x))),
             (Value::Bool(x), Value::Bool(y)) => bool_f(*x, *y).map(|x| Value::Bool(x)),
             (Value::String(x), Value::String(y)) => string_f(x, y).map(|x| Value::String(x)),
             _ => None
+        }
+    }
+
+    pub fn map<
+        F1: Fn(i64) -> Option<i64>,
+        F2: Fn(f64) -> Option<f64>,
+        F3: Fn(bool) -> Option<bool>,
+        F4: Fn(&str) -> Option<String>
+    >(&self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) -> Option<Value> {
+        match self {
+            Value::Null => None,
+            Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
+            Value::Float(x) => float_f(x.0).map(|x| Value::Float(Float(x))),
+            Value::Bool(x) => bool_f(*x).map(|x| Value::Bool(x)),
+            Value::String(x) => string_f(x).map(|x| Value::String(x)),
+        }
+    }
+
+    pub fn modify<
+        F1: Fn(&mut i64),
+        F2: Fn(&mut f64),
+        F3: Fn(&mut bool),
+        F4: Fn(&mut String)
+    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) {
+        match self {
+            Value::Null => {},
+            Value::Int(x) => int_f(x),
+            Value::Float(x) => float_f(&mut x.0),
+            Value::Bool(x) => bool_f(x),
+            Value::String(x) => string_f(x)
+        }
+    }
+
+    pub fn modify_same_type<
+        F1: Fn(&mut i64, i64),
+        F2: Fn(&mut f64, f64),
+        F3: Fn(&mut bool, bool),
+        F4: Fn(&mut String, &str)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) {
+        match (self, value) {
+            (Value::Int(x), Value::Int(y)) => int_f(x, *y),
+            (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
+            (Value::Bool(x), Value::Bool(y)) => bool_f(x, *y),
+            (Value::String(x), Value::String(y)) => string_f(x, y),
+            _ => {}
         }
     }
 }
@@ -63,6 +166,7 @@ impl std::fmt::Display for Value {
         match self {
             Value::Null => write!(f, "NULL"),
             Value::Int(x) => write!(f, "{}", x),
+            Value::Float(x) => write!(f, "{:.2}", x.0),
             Value::Bool(x) => write!(f, "{}", x),
             Value::String(x) => write!(f, "{}", x)
         }
@@ -72,6 +176,7 @@ impl std::fmt::Display for Value {
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub enum ValueType {
     Int,
+    Float,
     Bool,
     String
 }
@@ -80,6 +185,7 @@ impl ValueType {
     pub fn parse(&self, value_str: &str) -> Option<Value> {
         match self {
             ValueType::Int => i64::from_str(value_str).map(|x| Value::Int(x)).ok(),
+            ValueType::Float => f64::from_str(value_str).map(|x| Value::Float(Float(x))).ok(),
             ValueType::Bool => bool::from_str(value_str).map(|x| Value::Bool(x)).ok(),
             ValueType::String => Some(Value::String(value_str.to_owned()))
         }
@@ -88,9 +194,19 @@ impl ValueType {
     pub fn from_str(text: &str) -> Option<ValueType> {
         match text {
             "int" => Some(ValueType::Int),
+            "real" => Some(ValueType::Float),
             "text" => Some(ValueType::String),
             "boolean" => Some(ValueType::Bool),
             _ => None
+        }
+    }
+
+    pub fn default_value(&self) -> Value {
+        match self {
+            ValueType::Int => Value::Int(0),
+            ValueType::Float => Value::Float(Float(0.0)),
+            ValueType::Bool => Value::Bool(false),
+            ValueType::String => Value::String(String::new())
         }
     }
 }

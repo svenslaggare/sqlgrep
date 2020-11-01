@@ -63,6 +63,16 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             }
                         )
                     },
+                    |x, y| {
+                        Some(
+                            match operator {
+                                ArithmeticOperator::Add => x + y,
+                                ArithmeticOperator::Subtract => x - y,
+                                ArithmeticOperator::Multiply => x * y,
+                                ArithmeticOperator::Divide => x / y
+                            }
+                        )
+                    },
                     |_, _| {
                         None
                     },

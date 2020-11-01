@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use regex::Regex;
 
-use crate::model::Value;
+use crate::model::{Value, Float};
 use crate::model::ValueType;
 
 pub struct Row {
@@ -168,6 +168,24 @@ fn test_table_extract4() {
     let result = table_definition.extract("A: aba");
     assert_eq!(Value::Bool(false), result.columns[0]);
 }
+
+#[test]
+fn test_table_extract5() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9\\.]+)")],
+        vec![
+            ColumnDefinition::new("line", 1, "x", ValueType::Float)
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711");
+    assert_eq!(Value::Float(Float(4711.0)), result.columns[0]);
+
+    let result = table_definition.extract("A: 4711.1337");
+    assert_eq!(Value::Float(Float(4711.1337)), result.columns[0]);
+}
+
 
 #[test]
 fn test_table_extract_multiple1() {
