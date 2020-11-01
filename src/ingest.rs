@@ -5,7 +5,7 @@ use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
 use crate::execution_engine::{ExecutionEngine};
-use crate::execution_model::{ExecutionResult, ResultRow, ExecutionError};
+use crate::execution_model::{ExecutionResult, ResultRow};
 
 pub struct FileIngester<'a> {
     reader: Option<BufReader<File>>,

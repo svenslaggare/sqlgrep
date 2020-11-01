@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator};
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator};
 use crate::execution_model::ColumnProvider;
 
 #[derive(Debug, PartialEq)]
@@ -79,6 +79,28 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     |_, _| {
                         None
                     }
+                ).ok_or(EvaluationError::UndefinedOperation)
+            }
+            ExpressionTree::UnaryArithmetic { operand, operator } => {
+                let operand_value = self.evaluate(operand)?;
+
+                operand_value.map(
+                    |x| {
+                        Some(
+                            match operator {
+                                UnaryArithmeticOperator::Negative => -x
+                            }
+                        )
+                    },
+                    |x| {
+                        Some(
+                            match operator {
+                                UnaryArithmeticOperator::Negative => -x
+                            }
+                        )
+                    },
+                    |_| None,
+                    |_| None,
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
             ExpressionTree::And { left, right } => {
@@ -262,6 +284,21 @@ fn test_arithmetic_fail() {
             left: Box::new(ExpressionTree::Value(Value::Int(4000))),
             right: Box::new(ExpressionTree::Value(Value::Bool(false))),
             operator: ArithmeticOperator::Add
+        })
+    );
+}
+
+#[test]
+fn test_unary_arithmetic() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Int(-5000)),
+        expression_execution_engine.evaluate(&ExpressionTree::UnaryArithmetic {
+            operand: Box::new(ExpressionTree::Value(Value::Int(5000))),
+            operator: UnaryArithmeticOperator::Negative
         })
     );
 }

@@ -13,11 +13,10 @@ use std::io::Write;
 
 use structopt::StructOpt;
 
-use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
-use crate::model::{ValueType, Statement};
+use crate::data_model::{Tables};
+use crate::model::{ Statement};
 use crate::ingest::{FileIngester, FollowFileIngester};
 use crate::execution_engine::ExecutionEngine;
-use crate::parser::{tokenize, Parser, BinaryOperators, UnaryOperators, ParserResult, ParseOperationTree};
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]

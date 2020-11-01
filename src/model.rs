@@ -230,13 +230,19 @@ pub enum ArithmeticOperator {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum UnaryArithmeticOperator {
+    Negative
+}
+
+#[derive(Debug, PartialEq)]
 pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
     Compare { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: CompareOperator },
     And { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    Arithmetic { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: ArithmeticOperator }
+    Arithmetic { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: ArithmeticOperator },
+    UnaryArithmetic { operand: Box<ExpressionTree>, operator: UnaryArithmeticOperator }
 }
 
 #[derive(Debug, PartialEq)]

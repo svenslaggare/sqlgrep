@@ -1,7 +1,7 @@
 use std::fmt::Formatter;
 
 use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator};
-use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, CreateTableStatement};
+use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator};
 use crate::data_model::{ColumnDefinition, TableDefinition};
 
 #[derive(Debug)]
@@ -155,7 +155,14 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
                 _ => { return Err(ConvertParseTreeError::UndefinedOperator); }
             }
         }
-        ParseExpressionTree::UnaryOperator { .. } => Err(ConvertParseTreeError::UndefinedExpression),
+        ParseExpressionTree::UnaryOperator { operator, operand } => {
+            let operand = Box::new(transform_expression(*operand)?);
+
+            match operator {
+                Operator::Single('-') => Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Negative, operand }),
+                _ => { return Err(ConvertParseTreeError::UndefinedOperator); }
+            }
+        }
         ParseExpressionTree::AndExpression { left, right } => {
             let left = Box::new(transform_expression(*left)?);
             let right = Box::new(transform_expression(*right)?);
@@ -382,6 +389,41 @@ fn test_select_statement5() {
 
     assert_eq!("test", statement.from);
     assert_eq!(Some("test.log".to_owned()), statement.filename);
+}
+
+#[test]
+fn test_select_statement6() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![
+            (
+                None,
+                ParseExpressionTree::UnaryOperator {
+                    operator: Operator::Single('-'),
+                    operand: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned()))
+                }
+            )
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: None
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("p0", statement.projections[0].0.as_str());
+    assert_eq!(
+        &ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Negative, operand: Box::new(ExpressionTree::ColumnAccess("x".to_owned())) },
+        &statement.projections[0].1
+    );
+
+    assert_eq!("test", statement.from);
 }
 
 #[test]

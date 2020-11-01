@@ -1159,6 +1159,31 @@ fn test_parse_expression5() {
 }
 
 #[test]
+fn test_parse_expression6() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Operator(Operator::Single('-')),
+            Token::Int(4),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::UnaryOperator {
+            operator: Operator::Single('-'),
+            operand: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+        },
+        tree
+    );
+}
+
+#[test]
 fn test_parse_select1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
