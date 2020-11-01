@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::model::{SelectStatement, Value, ExpressionTree, ArithmeticOperator, CompareOperator, ValueType};
-use crate::execution_model::{ColumnProvider, HashMapColumnProvider, ExecutionResult, ResultRow};
+use crate::model::{SelectStatement, ExpressionTree, ArithmeticOperator, Value, ValueType, CompareOperator};
+use crate::execution_model::{ColumnProvider, ExecutionResult, ResultRow, HashMapColumnProvider};
 use crate::expression_execution::{ExpressionExecutionEngine};
 use crate::data_model::{Row, TableDefinition, ColumnDefinition};
 

@@ -10,6 +10,8 @@ mod execution_engine;
 mod ingest;
 
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use structopt::StructOpt;
 
@@ -122,13 +124,20 @@ fn parse_statement(line: &str) -> Option<Statement> {
     statement.ok()
 }
 
-fn execute(command_line_input: &CommandLineInput, tables: &Tables, line: String, single_result: bool) {
-    match parse_statement(&line) {
+fn execute(command_line_input: &CommandLineInput, tables: &Tables, running: Arc<AtomicBool>, query_line: String, single_result: bool) -> bool {
+    if query_line == "exit" {
+        return true;
+    }
+
+    running.store(true, Ordering::SeqCst);
+
+    match parse_statement(&query_line) {
         Some(statement) => {
             let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone()).unwrap();
 
             let result = if command_line_input.follow {
                 let ingester = FollowFileIngester::new(
+                    running,
                     &filename,
                     command_line_input.head,
                     ExecutionEngine::new(&tables)
@@ -140,11 +149,12 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, line: String,
                     }
                     Err(err) => {
                         println!("{}", err);
-                        return;
+                        return false;
                     }
                 }
             } else {
                 let ingester = FileIngester::new(
+                    running,
                     &filename,
                     single_result,
                     ExecutionEngine::new(&tables),
@@ -156,7 +166,7 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, line: String,
                     }
                     Err(err) => {
                         println!("{}", err);
-                        return;
+                        return false;
                     }
                 }
             };
@@ -167,6 +177,8 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, line: String,
         }
         _ => {}
     }
+
+    false
 }
 
 fn main() {
@@ -179,11 +191,23 @@ fn main() {
         }
     }
 
+    let running = Arc::new(AtomicBool::new(false));
+    let running_clone = running.clone();
+    ctrlc::set_handler(move || {
+        if !running_clone.load(Ordering::SeqCst) {
+            std::process::exit(0);
+        }
+
+        running_clone.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
     if let Some(command) = command_line_input.command.clone() {
-        execute(&command_line_input, &tables, command, true);
+        execute(&command_line_input, &tables, running.clone(), command, true);
     } else {
         for line in ReadLinePrompt::new("> ") {
-            execute(&command_line_input, &tables, line, false);
+            if execute(&command_line_input, &tables, running.clone(), line, false) {
+                break;
+            }
         }
     }
 }

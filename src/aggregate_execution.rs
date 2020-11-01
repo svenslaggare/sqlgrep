@@ -1,6 +1,6 @@
 use std::collections::{HashMap, BTreeMap};
 
-use crate::model::{Value, Aggregate, AggregateStatement, ExpressionTree, CompareOperator, ValueType};
+use crate::model::{Value, Aggregate, AggregateStatement, ValueType, ExpressionTree, CompareOperator};
 use crate::data_model::{Row};
 use crate::execution_model::{ColumnProvider, ExecutionResult, ExecutionError, ResultRow, HashMapColumnProvider};
 use crate::expression_execution::ExpressionExecutionEngine;

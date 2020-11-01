@@ -222,13 +222,6 @@ fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Agg
     }
 }
 
-fn transform_column_access(tree: ParseExpressionTree) -> Result<String, ConvertParseTreeError> {
-    match tree {
-        ParseExpressionTree::ColumnAccess(name) => Ok(name),
-        _ => Err(ConvertParseTreeError::ExpectedColumnAccess)
-    }
-}
-
 #[test]
 fn test_select_statement1() {
     let tree = ParseOperationTree::Select {

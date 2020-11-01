@@ -1,5 +1,7 @@
 use std::io::{BufReader, BufRead, Seek, SeekFrom};
 use std::fs::File;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
@@ -8,19 +10,22 @@ use crate::execution_engine::{ExecutionEngine};
 use crate::execution_model::{ExecutionResult, ResultRow};
 
 pub struct FileIngester<'a> {
+    running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     single_result: bool,
     execution_engine: ExecutionEngine<'a>
 }
 
 impl<'a> FileIngester<'a> {
-    pub fn new(filename: &str,
+    pub fn new(running: Arc<AtomicBool>,
+               filename: &str,
                single_result: bool,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
         let reader = BufReader::new(File::open(filename)?);
 
         Ok(
             FileIngester {
+                running,
                 reader: Some(reader),
                 single_result,
                 execution_engine
@@ -46,6 +51,10 @@ impl<'a> FileIngester<'a> {
             } else {
                 break;
             }
+
+            if !self.running.load(Ordering::SeqCst) {
+                break;
+            }
         }
 
         if print_only_last {
@@ -59,12 +68,14 @@ impl<'a> FileIngester<'a> {
 }
 
 pub struct FollowFileIngester<'a> {
+    running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>
 }
 
 impl<'a> FollowFileIngester<'a> {
-    pub fn new(filename: &str,
+    pub fn new(running: Arc<AtomicBool>,
+               filename: &str,
                head: bool,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
         let mut reader = BufReader::new(File::open(filename)?);
@@ -75,6 +86,7 @@ impl<'a> FollowFileIngester<'a> {
 
         Ok(
             FollowFileIngester {
+                running,
                 reader: Some(reader),
                 execution_engine
             }
@@ -97,12 +109,15 @@ impl<'a> FollowFileIngester<'a> {
             if let Some(result_row) = result? {
                 OutputPrinter::new(false).print(&result_row)
             }
+
+            if !self.running.load(Ordering::SeqCst) {
+                break;
+            }
         }
 
         Ok(())
     }
 }
-
 
 struct OutputPrinter {
     single_result: bool
@@ -159,7 +174,13 @@ fn test_file_ingest1() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/test1.log",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
     let result = ingester.process(Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
@@ -208,7 +229,12 @@ fn test_file_ingest2() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/test1.log",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
@@ -254,7 +280,13 @@ fn test_file_ingest3() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/test1.log",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("count".to_owned(), Aggregate::Count),
@@ -298,7 +330,13 @@ fn test_file_ingest4() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/test1.log",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned())),
