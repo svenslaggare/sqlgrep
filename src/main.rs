@@ -133,7 +133,11 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, running: Arc<
 
     match parse_statement(&query_line) {
         Some(statement) => {
-            let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone()).unwrap();
+            let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone());
+            if filename.is_none() {
+                println!("The input filename must be defined.");
+            }
+            let filename = filename.unwrap();
 
             let result = if command_line_input.follow {
                 let ingester = FollowFileIngester::new(
