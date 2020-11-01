@@ -113,10 +113,15 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 Ok(Value::Bool(self.evaluate(left)?.bool() || self.evaluate(right)?.bool()))
             }
             ExpressionTree::Function { function, arguments } => {
+                let mut executed_arguments = Vec::new();
+                for argument in arguments {
+                    executed_arguments.push(self.evaluate(argument)?);
+                }
+
                 match function {
                     Function::Max if arguments.len() == 2 => {
-                        let arg0 = self.evaluate(&arguments[0])?;
-                        let arg1 = self.evaluate(&arguments[1])?;
+                        let arg0 = executed_arguments.remove(0);
+                        let arg1 = executed_arguments.remove(0);
 
                         arg0.map_same_type(
                             &arg1,
@@ -128,8 +133,8 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
                     Function::Min if arguments.len() == 2 => {
-                        let arg0 = self.evaluate(&arguments[0])?;
-                        let arg1 = self.evaluate(&arguments[1])?;
+                        let arg0 = executed_arguments.remove(0);
+                        let arg1 = executed_arguments.remove(0);
 
                         arg0.map_same_type(
                             &arg1,
@@ -333,6 +338,24 @@ fn test_unary_arithmetic() {
         expression_execution_engine.evaluate(&ExpressionTree::UnaryArithmetic {
             operand: Box::new(ExpressionTree::Value(Value::Int(5000))),
             operator: UnaryArithmeticOperator::Negative
+        })
+    );
+}
+
+#[test]
+fn test_function1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Int(5000)),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::Max,
+            arguments: vec![
+                ExpressionTree::Value(Value::Int(-1000)),
+                ExpressionTree::Value(Value::Int(5000))
+            ]
         })
     );
 }
