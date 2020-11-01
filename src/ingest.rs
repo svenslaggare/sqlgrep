@@ -105,9 +105,13 @@ impl<'a> FollowFileIngester<'a> {
                 line.remove(line.len() - 1);
             }
 
-            let (result, _) = self.execution_engine.execute(&statement, line);
+            let (result, refresh) = self.execution_engine.execute(&statement, line);
             if let Some(result_row) = result? {
-                OutputPrinter::new(false).print(&result_row)
+                if refresh {
+                    print!("\x1B[2J\x1B[1;1H");
+                }
+
+                OutputPrinter::new(refresh).print(&result_row)
             }
 
             if !self.running.load(Ordering::SeqCst) {
