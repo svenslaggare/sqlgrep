@@ -26,5 +26,5 @@ jobs:
       run: cargo build --release --verbose
     - uses: actions/upload-artifact@v2
       with:
-        name: "sqpgrep $GITHUB_SHA"
+        name: "sqlgrep $GITHUB_SHA"
         path: target/release/sqlgrep
