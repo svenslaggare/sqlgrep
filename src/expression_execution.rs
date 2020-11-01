@@ -34,6 +34,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
             ExpressionTree::ColumnAccess(name) => {
                 self.column_access.get(name.as_str()).map(|value| value.clone()).ok_or(EvaluationError::ColumnNotFound)
             }
+            ExpressionTree::Wildcard => { Err(EvaluationError::UndefinedOperation) }
             ExpressionTree::Compare { left, right, operator } => {
                 let left_value = self.evaluate(left)?;
                 let right_value = self.evaluate(right)?;

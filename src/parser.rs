@@ -96,6 +96,7 @@ impl std::fmt::Display for ParserError {
 pub enum ParseExpressionTree {
     Value(Value),
     ColumnAccess(String),
+    Wildcard,
     BinaryOperator { operator: Operator, left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
     UnaryOperator { operator: Operator, operand: Box<ParseExpressionTree>},
     AndExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
@@ -826,6 +827,10 @@ impl<'a> Parser<'a> {
         let op = self.current_to_op()?;
         self.next()?;
 
+        if op == Operator::Single('*') {
+            return Ok(ParseExpressionTree::Wildcard);
+        }
+
         let operand = self.parse_unary_operator()?;
         if !self.unary_operators.exists(&op) {
             return Err(ParserError::NotDefinedUnaryOperator(op));
@@ -1205,6 +1210,36 @@ fn test_parse_select1() {
     assert_eq!(
         ParseOperationTree::Select {
             projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            from: ("test".to_string(), None),
+            filter: None,
+            group_by: None
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_select2() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Operator(Operator::Single('*')),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![(None, ParseExpressionTree::Wildcard)],
             from: ("test".to_string(), None),
             filter: None,
             group_by: None

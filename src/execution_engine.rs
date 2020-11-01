@@ -40,7 +40,7 @@ impl<'a> ExecutionEngine<'a> {
                           select_statement: &SelectStatement,
                           line: String) -> ExecutionResult<Option<ResultRow>> {
         let table_definition = self.get_table(&select_statement.from)?;
-        let select_execution_engine = SelectExecutionEngine::new();
+        let select_execution_engine = SelectExecutionEngine::new(&table_definition);
         let row = table_definition.extract(&line);
 
         if row.any_result() {

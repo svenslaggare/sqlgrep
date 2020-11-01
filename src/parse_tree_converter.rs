@@ -137,6 +137,7 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
     match tree {
         ParseExpressionTree::Value(value) => Ok(ExpressionTree::Value(value)),
         ParseExpressionTree::ColumnAccess(name) => Ok(ExpressionTree::ColumnAccess(name)),
+        ParseExpressionTree::Wildcard => Ok(ExpressionTree::Wildcard),
         ParseExpressionTree::BinaryOperator { operator, left, right } => {
             let left = Box::new(transform_expression(*left)?);
             let right = Box::new(transform_expression(*right)?);

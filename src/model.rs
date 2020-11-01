@@ -238,6 +238,7 @@ pub enum UnaryArithmeticOperator {
 pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
+    Wildcard,
     Compare { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: CompareOperator },
     And { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
@@ -260,6 +261,12 @@ pub struct SelectStatement {
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>
+}
+
+impl SelectStatement {
+    pub fn is_wildcard_projection(&self) -> bool {
+        self.projections.len() == 1 && self.projections[0].1 == ExpressionTree::Wildcard
+    }
 }
 
 pub struct AggregateStatement {

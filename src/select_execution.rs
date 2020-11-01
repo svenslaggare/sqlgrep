@@ -1,23 +1,22 @@
 use std::collections::HashMap;
-use std::marker::PhantomData;
 
-use crate::model::{SelectStatement, Value, ExpressionTree, ArithmeticOperator, CompareOperator};
+use crate::model::{SelectStatement, Value, ExpressionTree, ArithmeticOperator, CompareOperator, ValueType};
 use crate::execution_model::{ColumnProvider, HashMapColumnProvider, ExecutionResult, ResultRow};
 use crate::expression_execution::{ExpressionExecutionEngine};
-use crate::data_model::Row;
+use crate::data_model::{Row, TableDefinition, ColumnDefinition};
 
-pub struct SelectExecutionEngine<TColumnProvider> where TColumnProvider: ColumnProvider {
-    _phantom: PhantomData<TColumnProvider>
+pub struct SelectExecutionEngine<'a>{
+    table_definition: &'a TableDefinition
 }
 
-impl<TColumnProvider> SelectExecutionEngine<TColumnProvider> where TColumnProvider: ColumnProvider {
-    pub fn new() -> SelectExecutionEngine<TColumnProvider> {
+impl<'a> SelectExecutionEngine<'a>  {
+    pub fn new(table_definition: &'a TableDefinition) -> SelectExecutionEngine<'a> {
         SelectExecutionEngine {
-            _phantom: PhantomData::default()
+            table_definition
         }
     }
 
-    pub fn execute(&self, select_statement: &SelectStatement, row: TColumnProvider) -> ExecutionResult<Option<ResultRow>> {
+    pub fn execute<TColumnProvider: ColumnProvider>(&self, select_statement: &SelectStatement, row: TColumnProvider) -> ExecutionResult<Option<ResultRow>> {
         let expression_execution_engine = ExpressionExecutionEngine::new(&row);
 
         let valid = if let Some(filter) = select_statement.filter.as_ref() {
@@ -27,15 +26,25 @@ impl<TColumnProvider> SelectExecutionEngine<TColumnProvider> where TColumnProvid
         };
 
         if valid {
+            let mut column_names = Vec::new();
             let mut result_columns = Vec::new();
 
-            for (_, projection) in &select_statement.projections {
-                result_columns.push(expression_execution_engine.evaluate(projection)?);
+            if select_statement.is_wildcard_projection() {
+                for column in &self.table_definition.columns {
+                    column_names.push(column.name.clone());
+                    result_columns.push(expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess(column.name.clone()))?);
+                }
+            } else {
+                column_names = select_statement.projections.iter().map(|projection| projection.0.clone()).collect();
+
+                for (_, projection) in &select_statement.projections {
+                    result_columns.push(expression_execution_engine.evaluate(projection)?);
+                }
             }
 
             let result_row = ResultRow {
                 data: vec![Row { columns: result_columns }],
-                columns: select_statement.projections.iter().map(|projection| projection.0.clone()).collect()
+                columns: column_names
             };
 
             Ok(Some(result_row))
@@ -47,7 +56,8 @@ impl<TColumnProvider> SelectExecutionEngine<TColumnProvider> where TColumnProvid
 
 #[test]
 fn test_project1() {
-    let select_execution_engine = SelectExecutionEngine::new();
+    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
+    let select_execution_engine = SelectExecutionEngine::new(&table_definition);
 
     let column_values = vec![
         Value::Int(1337)
@@ -77,7 +87,8 @@ fn test_project1() {
 
 #[test]
 fn test_project2() {
-    let select_execution_engine = SelectExecutionEngine::new();
+    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
+    let select_execution_engine = SelectExecutionEngine::new(&table_definition);
 
     let column_values = vec![
         Value::Int(1000)
@@ -116,7 +127,8 @@ fn test_project2() {
 
 #[test]
 fn test_project3() {
-    let select_execution_engine = SelectExecutionEngine::new();
+    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
+    let select_execution_engine = SelectExecutionEngine::new(&table_definition);
 
     let column_values = vec![
         Value::Int(1000)
@@ -159,8 +171,54 @@ fn test_project3() {
 }
 
 #[test]
+fn test_project4() {
+    let table_definition = TableDefinition::new(
+        "test",
+        Vec::new(),
+        vec![
+            ColumnDefinition::new("", 0, "x", ValueType::Int),
+            ColumnDefinition::new("", 0, "y", ValueType::Bool),
+        ]
+    ).unwrap();
+
+    let select_execution_engine = SelectExecutionEngine::new(&table_definition);
+
+    let column_values = vec![
+        Value::Int(1000),
+        Value::Bool(false),
+    ];
+
+    let mut columns = HashMap::new();
+    columns.insert("x", &column_values[0]);
+    columns.insert("y", &column_values[1]);
+
+    let result = select_execution_engine.execute(
+        &SelectStatement {
+            projections: vec![("p0".to_owned(), ExpressionTree::Wildcard)],
+            from: "test".to_owned(),
+            filename: None,
+            filter: None,
+        },
+        HashMapColumnProvider::new(columns)
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(Value::Int(1000), result.data[0].columns[0]);
+    assert_eq!("x".to_owned(), result.columns[0]);
+
+    assert_eq!(Value::Bool(false), result.data[0].columns[1]);
+    assert_eq!("y".to_owned(), result.columns[1]);
+}
+
+#[test]
 fn test_filter1() {
-    let select_execution_engine = SelectExecutionEngine::new();
+    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
+    let select_execution_engine = SelectExecutionEngine::new(&table_definition);
 
     let column_values = vec![
         Value::Int(1337)
@@ -193,7 +251,8 @@ fn test_filter1() {
 
 #[test]
 fn test_filter2() {
-    let select_execution_engine = SelectExecutionEngine::new();
+    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
+    let select_execution_engine = SelectExecutionEngine::new(&table_definition);
 
     let column_values = vec![
         Value::Int(1337)
