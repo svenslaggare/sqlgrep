@@ -186,7 +186,7 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
 
 fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
     match tree {
-        ParseExpressionTree::ColumnAccess(name) => Ok((Some(name), Aggregate::GroupKey)),
+        ParseExpressionTree::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name))),
         ParseExpressionTree::Call(name, mut arguments) => {
             let name_lowercase = name.to_lowercase();
             match name_lowercase.as_str() {
@@ -453,7 +453,7 @@ fn test_aggregate_statement1() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey, statement.aggregates[0].1);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
     assert_eq!("p1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
@@ -485,7 +485,7 @@ fn test_aggregate_statement2() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey, statement.aggregates[0].1);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
     assert_eq!("p1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
@@ -517,7 +517,7 @@ fn test_aggregate_statement3() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey, statement.aggregates[0].1);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
     assert_eq!("p1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Count, statement.aggregates[1].1);

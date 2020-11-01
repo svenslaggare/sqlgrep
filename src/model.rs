@@ -253,7 +253,7 @@ pub enum ExpressionTree {
 
 #[derive(Debug, PartialEq)]
 pub enum Aggregate {
-    GroupKey,
+    GroupKey(String),
     Count,
     Min(ExpressionTree),
     Max(ExpressionTree),

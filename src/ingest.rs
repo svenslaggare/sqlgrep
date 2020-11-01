@@ -212,7 +212,7 @@ fn test_file_ingest2() {
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hour".to_owned(), Aggregate::GroupKey),
+            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned())),
             ("count".to_owned(), Aggregate::Count),
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
         ],
@@ -301,7 +301,7 @@ fn test_file_ingest4() {
     let mut ingester = FileIngester::new("testdata/test1.log", false, ExecutionEngine::new(&tables)).unwrap();
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey),
+            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned())),
             ("count".to_owned(), Aggregate::Count),
             ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned()))),
         ],
