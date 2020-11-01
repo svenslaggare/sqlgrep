@@ -1,0 +1,3 @@
+SELECT ip, hostname FROM connections WHERE hostname != NULL
+
+SELECT hostname, COUNT() AS count FROM connections GROUP BY hostname
