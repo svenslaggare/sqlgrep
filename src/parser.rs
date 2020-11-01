@@ -567,8 +567,8 @@ impl<'a> Parser<'a> {
                 Token::Colon,
                 ParserError::ExpectedColon
             )?;
-
             self.next()?;
+
             filename = Some(self.consume_string()?);
         }
 

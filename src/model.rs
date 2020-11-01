@@ -240,6 +240,12 @@ pub enum UnaryArithmeticOperator {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum Function {
+    Max,
+    Min
+}
+
+#[derive(Debug, PartialEq)]
 pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
@@ -247,8 +253,9 @@ pub enum ExpressionTree {
     Compare { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: CompareOperator },
     And { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    Arithmetic { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: ArithmeticOperator },
-    UnaryArithmetic { operand: Box<ExpressionTree>, operator: UnaryArithmeticOperator }
+    Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
+    Function { function: Function, arguments: Vec<ExpressionTree> }
 }
 
 #[derive(Debug, PartialEq)]

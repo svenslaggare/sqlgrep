@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator};
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function};
 use crate::execution_model::ColumnProvider;
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
     ColumnNotFound,
-    UndefinedOperation
+    UndefinedOperation,
+    UndefinedFunction
 }
 
 impl std::fmt::Display for EvaluationError {
@@ -110,6 +111,37 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
             }
             ExpressionTree::Or { left, right } => {
                 Ok(Value::Bool(self.evaluate(left)?.bool() || self.evaluate(right)?.bool()))
+            }
+            ExpressionTree::Function { function, arguments } => {
+                match function {
+                    Function::Max if arguments.len() == 2 => {
+                        let arg0 = self.evaluate(&arguments[0])?;
+                        let arg1 = self.evaluate(&arguments[1])?;
+
+                        arg0.map_same_type(
+                            &arg1,
+                            || Some(Value::Null),
+                            |x, y| Some(x.max(y)),
+                            |x, y| Some(x.max(y)),
+                            |_, _| None,
+                            |_, _| None
+                        ).ok_or(EvaluationError::UndefinedOperation)
+                    }
+                    Function::Min if arguments.len() == 2 => {
+                        let arg0 = self.evaluate(&arguments[0])?;
+                        let arg1 = self.evaluate(&arguments[1])?;
+
+                        arg0.map_same_type(
+                            &arg1,
+                            || Some(Value::Null),
+                            |x, y| Some(x.min(y)),
+                            |x, y| Some(x.min(y)),
+                            |_, _| None,
+                            |_, _| None
+                        ).ok_or(EvaluationError::UndefinedOperation)
+                    }
+                    _ => Err(EvaluationError::UndefinedFunction)
+                }
             }
         }
     }
