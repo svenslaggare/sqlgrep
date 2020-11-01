@@ -86,21 +86,30 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 let operand_value = self.evaluate(operand)?;
 
                 operand_value.map(
-                    |x| {
-                        Some(
-                            match operator {
-                                UnaryArithmeticOperator::Negative => -x
-                            }
-                        )
+                    || {
+                        match operator {
+                            UnaryArithmeticOperator::Negative => Some(Value::Null),
+                            UnaryArithmeticOperator::Invert => Some(Value::Null)
+                        }
                     },
                     |x| {
-                        Some(
-                            match operator {
-                                UnaryArithmeticOperator::Negative => -x
-                            }
-                        )
+                        match operator {
+                            UnaryArithmeticOperator::Negative => Some(-x),
+                            UnaryArithmeticOperator::Invert => None
+                        }
                     },
-                    |_| None,
+                    |x| {
+                        match operator {
+                            UnaryArithmeticOperator::Negative => Some(-x),
+                            UnaryArithmeticOperator::Invert => None
+                        }
+                    },
+                    |x| {
+                        match operator {
+                            UnaryArithmeticOperator::Negative => None,
+                            UnaryArithmeticOperator::Invert => Some(!x)
+                        }
+                    },
                     |_| None,
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
@@ -300,6 +309,21 @@ fn test_unary_arithmetic() {
         expression_execution_engine.evaluate(&ExpressionTree::UnaryArithmetic {
             operand: Box::new(ExpressionTree::Value(Value::Int(5000))),
             operator: UnaryArithmeticOperator::Negative
+        })
+    );
+}
+
+#[test]
+fn test_null1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Null),
+        expression_execution_engine.evaluate(&ExpressionTree::UnaryArithmetic {
+            operand: Box::new(ExpressionTree::Value(Value::Null)),
+            operator: UnaryArithmeticOperator::Invert
         })
     );
 }

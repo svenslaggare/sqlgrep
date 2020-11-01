@@ -164,6 +164,10 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
                 _ => { return Err(ConvertParseTreeError::UndefinedOperator); }
             }
         }
+        ParseExpressionTree::Invert { operand } => {
+            let operand = Box::new(transform_expression(*operand)?);
+            Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Invert, operand })
+        }
         ParseExpressionTree::AndExpression { left, right } => {
             let left = Box::new(transform_expression(*left)?);
             let right = Box::new(transform_expression(*right)?);
@@ -176,7 +180,7 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
 
             Ok(ExpressionTree::Or { left, right })
         }
-        ParseExpressionTree::Call(_, _) => Err(ConvertParseTreeError::UndefinedExpression)
+        ParseExpressionTree::Call(_, _) => Err(ConvertParseTreeError::UndefinedExpression),
     }
 }
 

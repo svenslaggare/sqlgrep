@@ -116,13 +116,14 @@ impl Value {
     }
 
     pub fn map<
-        F1: Fn(i64) -> Option<i64>,
-        F2: Fn(f64) -> Option<f64>,
-        F3: Fn(bool) -> Option<bool>,
-        F4: Fn(&str) -> Option<String>
-    >(&self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) -> Option<Value> {
+        F1: Fn() -> Option<Value>,
+        F2: Fn(i64) -> Option<i64>,
+        F3: Fn(f64) -> Option<f64>,
+        F4: Fn(bool) -> Option<bool>,
+        F5: Fn(&str) -> Option<String>,
+    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5) -> Option<Value> {
         match self {
-            Value::Null => None,
+            Value::Null => null_f(),
             Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
             Value::Float(x) => float_f(x.0).map(|x| Value::Float(Float(x))),
             Value::Bool(x) => bool_f(*x).map(|x| Value::Bool(x)),
@@ -231,7 +232,8 @@ pub enum ArithmeticOperator {
 
 #[derive(Debug, PartialEq)]
 pub enum UnaryArithmeticOperator {
-    Negative
+    Negative,
+    Invert
 }
 
 #[derive(Debug, PartialEq)]

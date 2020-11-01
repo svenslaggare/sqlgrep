@@ -96,6 +96,7 @@ impl AggregateExecutionEngine {
                     average_entry.1 += 1;
 
                     let average = average_entry.0.map(
+                        || None,
                         |x| Some(x / average_entry.1),
                         |x| Some(x / average_entry.1 as f64),
                         |_| None,

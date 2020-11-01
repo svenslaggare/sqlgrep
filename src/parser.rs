@@ -20,6 +20,7 @@ pub enum Keyword {
     Or,
     Create,
     Table,
+    Not
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -60,6 +61,7 @@ pub enum Token {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParserError {
+    Unknown,
     IntConvertError,
     ExpectedKeyword(Keyword),
     ExpectedAnyKeyword(Vec<Keyword>),
@@ -99,6 +101,7 @@ pub enum ParseExpressionTree {
     Wildcard,
     BinaryOperator { operator: Operator, left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
     UnaryOperator { operator: Operator, operand: Box<ParseExpressionTree>},
+    Invert { operand: Box<ParseExpressionTree> },
     AndExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
     OrExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
     Call(String, Vec<ParseExpressionTree>)
@@ -135,6 +138,7 @@ lazy_static! {
             ("or".to_owned(), Keyword::Or),
             ("create".to_owned(), Keyword::Create),
             ("table".to_owned(), Keyword::Table),
+            ("not".to_owned(), Keyword::Not),
         ].into_iter()
     );
 
@@ -820,23 +824,34 @@ impl<'a> Parser<'a> {
 
     fn parse_unary_operator(&mut self) -> ParserResult<ParseExpressionTree> {
         match self.current() {
-            Token::Operator(_) => {},
+            Token::Operator(_) | Token::Keyword(Keyword::Not) => {},
             _ => return self.parse_primary_expression()
         }
 
-        let op = self.current_to_op()?;
+        let op_token = self.current().clone();
         self.next()?;
 
-        if op == Operator::Single('*') {
-            return Ok(ParseExpressionTree::Wildcard);
-        }
+        match op_token {
+            Token::Operator(Operator::Single('*')) => {
+                return Ok(ParseExpressionTree::Wildcard);
+            }
+            _ => {}
+        };
 
         let operand = self.parse_unary_operator()?;
-        if !self.unary_operators.exists(&op) {
-            return Err(ParserError::NotDefinedUnaryOperator(op));
-        }
+        match op_token {
+            Token::Operator(op) => {
+                if !self.unary_operators.exists(&op) {
+                    return Err(ParserError::NotDefinedUnaryOperator(op));
+                }
 
-        Ok(ParseExpressionTree::UnaryOperator { operator: op, operand: Box::new(operand) })
+                Ok(ParseExpressionTree::UnaryOperator { operator: op, operand: Box::new(operand) })
+            }
+            Token::Keyword(Keyword::Not) => {
+                Ok(ParseExpressionTree::Invert { operand: Box::new(operand) })
+            }
+            _ => Err(ParserError::Unknown)
+        }
     }
 
     fn consume_identifier(&mut self) -> ParserResult<String> {
@@ -1183,6 +1198,30 @@ fn test_parse_expression6() {
         ParseExpressionTree::UnaryOperator {
             operator: Operator::Single('-'),
             operand: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_expression7() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Not),
+            Token::True,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::Invert {
+            operand: Box::new(ParseExpressionTree::Value(Value::Bool(true)))
         },
         tree
     );
