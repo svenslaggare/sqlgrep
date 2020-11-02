@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufRead, Seek, SeekFrom};
+use std::io::{BufReader, BufRead, Seek, SeekFrom, Read};
 use std::fs::File;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -70,6 +70,7 @@ impl<'a> FileIngester<'a> {
 pub struct FollowFileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
+    position: u64,
     execution_engine: ExecutionEngine<'a>
 }
 
@@ -80,14 +81,17 @@ impl<'a> FollowFileIngester<'a> {
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
         let mut reader = BufReader::new(File::open(filename)?);
 
-        if !head {
-            reader.seek(SeekFrom::End(0))?;
-        }
+        let position = if !head {
+            reader.seek(SeekFrom::End(0))?
+        } else {
+            0
+        };
 
         Ok(
             FollowFileIngester {
                 running,
                 reader: Some(reader),
+                position,
                 execution_engine
             }
         )
@@ -95,17 +99,26 @@ impl<'a> FollowFileIngester<'a> {
 
     pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
         let mut reader = self.reader.take().unwrap();
+        let mut line = String::new();
+
         loop {
-            let mut line = String::new();
             if let Err(_) = reader.read_line(&mut line) {
                 break;
             }
 
-            if line.len() > 0 {
-                line.remove(line.len() - 1);
+            // If we get an EOF in the middle of a line, read_line will return. We will then try again and use content of current read line
+            if !line.ends_with('\n') {
+                continue;
             }
 
-            let (result, refresh) = self.execution_engine.execute(&statement, line);
+            if line.ends_with('\n') {
+                line.pop();
+            }
+
+            let mut input_line = String::new();
+            std::mem::swap(&mut input_line, &mut line);
+
+            let (result, refresh) = self.execution_engine.execute(&statement, input_line);
             if let Some(result_row) = result? {
                 if refresh {
                     print!("\x1B[2J\x1B[1;1H");
