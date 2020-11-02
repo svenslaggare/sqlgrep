@@ -651,26 +651,52 @@ impl<'a> Parser<'a> {
         let mut columns = Vec::new();
 
         loop {
-            let pattern_name = self.consume_identifier()?;
             match self.current() {
-                Token::Operator(Operator::Single('=')) => {
+                Token::Identifier(pattern_name) => {
+                    let pattern_name = pattern_name.clone();
                     self.next()?;
-                    let pattern = self.consume_string()?;
-                    patterns.push((pattern_name, pattern));
-                }
-                Token::LeftSquareParentheses => {
-                    self.next()?;
-                    let pattern_index = self.consume_int()?;
 
-                    self.expect_and_consume_token(
-                        Token::RightSquareParentheses,
-                        ParserError::ExpectedRightSquareParentheses
-                    )?;
+                    match self.current() {
+                        Token::Operator(Operator::Single('=')) => {
+                            self.next()?;
+                            let pattern = self.consume_string()?;
+                            patterns.push((pattern_name, pattern));
+                        }
+                        Token::LeftSquareParentheses => {
+                            self.next()?;
+                            let pattern_index = self.consume_int()?;
+
+                            self.expect_and_consume_token(
+                                Token::RightSquareParentheses,
+                                ParserError::ExpectedRightSquareParentheses
+                            )?;
+
+                            self.expect_and_consume_token(
+                                Token::RightArrow,
+                                ParserError::ExpectedRightArrow
+                            )?;
+
+                            let column_name = self.consume_identifier()?;
+                            let column_type = self.consume_identifier()?;
+                            let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
+
+                            columns.push((column_name, column_type, pattern_name, pattern_index as usize));
+                        }
+                        _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
+                    }
+                }
+                Token::String(pattern) => {
+                    let pattern = pattern.clone();
+                    self.next()?;
 
                     self.expect_and_consume_token(
                         Token::RightArrow,
                         ParserError::ExpectedRightArrow
                     )?;
+
+                    let pattern_name = format!("_pattern{}", patterns.len());
+                    let pattern_index = 1;
+                    patterns.push((pattern_name.clone(), pattern.clone()));
 
                     let column_name = self.consume_identifier()?;
                     let column_type = self.consume_identifier()?;
@@ -1685,6 +1711,44 @@ fn test_parse_create_table3() {
         tree
     );
 }
+
+#[test]
+fn test_parse_create_table4() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned())],
+            columns: vec![("x".to_owned(), ValueType::Int, "_pattern0".to_owned(), 1)]
+        },
+        tree
+    );
+}
+
 
 #[test]
 fn test_parse_str1() {
