@@ -210,7 +210,11 @@ fn main() {
         execute(&command_line_input, &tables, running.clone(), command, true);
     } else {
         let mut line_editor = Editor::<()>::new();
-        while let Ok(line) = line_editor.readline("> ") {
+        while let Ok(mut line) = line_editor.readline("> ") {
+            if line.ends_with('\n') {
+                line.pop();
+            }
+
             line_editor.add_history_entry(line.clone());
             if execute(&command_line_input, &tables, running.clone(), line, false) {
                 break;
