@@ -10,7 +10,7 @@ To build, run: `cargo build --release`
 First, a schema needs to be defined that will transform text lines into structured data:
 ```
 CREATE TABLE connections(
-    line => 'connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
+    line = 'connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
 
     line[1] => ip TEXT,
     line[2] => hostname TEXT,

@@ -563,11 +563,10 @@ impl<'a> Parser<'a> {
         if self.current() == &Token::Colon {
             self.next()?;
 
-            self.expect_token(
+            self.expect_and_consume_token(
                 Token::Colon,
                 ParserError::ExpectedColon
             )?;
-            self.next()?;
 
             filename = Some(self.consume_string()?);
         }
@@ -585,11 +584,10 @@ impl<'a> Parser<'a> {
                     Token::Keyword(Keyword::Group) => {
                         self.next()?;
 
-                        self.expect_token(
-                            Token::Keyword(Keyword::By)
-                            , ParserError::ExpectedKeyword(Keyword::By)
+                        self.expect_and_consume_token(
+                            Token::Keyword(Keyword::By),
+                            ParserError::ExpectedKeyword(Keyword::By)
                         )?;
-                        self.next()?;
 
                         group_by = Some(self.consume_identifier()?);
                     },
@@ -637,19 +635,17 @@ impl<'a> Parser<'a> {
     fn parse_create_table(&mut self) -> ParserResult<ParseOperationTree> {
         self.next()?;
 
-        self.expect_token(
+        self.expect_and_consume_token(
             Token::Keyword(Keyword::Table),
             ParserError::ExpectedKeyword(Keyword::Table)
         )?;
-        self.next()?;
 
         let table_name = self.consume_identifier()?;
 
-        self.expect_token(
+        self.expect_and_consume_token(
             Token::LeftParentheses,
             ParserError::ExpectedLeftParentheses
         )?;
-        self.next()?;
 
         let mut patterns = Vec::new();
         let mut columns = Vec::new();
@@ -657,7 +653,7 @@ impl<'a> Parser<'a> {
         loop {
             let pattern_name = self.consume_identifier()?;
             match self.current() {
-                Token::RightArrow => {
+                Token::Operator(Operator::Single('=')) => {
                     self.next()?;
                     let pattern = self.consume_string()?;
                     patterns.push((pattern_name, pattern));
@@ -666,17 +662,15 @@ impl<'a> Parser<'a> {
                     self.next()?;
                     let pattern_index = self.consume_int()?;
 
-                    self.expect_token(
+                    self.expect_and_consume_token(
                         Token::RightSquareParentheses,
                         ParserError::ExpectedRightSquareParentheses
                     )?;
-                    self.next()?;
 
-                    self.expect_token(
+                    self.expect_and_consume_token(
                         Token::RightArrow,
                         ParserError::ExpectedRightArrow
                     )?;
-                    self.next()?;
 
                     let column_name = self.consume_identifier()?;
                     let column_type = self.consume_identifier()?;
@@ -697,11 +691,10 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.expect_token(
+        self.expect_and_consume_token(
             Token::SemiColon,
             ParserError::ExpectedSemiColon
         )?;
-        self.next()?;
 
         Ok(
             ParseOperationTree::CreateTable {
@@ -783,12 +776,11 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 let expression = self.parse_expression_internal();
 
-                self.expect_token(
+                self.expect_and_consume_token(
                     Token::RightParentheses,
                     ParserError::ExpectedRightParentheses
                 )?;
 
-                self.next()?;
                 expression
             }
             _ => Err(ParserError::ExpectedExpression)
@@ -886,6 +878,12 @@ impl<'a> Parser<'a> {
         } else {
             Err(ParserError::ExpectedInt)
         }
+    }
+
+    fn expect_and_consume_token(&mut self, token: Token, error: ParserError) -> ParserResult<()> {
+        self.expect_token(token, error)?;
+        self.next()?;
+        Ok(())
     }
 
     fn expect_token(&self, token: Token, error: ParserError) -> ParserResult<()> {
@@ -1515,7 +1513,7 @@ fn test_parse_create_table1() {
             Token::LeftParentheses,
 
             Token::Identifier("line".to_string()),
-            Token::RightArrow,
+            Token::Operator(Operator::Single('=')),
             Token::String("A: ([0-9]+)".to_owned()),
             Token::Comma,
 
@@ -1560,7 +1558,7 @@ fn test_parse_create_table2() {
             Token::LeftParentheses,
 
             Token::Identifier("line".to_string()),
-            Token::RightArrow,
+            Token::Operator(Operator::Single('=')),
             Token::String("A: ([0-9]+), B: ([A-Z]+)".to_owned()),
             Token::Comma,
 
@@ -1617,7 +1615,7 @@ fn test_parse_create_table3() {
             Token::LeftParentheses,
 
             Token::Identifier("line".to_string()),
-            Token::RightArrow,
+            Token::Operator(Operator::Single('=')),
             Token::String("A: ([0-9]+)".to_owned()),
             Token::Comma,
 
@@ -1638,7 +1636,7 @@ fn test_parse_create_table3() {
             Token::LeftParentheses,
 
             Token::Identifier("line".to_string()),
-            Token::RightArrow,
+            Token::Operator(Operator::Single('=')),
             Token::String("A: ([0-9]+), B: ([A-Z]+)".to_owned()),
             Token::Comma,
 
@@ -1771,7 +1769,7 @@ fn test_parse_str3() {
 
     let tokens = tokenize(r"
     CREATE TABLE connections(
-        line => 'connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
+        line = 'connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
 
         line[1] => ip TEXT,
         line[2] => hostname TEXT,
@@ -1799,6 +1797,46 @@ fn test_parse_str3() {
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
+            ],
+            columns: vec![
+                ("ip".to_owned(), ValueType::String, "line".to_owned(), 1),
+                ("hostname".to_owned(), ValueType::String, "line".to_owned(), 2),
+                ("year".to_owned(), ValueType::Int, "line".to_owned(), 9),
+                ("month".to_owned(), ValueType::String, "line".to_owned(), 4),
+                ("day".to_owned(), ValueType::Int, "line".to_owned(), 5),
+                ("hour".to_owned(), ValueType::Int, "line".to_owned(), 6),
+                ("minute".to_owned(), ValueType::Int, "line".to_owned(), 7),
+                ("second".to_owned(), ValueType::Int, "line".to_owned(), 8),
+            ]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_str4() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut tokens_str = std::fs::read_to_string("testdata/definition1.txt").unwrap();
+    let tokens = tokenize(&tokens_str);
+    assert!(tokens.is_ok());
+
+    let tokens = tokens.unwrap();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        tokens
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "connections".to_string(),
+            patterns: vec![
+                ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
             ],
             columns: vec![
                 ("ip".to_owned(), ValueType::String, "line".to_owned(), 1),
