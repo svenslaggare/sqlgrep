@@ -4,7 +4,7 @@ use std::iter::FromIterator;
 
 use lazy_static::lazy_static;
 
-use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator};
+use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function};
 use crate::data_model::{ColumnDefinition, TableDefinition};
 
@@ -115,10 +115,23 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
 
 fn create_create_table_statement(name: String,
                                  patterns: Vec<(String, String)>,
-                                 columns: Vec<(String, ValueType, String, usize)>) -> Result<Statement, ConvertParseTreeError> {
+                                 columns: Vec<ParseColumnDefinition>) -> Result<Statement, ConvertParseTreeError> {
     let column_definitions = columns
         .into_iter()
-        .map(|column| ColumnDefinition::new(&column.2, column.3, &column.0, column.1))
+        .map(|column| {
+            let mut column_definition = ColumnDefinition::new(
+                &column.pattern_name,
+                column.pattern_index,
+                &column.name,
+                column.column_type
+            );
+
+            if let Some(nullable) = column.nullable.as_ref() {
+                column_definition.options.nullable = *nullable;
+            }
+
+            column_definition
+        })
         .collect::<Vec<_>>();
 
     let table_definition = TableDefinition::new(
@@ -636,7 +649,14 @@ fn test_create_table_statement1() {
     let tree = ParseOperationTree::CreateTable {
         name: "test".to_string(),
         patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
-        columns: vec![("x".to_owned(), ValueType::Int, "line".to_owned(), 1)]
+        columns: vec![
+            ParseColumnDefinition::new(
+                "line".to_string(),
+                1,
+                "x".to_string(),
+                ValueType::Int
+            )
+        ]
     };
 
     let statement = transform_statement(tree);

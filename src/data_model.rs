@@ -48,6 +48,7 @@ impl TableDefinition {
 
         let mut columns = Vec::new();
         for column in &self.columns {
+            let mut is_null = false;
             if let Some(capture_result) = extracted_results.get(&column.pattern_name) {
                 let group_result = capture_result.get(column.group_index);
                 if column.column_type == ValueType::Bool {
@@ -57,10 +58,17 @@ impl TableDefinition {
                         columns.push(Value::from_option(column.column_type.parse(group.as_str())));
                     } else {
                         columns.push(Value::Null);
+                        is_null = true;
                     }
                 }
             } else {
                 columns.push(Value::Null);
+                is_null = true;
+            }
+
+            if is_null && !column.options.nullable {
+                columns.clear();
+                break;
             }
         }
 
@@ -70,20 +78,56 @@ impl TableDefinition {
     }
 }
 
+pub struct ColumnOptions {
+    pub nullable: bool
+}
+
+impl ColumnOptions {
+    pub fn new() -> ColumnOptions {
+        ColumnOptions {
+            nullable: true
+        }
+    }
+
+    pub fn not_null(mut self) -> Self {
+        self.nullable = false;
+        self
+    }
+}
+
 pub struct ColumnDefinition {
     pub pattern_name: String,
     pub group_index: usize,
     pub name: String,
-    pub column_type: ValueType
+    pub column_type: ValueType,
+    pub options: ColumnOptions
 }
 
 impl ColumnDefinition {
-    pub fn new(pattern_name: &str, group_index: usize, name: &str, column_type: ValueType) -> ColumnDefinition {
+    pub fn new(pattern_name: &str,
+               group_index: usize,
+               name: &str,
+               column_type: ValueType) -> ColumnDefinition {
         ColumnDefinition {
             pattern_name: pattern_name.to_owned(),
             group_index,
             name: name.to_owned(),
-            column_type
+            column_type,
+            options: ColumnOptions::new()
+        }
+    }
+
+    pub fn with_options(pattern_name: &str,
+                        group_index: usize,
+                        name: &str,
+                        column_type: ValueType,
+                        options: ColumnOptions) -> ColumnDefinition {
+        ColumnDefinition {
+            pattern_name: pattern_name.to_owned(),
+            group_index,
+            name: name.to_owned(),
+            column_type,
+            options
         }
     }
 }
@@ -223,6 +267,62 @@ fn test_table_extract_multiple2() {
     let result = table_definition.extract("A: 4711 B: aba");
     assert_eq!(Value::Int(4711), result.columns[0]);
     assert_eq!(Value::String("aba".to_owned()), result.columns[1]);
+}
+
+#[test]
+fn test_table_extract_multiple3() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![
+            ("line1", "A: ([0-9]+)"),
+            ("line2", "B: ([a-z]+)")
+        ],
+        vec![
+            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::new("line2", 1, "y", ValueType::String)
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711");
+    assert_eq!(Value::Int(4711), result.columns[0]);
+    assert_eq!(Value::Null, result.columns[1]);
+}
+
+#[test]
+fn test_table_extract_multiple4() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![
+            ("line1", "A: ([0-9]+)"),
+            ("line2", "B: ([a-z]+)")
+        ],
+        vec![
+            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_options("line2", 1, "y", ValueType::String, ColumnOptions::new().not_null())
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711 B: aba");
+    assert_eq!(Value::Int(4711), result.columns[0]);
+    assert_eq!(Value::String("aba".to_owned()), result.columns[1]);
+}
+
+#[test]
+fn test_table_extract_multiple5() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![
+            ("line1", "A: ([0-9]+)"),
+            ("line2", "B: ([a-z]+)")
+        ],
+        vec![
+            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_options("line2", 1, "y", ValueType::String, ColumnOptions::new().not_null())
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711");
+    assert_eq!(false, result.any_result());
 }
 
 #[test]

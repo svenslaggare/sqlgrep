@@ -74,9 +74,6 @@ pub enum ParserError {
     ExpectedProjectionContinuation,
     ExpectedColumnDefinitionStart,
     ExpectedColumnDefinitionContinuation,
-    NotDefinedBinaryOperator(Operator),
-    NotDefinedUnaryOperator(Operator),
-    NotDefinedType(String),
     ExpectedIdentifier,
     ExpectedString,
     ExpectedInt,
@@ -84,6 +81,10 @@ pub enum ParserError {
     ExpectedColon,
     ExpectedRightArrow,
     ExpectedSemiColon,
+    ExpectedNull,
+    NotDefinedBinaryOperator(Operator),
+    NotDefinedUnaryOperator(Operator),
+    NotDefinedType(String),
     ReachedEndOfTokens,
     TooManyTokens
 }
@@ -108,6 +109,30 @@ pub enum ParseExpressionTree {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct ParseColumnDefinition {
+    pub pattern_name: String,
+    pub pattern_index: usize,
+    pub name: String,
+    pub column_type: ValueType,
+    pub nullable: Option<bool>
+}
+
+impl ParseColumnDefinition {
+    pub fn new(pattern_name: String,
+               pattern_index: usize,
+               name: String,
+               column_type: ValueType) -> ParseColumnDefinition {
+        ParseColumnDefinition {
+            pattern_name,
+            pattern_index,
+            name,
+            column_type,
+            nullable: None
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub enum ParseOperationTree {
     Select {
         projections: Vec<(Option<String>, ParseExpressionTree)>,
@@ -118,7 +143,7 @@ pub enum ParseOperationTree {
     CreateTable {
         name: String,
         patterns: Vec<(String, String)>,
-        columns: Vec<(String, ValueType, String, usize)>
+        columns: Vec<ParseColumnDefinition>
     },
     Multiple(Vec<ParseOperationTree>)
 }
@@ -259,166 +284,6 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
 
     tokens.push(Token::End);
     Ok(tokens)
-}
-
-#[test]
-fn test_tokenize1() {
-    let tokens = tokenize("a1 + b + caba + 134 + 12");
-    assert_eq!(
-        vec![
-            Token::Identifier("a1".to_string()),
-            Token::Operator(Operator::Single('+')),
-            Token::Identifier("b".to_string()),
-            Token::Operator(Operator::Single('+')),
-            Token::Identifier("caba".to_string()),
-            Token::Operator(Operator::Single('+')),
-            Token::Int(134),
-            Token::Operator(Operator::Single('+')),
-            Token::Int(12),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize2() {
-    let tokens = tokenize("f(a, b, 4)");
-    assert_eq!(
-        vec![
-            Token::Identifier("f".to_string()),
-            Token::LeftParentheses,
-            Token::Identifier("a".to_string()),
-            Token::Comma,
-            Token::Identifier("b".to_string()),
-            Token::Comma,
-            Token::Int(4),
-            Token::RightParentheses,
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize3() {
-    let tokens = tokenize("a + 4");
-    assert_eq!(
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::Operator(Operator::Single('+')),
-            Token::Int(4),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize4() {
-    let tokens = tokenize("SELECT x FROM test WHERE x > 4");
-    assert_eq!(
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize5() {
-    let tokens = tokenize("a <= 4");
-    assert_eq!(
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::Operator(Operator::Dual('<', '=')),
-            Token::Int(4),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize6() {
-    let tokens = tokenize("NULL true FALSE");
-    assert_eq!(
-        vec![
-            Token::Null,
-            Token::True,
-            Token::False,
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize7() {
-    let tokens = tokenize("x + 'test 4711.1337' + y");
-    assert_eq!(
-        vec![
-            Token::Identifier("x".to_owned()),
-            Token::Operator(Operator::Single('+')),
-            Token::String("test 4711.1337".to_owned()),
-            Token::Operator(Operator::Single('+')),
-            Token::Identifier("y".to_owned()),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize8() {
-    let tokens = tokenize("x + 'test \\'4711\\'.1337' + y");
-    assert_eq!(
-        vec![
-            Token::Identifier("x".to_owned()),
-            Token::Operator(Operator::Single('+')),
-            Token::String("test '4711'.1337".to_owned()),
-            Token::Operator(Operator::Single('+')),
-            Token::Identifier("y".to_owned()),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize9() {
-    let tokens = tokenize("a => 4");
-    assert_eq!(
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::RightArrow,
-            Token::Int(4),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
-}
-
-#[test]
-fn test_tokenize10() {
-    let tokens = tokenize("line => 'connection from ([0-9.]+) \\\\((.*)\\\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)'");
-    assert_eq!(
-        vec![
-            Token::Identifier("line".to_owned()),
-            Token::RightArrow,
-            Token::String("connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned()),
-            Token::End
-        ],
-        tokens.unwrap()
-    );
 }
 
 pub struct BinaryOperator {
@@ -676,11 +541,7 @@ impl<'a> Parser<'a> {
                                 ParserError::ExpectedRightArrow
                             )?;
 
-                            let column_name = self.consume_identifier()?;
-                            let column_type = self.consume_identifier()?;
-                            let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
-
-                            columns.push((column_name, column_type, pattern_name, pattern_index as usize));
+                            columns.push(self.parse_define_column(pattern_name, pattern_index as usize)?);
                         }
                         _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
                     }
@@ -698,11 +559,13 @@ impl<'a> Parser<'a> {
                     let pattern_index = 1;
                     patterns.push((pattern_name.clone(), pattern.clone()));
 
-                    let column_name = self.consume_identifier()?;
-                    let column_type = self.consume_identifier()?;
-                    let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
+                    columns.push(self.parse_define_column(pattern_name, pattern_index as usize)?);
 
-                    columns.push((column_name, column_type, pattern_name, pattern_index as usize));
+                    // let column_name = self.consume_identifier()?;
+                    // let column_type = self.consume_identifier()?;
+                    // let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
+                    //
+                    // columns.push((column_name, column_type, pattern_name, pattern_index as usize));
                 }
                 _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
             }
@@ -727,6 +590,33 @@ impl<'a> Parser<'a> {
                 name: table_name,
                 patterns,
                 columns
+            }
+        )
+    }
+
+    fn parse_define_column(&mut self, pattern_name: String, pattern_index: usize) -> ParserResult<ParseColumnDefinition> {
+        let column_name = self.consume_identifier()?;
+        let column_type = self.consume_identifier()?;
+        let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
+
+        let mut nullable = None;
+        if self.current() == &Token::Keyword(Keyword::Not) {
+            self.next()?;
+            self.expect_and_consume_token(
+                Token::Null,
+                ParserError::ExpectedNull
+            )?;
+
+            nullable = Some(true);
+        }
+
+        Ok(
+            ParseColumnDefinition {
+                pattern_name,
+                pattern_index,
+                name: column_name,
+                column_type,
+                nullable
             }
         )
     }
@@ -967,6 +857,167 @@ pub fn parse_str(text: &str) -> ParserResult<ParseOperationTree> {
         &unary_operators,
         tokens
     ).parse()
+}
+
+
+#[test]
+fn test_tokenize1() {
+    let tokens = tokenize("a1 + b + caba + 134 + 12");
+    assert_eq!(
+        vec![
+            Token::Identifier("a1".to_string()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("b".to_string()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("caba".to_string()),
+            Token::Operator(Operator::Single('+')),
+            Token::Int(134),
+            Token::Operator(Operator::Single('+')),
+            Token::Int(12),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize2() {
+    let tokens = tokenize("f(a, b, 4)");
+    assert_eq!(
+        vec![
+            Token::Identifier("f".to_string()),
+            Token::LeftParentheses,
+            Token::Identifier("a".to_string()),
+            Token::Comma,
+            Token::Identifier("b".to_string()),
+            Token::Comma,
+            Token::Int(4),
+            Token::RightParentheses,
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize3() {
+    let tokens = tokenize("a + 4");
+    assert_eq!(
+        vec![
+            Token::Identifier("a".to_string()),
+            Token::Operator(Operator::Single('+')),
+            Token::Int(4),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize4() {
+    let tokens = tokenize("SELECT x FROM test WHERE x > 4");
+    assert_eq!(
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Keyword(Keyword::Where),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('>')),
+            Token::Int(4),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize5() {
+    let tokens = tokenize("a <= 4");
+    assert_eq!(
+        vec![
+            Token::Identifier("a".to_string()),
+            Token::Operator(Operator::Dual('<', '=')),
+            Token::Int(4),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize6() {
+    let tokens = tokenize("NULL true FALSE");
+    assert_eq!(
+        vec![
+            Token::Null,
+            Token::True,
+            Token::False,
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize7() {
+    let tokens = tokenize("x + 'test 4711.1337' + y");
+    assert_eq!(
+        vec![
+            Token::Identifier("x".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::String("test 4711.1337".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("y".to_owned()),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize8() {
+    let tokens = tokenize("x + 'test \\'4711\\'.1337' + y");
+    assert_eq!(
+        vec![
+            Token::Identifier("x".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::String("test '4711'.1337".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("y".to_owned()),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize9() {
+    let tokens = tokenize("a => 4");
+    assert_eq!(
+        vec![
+            Token::Identifier("a".to_string()),
+            Token::RightArrow,
+            Token::Int(4),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize10() {
+    let tokens = tokenize("line => 'connection from ([0-9.]+) \\\\((.*)\\\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)'");
+    assert_eq!(
+        vec![
+            Token::Identifier("line".to_owned()),
+            Token::RightArrow,
+            Token::String("connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned()),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
 }
 
 #[test]
@@ -1563,7 +1614,12 @@ fn test_parse_create_table1() {
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
-            columns: vec![("x".to_owned(), ValueType::Int, "line".to_owned(), 1)]
+            columns: vec![ParseColumnDefinition::new(
+                "line".to_string(),
+                1,
+                "x".to_string(),
+                ValueType::Int
+            )]
         },
         tree
     );
@@ -1618,8 +1674,18 @@ fn test_parse_create_table2() {
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned())],
             columns: vec![
-                ("x".to_owned(), ValueType::Int, "line".to_owned(), 1),
-                ("y".to_owned(), ValueType::String, "line".to_owned(), 2)
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    1,
+                    "x".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    2,
+                    "y".to_string(),
+                    ValueType::String
+                )
             ]
         },
         tree
@@ -1697,14 +1763,31 @@ fn test_parse_create_table3() {
             ParseOperationTree::CreateTable {
                 name: "test1".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
-                columns: vec![("x".to_owned(), ValueType::Int, "line".to_owned(), 1)]
+                columns: vec![
+                    ParseColumnDefinition::new(
+                        "line".to_string(),
+                        1,
+                        "x".to_string(),
+                        ValueType::Int
+                    )
+                ]
             },
             ParseOperationTree::CreateTable {
                 name: "test2".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned())],
                 columns: vec![
-                    ("x".to_owned(), ValueType::Int, "line".to_owned(), 1),
-                    ("y".to_owned(), ValueType::String, "line".to_owned(), 2)
+                    ParseColumnDefinition::new(
+                        "line".to_string(),
+                        1,
+                        "x".to_string(),
+                        ValueType::Int
+                    ),
+                    ParseColumnDefinition::new(
+                        "line".to_string(),
+                        2,
+                        "y".to_string(),
+                        ValueType::String
+                    )
                 ]
             },
         ]),
@@ -1743,12 +1826,71 @@ fn test_parse_create_table4() {
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
             patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned())],
-            columns: vec![("x".to_owned(), ValueType::Int, "_pattern0".to_owned(), 1)]
+            columns: vec![
+                ParseColumnDefinition::new(
+                    "_pattern0".to_string(),
+                    1,
+                    "x".to_string(),
+                    ValueType::Int
+                )
+            ]
         },
         tree
     );
 }
 
+#[test]
+fn test_parse_create_table5() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+            Token::Keyword(Keyword::Not),
+            Token::Null,
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+            columns: vec![ParseColumnDefinition {
+                pattern_name: "line".to_string(),
+                pattern_index: 1,
+                name: "x".to_string(),
+                column_type: ValueType::Int,
+                nullable: Some(true)
+            }]
+        },
+        tree
+    );
+}
 
 #[test]
 fn test_parse_str1() {
@@ -1863,14 +2005,54 @@ fn test_parse_str3() {
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
             ],
             columns: vec![
-                ("ip".to_owned(), ValueType::String, "line".to_owned(), 1),
-                ("hostname".to_owned(), ValueType::String, "line".to_owned(), 2),
-                ("year".to_owned(), ValueType::Int, "line".to_owned(), 9),
-                ("month".to_owned(), ValueType::String, "line".to_owned(), 4),
-                ("day".to_owned(), ValueType::Int, "line".to_owned(), 5),
-                ("hour".to_owned(), ValueType::Int, "line".to_owned(), 6),
-                ("minute".to_owned(), ValueType::Int, "line".to_owned(), 7),
-                ("second".to_owned(), ValueType::Int, "line".to_owned(), 8),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    1,
+                    "ip".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    2,
+                    "hostname".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    9,
+                    "year".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    4,
+                    "month".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    5,
+                    "day".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    6,
+                    "hour".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    7,
+                    "minute".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    8,
+                    "second".to_string(),
+                    ValueType::Int
+                )
             ]
         },
         tree
@@ -1903,14 +2085,54 @@ fn test_parse_str4() {
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
             ],
             columns: vec![
-                ("ip".to_owned(), ValueType::String, "line".to_owned(), 1),
-                ("hostname".to_owned(), ValueType::String, "line".to_owned(), 2),
-                ("year".to_owned(), ValueType::Int, "line".to_owned(), 9),
-                ("month".to_owned(), ValueType::String, "line".to_owned(), 4),
-                ("day".to_owned(), ValueType::Int, "line".to_owned(), 5),
-                ("hour".to_owned(), ValueType::Int, "line".to_owned(), 6),
-                ("minute".to_owned(), ValueType::Int, "line".to_owned(), 7),
-                ("second".to_owned(), ValueType::Int, "line".to_owned(), 8),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    1,
+                    "ip".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    2,
+                    "hostname".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    9,
+                    "year".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    4,
+                    "month".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    5,
+                    "day".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    6,
+                    "hour".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    7,
+                    "minute".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    8,
+                    "second".to_string(),
+                    ValueType::Int
+                )
             ]
         },
         tree
