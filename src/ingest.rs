@@ -1,4 +1,4 @@
-use std::io::{BufReader, BufRead, Seek, SeekFrom, Read};
+use std::io::{BufReader, BufRead, Seek, SeekFrom};
 use std::fs::File;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -13,7 +13,8 @@ pub struct FileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     single_result: bool,
-    execution_engine: ExecutionEngine<'a>
+    execution_engine: ExecutionEngine<'a>,
+    pub print_result: bool
 }
 
 impl<'a> FileIngester<'a> {
@@ -28,7 +29,8 @@ impl<'a> FileIngester<'a> {
                 running,
                 reader: Some(reader),
                 single_result,
-                execution_engine
+                execution_engine,
+                print_result: true
             }
         )
     }
@@ -43,7 +45,7 @@ impl<'a> FileIngester<'a> {
                 print_only_last = print_only_last_this;
 
                 if let Some(result_row) = result? {
-                    if !print_only_last {
+                    if self.print_result && !print_only_last {
                         OutputPrinter::new(self.single_result).print(&result_row)
                     }
                     last_result_raw = Some(result_row);
@@ -57,7 +59,7 @@ impl<'a> FileIngester<'a> {
             }
         }
 
-        if print_only_last {
+        if self.print_result && print_only_last {
             if let Some(result_row) = last_result_raw {
                 OutputPrinter::new(true).print(&result_row)
             }
@@ -70,7 +72,6 @@ impl<'a> FileIngester<'a> {
 pub struct FollowFileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
-    position: u64,
     execution_engine: ExecutionEngine<'a>
 }
 
@@ -81,17 +82,12 @@ impl<'a> FollowFileIngester<'a> {
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
         let mut reader = BufReader::new(File::open(filename)?);
 
-        let position = if !head {
-            reader.seek(SeekFrom::End(0))?
-        } else {
-            0
-        };
+        reader.seek(SeekFrom::End(0))?;
 
         Ok(
             FollowFileIngester {
                 running,
                 reader: Some(reader),
-                position,
                 execution_engine
             }
         )

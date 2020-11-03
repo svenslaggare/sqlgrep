@@ -1882,7 +1882,7 @@ fn test_parse_str4() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut tokens_str = std::fs::read_to_string("testdata/definition1.txt").unwrap();
+    let tokens_str = std::fs::read_to_string("testdata/definition1.txt").unwrap();
     let tokens = tokenize(&tokens_str);
     assert!(tokens.is_ok());
 

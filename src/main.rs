@@ -1,25 +1,17 @@
-mod model;
-mod execution_model;
-mod expression_execution;
-mod data_model;
-mod select_execution;
-mod aggregate_execution;
-mod parser;
-mod parse_tree_converter;
-mod execution_engine;
-mod ingest;
-
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use structopt::StructOpt;
 
-use crate::data_model::{Tables};
-use crate::model::{ Statement};
-use crate::ingest::{FileIngester, FollowFileIngester};
-use crate::execution_engine::ExecutionEngine;
 use rustyline::Editor;
+
+use sqlgrep::data_model::{Tables};
+use sqlgrep::model::{Statement};
+use sqlgrep::ingest::{FileIngester, FollowFileIngester};
+use sqlgrep::execution_engine::ExecutionEngine;
+use sqlgrep::parser;
+use sqlgrep::parse_tree_converter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
