@@ -138,7 +138,7 @@ pub enum ParseOperationTree {
         projections: Vec<(Option<String>, ParseExpressionTree)>,
         from: (String, Option<String>),
         filter: Option<ParseExpressionTree>,
-        group_by: Option<String>
+        group_by: Option<Vec<String>>
     },
     CreateTable {
         name: String,
@@ -454,7 +454,14 @@ impl<'a> Parser<'a> {
                             ParserError::ExpectedKeyword(Keyword::By)
                         )?;
 
-                        group_by = Some(self.consume_identifier()?);
+                        let mut group_by_keys = Vec::new();
+                        group_by_keys.push(self.consume_identifier()?);
+                        while let Token::Comma = self.current() {
+                            self.next()?;
+                            group_by_keys.push(self.consume_identifier()?);
+                        }
+
+                        group_by = Some(group_by_keys);
                     },
                     Token::SemiColon => {
                         self.next()?;
@@ -1569,7 +1576,52 @@ fn test_parse_select_group_by1() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
-            group_by: Some("x".to_owned())
+            group_by: Some(vec!["x".to_owned()])
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_select_group_by2() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Keyword(Keyword::Where),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('>')),
+            Token::Int(4),
+            Token::Keyword(Keyword::Group),
+            Token::Keyword(Keyword::By),
+            Token::Identifier("x".to_string()),
+            Token::Comma,
+            Token::Identifier("y".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('>'),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+                }
+            ),
+            group_by: Some(vec!["x".to_owned(), "y".to_owned()])
         },
         tree
     );
@@ -1924,7 +1976,7 @@ fn test_parse_str1() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
                 }
             ),
-            group_by: Some("x".to_owned())
+            group_by: Some(vec!["x".to_owned()])
         },
         tree
     );
@@ -1962,7 +2014,7 @@ fn test_parse_str2() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
                 }
             ),
-            group_by: Some("x".to_owned())
+            group_by: Some(vec!["x".to_owned()])
         },
         tree
     );

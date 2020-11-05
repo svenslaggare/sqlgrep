@@ -5,9 +5,11 @@ use crate::data_model::{Row};
 use crate::execution_model::{ColumnProvider, ExecutionResult, ExecutionError, ResultRow, HashMapColumnProvider};
 use crate::expression_execution::ExpressionExecutionEngine;
 
+type GroupKey = Vec<Value>;
+
 pub struct AggregateExecutionEngine {
-    groups: BTreeMap<Value, HashMap<usize, Value>>,
-    summary_statistics: BTreeMap<Value, HashMap<usize, (Value, i64)>>
+    groups: BTreeMap<GroupKey, HashMap<usize, Value>>,
+    summary_statistics: BTreeMap<GroupKey, HashMap<usize, (Value, i64)>>
 }
 
 impl AggregateExecutionEngine {
@@ -21,6 +23,16 @@ impl AggregateExecutionEngine {
     pub fn execute<TColumnProvider: ColumnProvider>(&mut self,
                                                     aggregate_statement: &AggregateStatement,
                                                     row: TColumnProvider) -> ExecutionResult<Option<ResultRow>> {
+        if !self.execute_update_only(aggregate_statement, row)? {
+            return Ok(None);
+        }
+
+        self.execute_result_only(aggregate_statement).map(|result| Some(result))
+    }
+
+    pub fn execute_update_only<TColumnProvider: ColumnProvider>(&mut self,
+                                                                aggregate_statement: &AggregateStatement,
+                                                                row: TColumnProvider) -> ExecutionResult<bool> {
         let expression_execution_engine = ExpressionExecutionEngine::new(&row);
 
         let valid = if let Some(filter) = aggregate_statement.filter.as_ref() {
@@ -30,21 +42,27 @@ impl AggregateExecutionEngine {
         };
 
         if !valid {
-            return Ok(None);
+            return Ok(false);
         }
 
         self.update_aggregates(aggregate_statement, &row, &expression_execution_engine)?;
-        self.execute_result_only(aggregate_statement).map(|result| Some(result))
+
+        Ok(true)
     }
 
     fn update_aggregates<TColumnProvider: ColumnProvider>(&mut self,
                                                           aggregate_statement: &AggregateStatement,
                                                           row: &TColumnProvider,
                                                           expression_execution_engine: &ExpressionExecutionEngine<TColumnProvider>) -> ExecutionResult<()> {
-        let group = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
-            row.get(group_by).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?
+        let group_key = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
+            let mut group_key = Vec::new();
+            for column in group_by {
+                group_key.push(row.get(column).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?);
+            }
+
+            group_key
         } else {
-            Value::Null
+            vec![Value::Null]
         };
 
         for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
@@ -53,20 +71,20 @@ impl AggregateExecutionEngine {
                     match aggregate_statement.group_by.as_ref() {
                         None => { return Err(ExecutionError::GroupKeyNotAvailable); }
                         Some(group_by) => {
-                            if group_by != group_column {
+                            if !group_by.iter().any(|column| column == group_column) {
                                 return Err(ExecutionError::GroupKeyNotAvailable);
                             }
                         }
                     }
                 }
                 Aggregate::Count => {
-                    if let Some(group_value) = self.get_group(group.clone(), aggregate_index, Value::Int(0)).int_mut() {
+                    if let Some(group_value) = self.get_group(group_key.clone(), aggregate_index, Value::Int(0)).int_mut() {
                         *group_value += 1;
                     }
                 }
                 Aggregate::Min(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(group.clone(), aggregate_index, column_value.clone());
+                    let group_value = self.get_group(group_key.clone(), aggregate_index, column_value.clone());
                     group_value.modify_same_type(
                         &column_value,
                         |x, y| { *x = (*x).min(y) },
@@ -77,7 +95,7 @@ impl AggregateExecutionEngine {
                 }
                 Aggregate::Max(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(group.clone(), aggregate_index, column_value.clone());
+                    let group_value = self.get_group(group_key.clone(), aggregate_index, column_value.clone());
                     group_value.modify_same_type(
                         &column_value,
                         |x, y| { *x = (*x).max(y) },
@@ -90,7 +108,7 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let average_entry = self.get_summary_group(group.clone(), aggregate_index, value_type);
+                    let average_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type);
                     average_entry.0.modify_same_type(
                         &column_value,
                         |x, y| { *x += y },
@@ -109,14 +127,14 @@ impl AggregateExecutionEngine {
                     );
 
                     if let Some(average) = average {
-                        *self.get_group(group.clone(), aggregate_index, average.clone()) = average.clone();
+                        *self.get_group(group_key.clone(), aggregate_index, average.clone()) = average.clone();
                     }
                 }
                 Aggregate::Sum(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let sum_entry = self.get_summary_group(group.clone(), aggregate_index, value_type);
+                    let sum_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type);
                     sum_entry.0.modify_same_type(
                         &column_value,
                         |x, y| { *x += y },
@@ -127,7 +145,7 @@ impl AggregateExecutionEngine {
                     sum_entry.1 += 1;
 
                     let sum = sum_entry.0.clone();
-                    *self.get_group(group.clone(), aggregate_index, sum.clone()) = sum.clone();
+                    *self.get_group(group_key.clone(), aggregate_index, sum.clone()) = sum.clone();
                 }
             }
         }
@@ -135,27 +153,34 @@ impl AggregateExecutionEngine {
         Ok(())
     }
 
-    fn get_group(&mut self, group: Value, aggregate_index: usize, default_value: Value) -> &mut Value {
-        self.groups.entry(group).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
+    fn get_group(&mut self, group_key: GroupKey, aggregate_index: usize, default_value: Value) -> &mut Value {
+        self.groups.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
     }
 
-    fn get_summary_group(&mut self, group: Value, aggregate_index: usize, value_type: ValueType) -> &mut (Value, i64) {
+    fn get_summary_group(&mut self, group_key: GroupKey, aggregate_index: usize, value_type: ValueType) -> &mut (Value, i64) {
         let default_value = value_type.default_value();
-        self.summary_statistics.entry(group.clone()).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((default_value, 0))
+        self.summary_statistics.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((default_value, 0))
     }
 
     pub fn execute_result_only(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         let mut result_rows_by_column = Vec::new();
         let mut columns = Vec::new();
 
+        let mut group_key_mapping = HashMap::new();
+        if let Some(group_key) = aggregate_statement.group_by.as_ref() {
+            for (index, column) in group_key.iter().enumerate() {
+                group_key_mapping.insert(column, index);
+            }
+        }
+
         for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
             columns.push(aggregate.0.clone());
             result_rows_by_column.push(Vec::new());
 
             match aggregate.1 {
-                Aggregate::GroupKey(_) => {
+                Aggregate::GroupKey(ref column) => {
                     for group_key in self.groups.keys() {
-                        result_rows_by_column.last_mut().unwrap().push(group_key.clone());
+                        result_rows_by_column.last_mut().unwrap().push(group_key[group_key_mapping[&column]].clone());
                     }
                 }
                 Aggregate::Count | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
@@ -211,7 +236,7 @@ fn test_group_by_and_count() {
         from: "test".to_owned(),
         filename: None,
         filter: None,
-        group_by: Some("x".to_string())
+        group_by: Some(vec!["x".to_string()])
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -283,7 +308,7 @@ fn test_group_by_and_count_and_filter() {
                 operator: CompareOperator::GreaterThan
             }
         ),
-        group_by: Some("x".to_string())
+        group_by: Some(vec!["x".to_string()])
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -330,7 +355,7 @@ fn test_group_by_and_max() {
         from: "test".to_owned(),
         filename: None,
         filter: None,
-        group_by: Some("name".to_string())
+        group_by: Some(vec!["name".to_string()])
     };
 
     for i in 1..6 {
@@ -385,7 +410,7 @@ fn test_group_by_and_min() {
         from: "test".to_owned(),
         filename: None,
         filter: None,
-        group_by: Some("name".to_string())
+        group_by: Some(vec!["name".to_string()])
     };
 
     for i in 1..6 {
@@ -441,7 +466,7 @@ fn test_group_by_and_count_and_max() {
         from: "test".to_owned(),
         filename: None,
         filter: None,
-        group_by: Some("name".to_string())
+        group_by: Some(vec!["name".to_string()])
     };
 
     for i in 1..6 {
@@ -498,7 +523,7 @@ fn test_group_by_and_average() {
         from: "test".to_owned(),
         filename: None,
         filter: None,
-        group_by: Some("name".to_string())
+        group_by: Some(vec!["name".to_string()])
     };
 
     for i in 1..6 {
@@ -553,7 +578,7 @@ fn test_group_by_and_sum() {
         from: "test".to_owned(),
         filename: None,
         filter: None,
-        group_by: Some("name".to_string())
+        group_by: Some(vec!["name".to_string()])
     };
 
     for i in 1..6 {

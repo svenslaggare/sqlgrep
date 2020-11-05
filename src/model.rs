@@ -286,7 +286,7 @@ pub struct AggregateStatement {
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
-    pub group_by: Option<String>
+    pub group_by: Option<Vec<String>>
 }
 
 pub struct CreateTableStatement {

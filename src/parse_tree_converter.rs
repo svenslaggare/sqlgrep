@@ -87,7 +87,7 @@ fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree
 fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionTree)>,
                               from: (String, Option<String>),
                               filter: Option<ParseExpressionTree>,
-                              group_by: Option<String>) -> Result<Statement, ConvertParseTreeError> {
+                              group_by: Option<Vec<String>>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let (default_name, aggregate) = transform_aggregate(tree)?;
@@ -510,7 +510,7 @@ fn test_aggregate_statement1() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: Some("x".to_owned())
+        group_by: Some(vec!["x".to_owned()])
     };
 
     let statement = transform_statement(tree);
@@ -530,7 +530,7 @@ fn test_aggregate_statement1() {
 
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some("x".to_owned()), statement.group_by);
+    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
 }
 
 #[test]
@@ -542,7 +542,7 @@ fn test_aggregate_statement2() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: Some("x".to_owned())
+        group_by: Some(vec!["x".to_owned()])
     };
 
     let statement = transform_statement(tree);
@@ -562,7 +562,7 @@ fn test_aggregate_statement2() {
 
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some("x".to_owned()), statement.group_by);
+    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
 }
 
 #[test]
@@ -574,7 +574,7 @@ fn test_aggregate_statement3() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: Some("x".to_owned())
+        group_by: Some(vec!["x".to_owned()])
     };
 
     let statement = transform_statement(tree);
@@ -593,7 +593,7 @@ fn test_aggregate_statement3() {
     assert_eq!(Aggregate::Count, statement.aggregates[1].1);
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some("x".to_owned()), statement.group_by);
+    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
 }
 
 #[test]
