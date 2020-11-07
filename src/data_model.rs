@@ -10,6 +10,12 @@ pub struct Row {
 }
 
 impl Row {
+    pub fn new(columns: Vec<Value>) -> Row {
+        Row {
+            columns
+        }
+    }
+
     pub fn any_result(&self) -> bool {
         self.columns.iter().any(|x| x.is_not_null())
     }

@@ -203,7 +203,7 @@ impl AggregateExecutionEngine {
                 result_columns.push(result_rows_by_column[column_index][row_index].clone());
             }
 
-            result_rows.push(Row { columns: result_columns });
+            result_rows.push(Row::new(result_columns));
         }
 
         Ok(

@@ -42,12 +42,12 @@ impl<'a> SelectExecutionEngine<'a>  {
                 }
             }
 
-            let result_row = ResultRow {
-                data: vec![Row { columns: result_columns }],
-                columns: column_names
-            };
-
-            Ok(Some(result_row))
+            Ok(Some(
+                ResultRow {
+                    data: vec![Row::new(result_columns)],
+                    columns: column_names
+                }
+            ))
         } else {
             Ok(None)
         }
