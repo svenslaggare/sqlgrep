@@ -82,7 +82,11 @@ impl<'a> FollowFileIngester<'a> {
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
         let mut reader = BufReader::new(File::open(filename)?);
 
-        reader.seek(SeekFrom::End(0))?;
+        if head {
+            reader.seek(SeekFrom::Start(0))?;
+        } else {
+            reader.seek(SeekFrom::End(0))?;
+        }
 
         Ok(
             FollowFileIngester {
