@@ -239,13 +239,13 @@ pub enum UnaryArithmeticOperator {
     Invert
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Function {
     Max,
     Min,
     Abs,
     Sqrt,
-    Power,
+    Pow,
     StringLength,
     StringToUpper,
     StringToLower,

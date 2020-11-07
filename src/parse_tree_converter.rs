@@ -1,5 +1,6 @@
 use std::fmt::Formatter;
 use std::collections::HashSet;
+use std::collections::HashMap;
 use std::iter::FromIterator;
 
 use lazy_static::lazy_static;
@@ -18,6 +19,7 @@ pub enum ConvertParseTreeError {
     UndefinedAggregate,
     UndefinedStatement,
     UndefinedExpression,
+    UndefinedFunction,
     InvalidPattern
 }
 
@@ -147,6 +149,19 @@ lazy_static! {
     static ref AGGREGATE_FUNCTIONS: HashSet<String> = HashSet::from_iter(
         vec!["min".to_owned(), "max".to_owned(), "avg".to_owned(), "sum".to_owned()].into_iter()
     );
+
+    static ref FUNCTIONS: HashMap<String, Function> = HashMap::from_iter(
+        vec![
+            ("min".to_owned(), Function::Min),
+            ("max".to_owned(), Function::Max),
+            ("abs".to_owned(), Function::Abs),
+            ("sqrt".to_owned(), Function::Sqrt),
+            ("pow".to_owned(), Function::Pow),
+            ("length".to_owned(), Function::StringLength),
+            ("upper".to_owned(), Function::StringToUpper),
+            ("lower".to_owned(), Function::StringToLower)
+        ].into_iter()
+    );
 }
 
 fn any_aggregates(projections: &Vec<(Option<String>, ParseExpressionTree)>) -> bool {
@@ -212,18 +227,9 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
                 transformed_arguments.push(transform_expression(argument)?);
             }
 
-            let name_lower = name.to_lowercase();
-            match name_lower.as_str() {
-                "min" => Ok(ExpressionTree::Function { function: Function::Min, arguments: transformed_arguments }),
-                "max" => Ok(ExpressionTree::Function { function: Function::Max, arguments: transformed_arguments }),
-                "abs" => Ok(ExpressionTree::Function { function: Function::Abs, arguments: transformed_arguments }),
-                "sqrt" => Ok(ExpressionTree::Function { function: Function::Sqrt, arguments: transformed_arguments }),
-                "pow" => Ok(ExpressionTree::Function { function: Function::Power, arguments: transformed_arguments }),
-                "length" => Ok(ExpressionTree::Function { function: Function::StringLength, arguments: transformed_arguments }),
-                "upper" => Ok(ExpressionTree::Function { function: Function::StringToUpper, arguments: transformed_arguments }),
-                "lower" => Ok(ExpressionTree::Function { function: Function::StringToLower, arguments: transformed_arguments }),
-                _ => Err(ConvertParseTreeError::UndefinedExpression)
-            }
+            FUNCTIONS.get(&name.to_lowercase()).map(|function| {
+                ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
+            }).ok_or(ConvertParseTreeError::UndefinedFunction)
         }
     }
 }

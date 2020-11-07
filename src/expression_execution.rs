@@ -167,7 +167,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
-                    Function::Power if arguments.len() == 2 => {
+                    Function::Pow if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
                         let arg1 = executed_arguments.remove(0);
 
