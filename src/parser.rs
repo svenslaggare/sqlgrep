@@ -6,7 +6,7 @@ use std::fmt::Formatter;
 
 use lazy_static::lazy_static;
 
-use crate::model::{Value, ValueType};
+use crate::model::{Value, ValueType, Float};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -41,6 +41,7 @@ impl std::fmt::Display for Operator {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Int(i64),
+    Float(f64),
     String(String),
     Null,
     True,
@@ -63,6 +64,8 @@ pub enum Token {
 pub enum ParserError {
     Unknown,
     IntConvertError,
+    FloatConvertError,
+    AlreadyHasDot,
     ExpectedKeyword(Keyword),
     ExpectedAnyKeyword(Vec<Keyword>),
     ExpectedLeftParentheses,
@@ -230,10 +233,19 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
         } else if current.is_numeric() {
             let mut number = String::new();
             number.push(current);
+            let mut has_dot = false;
 
             loop {
                 match char_iterator.peek() {
-                    Some(next) if next.is_numeric() || next == &'.' => {
+                    Some(next) if next.is_numeric() => {
+                        number.push(char_iterator.next().unwrap());
+                    }
+                    Some(next) if next == &'.' => {
+                        if has_dot {
+                            return Err(ParserError::AlreadyHasDot);
+                        }
+
+                        has_dot = true;
                         number.push(char_iterator.next().unwrap());
                     }
                     _ => {
@@ -242,7 +254,11 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
                 };
             }
 
-            tokens.push(Token::Int(i64::from_str(&number).map_err(|_err| ParserError::IntConvertError)?));
+            if has_dot {
+                tokens.push(Token::Float(f64::from_str(&number).map_err(|_err| ParserError::FloatConvertError)?));
+            } else {
+                tokens.push(Token::Int(i64::from_str(&number).map_err(|_err| ParserError::IntConvertError)?));
+            }
         } else if current == '(' {
             tokens.push(Token::LeftParentheses);
         } else if current == ')' {
@@ -677,6 +693,11 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 Ok(ParseExpressionTree::Value(Value::Int(value)))
             }
+            Token::Float(value) => {
+                let value = *value;
+                self.next()?;
+                Ok(ParseExpressionTree::Value(Value::Float(Float(value))))
+            }
             Token::String(value) => {
                 let value_copy = value.clone();
                 self.next()?;
@@ -1021,6 +1042,18 @@ fn test_tokenize10() {
             Token::Identifier("line".to_owned()),
             Token::RightArrow,
             Token::String("connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned()),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize11() {
+    let tokens = tokenize("4.0");
+    assert_eq!(
+        vec![
+            Token::Float(4.0),
             Token::End
         ],
         tokens.unwrap()

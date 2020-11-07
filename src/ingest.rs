@@ -106,7 +106,8 @@ impl<'a> FollowFileIngester<'a> {
                 break;
             }
 
-            // If we get an EOF in the middle of a line, read_line will return. We will then try again and use content of current read line
+            // If we get an EOF in the middle of a line, read_line will return.
+            // We will then try again and use content of current read line
             if !line.ends_with('\n') {
                 continue;
             }
