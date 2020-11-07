@@ -687,21 +687,18 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_primary_expression(&mut self) -> ParserResult<ParseExpressionTree> {
-        match self.current() {
+        match self.current().clone() {
             Token::Int(value) => {
-                let value = *value;
                 self.next()?;
                 Ok(ParseExpressionTree::Value(Value::Int(value)))
             }
             Token::Float(value) => {
-                let value = *value;
                 self.next()?;
                 Ok(ParseExpressionTree::Value(Value::Float(Float(value))))
             }
             Token::String(value) => {
-                let value_copy = value.clone();
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::String(value_copy)))
+                Ok(ParseExpressionTree::Value(Value::String(value)))
             }
             Token::Null => {
                 self.next()?;
@@ -849,14 +846,6 @@ impl<'a> Parser<'a> {
         }
 
         Ok(&self.tokens[self.index as usize])
-    }
-
-    fn current_to_op(&self) -> ParserResult<Operator> {
-        if let Token::Operator(op) = self.current() {
-            Ok(*op)
-        } else {
-            Err(ParserError::ExpectedOperator)
-        }
     }
 
     fn get_token_precedence(&self) -> ParserResult<i32> {
@@ -1979,21 +1968,7 @@ fn test_parse_create_table5() {
 
 #[test]
 fn test_parse_str1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let tokens = tokenize("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x");
-    assert!(tokens.is_ok());
-
-    let tokens = tokens.unwrap();
-
-    let mut parser = Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokens
-    );
-
-    let tree = parser.parse().unwrap();
+    let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x").unwrap();
 
     assert_eq!(
         ParseOperationTree::Select {
@@ -2017,21 +1992,7 @@ fn test_parse_str1() {
 
 #[test]
 fn test_parse_str2() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let tokens = tokenize("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE x >= 13 GROUP BY x");
-    assert!(tokens.is_ok());
-
-    let tokens = tokens.unwrap();
-
-    let mut parser = Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokens
-    );
-
-    let tree = parser.parse().unwrap();
+    let tree = parse_str("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE x >= 13 GROUP BY x").unwrap();
 
     assert_eq!(
         ParseOperationTree::Select {
@@ -2055,10 +2016,7 @@ fn test_parse_str2() {
 
 #[test]
 fn test_parse_str3() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let tokens = tokenize(r"
+    let tree = parse_str(r"
     CREATE TABLE connections(
         line = 'connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
 
@@ -2070,18 +2028,7 @@ fn test_parse_str3() {
         line[6] => hour INT,
         line[7] => minute INT,
         line[8] => second INT
-    );");
-    assert!(tokens.is_ok());
-
-    let tokens = tokens.unwrap();
-
-    let mut parser = Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokens
-    );
-
-    let tree = parser.parse().unwrap();
+    );").unwrap();
 
     assert_eq!(
         ParseOperationTree::CreateTable {
@@ -2146,22 +2093,31 @@ fn test_parse_str3() {
 
 #[test]
 fn test_parse_str4() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
+    let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x, y, z").unwrap();
 
-    let tokens_str = std::fs::read_to_string("testdata/definition1.txt").unwrap();
-    let tokens = tokenize(&tokens_str);
-    assert!(tokens.is_ok());
-
-    let tokens = tokens.unwrap();
-
-    let mut parser = Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokens
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![
+                (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
+                (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())]))
+            ],
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Dual('>', '='),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
+                }
+            ),
+            group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()])
+        },
+        tree
     );
+}
 
-    let tree = parser.parse().unwrap();
+#[test]
+fn test_parse_str_from_file1() {
+    let tree = parse_str(&std::fs::read_to_string("testdata/definition1.txt").unwrap()).unwrap();
 
     assert_eq!(
         ParseOperationTree::CreateTable {

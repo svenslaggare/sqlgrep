@@ -163,8 +163,8 @@ impl TestColumnProvider {
         }
     }
 
-    fn add_column(&mut self, name: String, value: Value) {
-        self.columns.insert(name, value);
+    fn add_column(&mut self, name: &str, value: Value) {
+        self.columns.insert(name.to_owned(), value);
     }
 }
 
@@ -177,7 +177,7 @@ impl ColumnProvider for TestColumnProvider {
 #[test]
 fn test_evaluate_column() {
     let mut column_provider = TestColumnProvider::new();
-    column_provider.add_column("x".to_owned(), Value::Int(1337));
+    column_provider.add_column("x", Value::Int(1337));
 
     let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 
