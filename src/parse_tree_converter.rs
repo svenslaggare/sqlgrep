@@ -216,6 +216,12 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
             match name_lower.as_str() {
                 "min" => Ok(ExpressionTree::Function { function: Function::Min, arguments: transformed_arguments }),
                 "max" => Ok(ExpressionTree::Function { function: Function::Max, arguments: transformed_arguments }),
+                "abs" => Ok(ExpressionTree::Function { function: Function::Abs, arguments: transformed_arguments }),
+                "sqrt" => Ok(ExpressionTree::Function { function: Function::Sqrt, arguments: transformed_arguments }),
+                "pow" => Ok(ExpressionTree::Function { function: Function::Power, arguments: transformed_arguments }),
+                "length" => Ok(ExpressionTree::Function { function: Function::StringLength, arguments: transformed_arguments }),
+                "upper" => Ok(ExpressionTree::Function { function: Function::StringToUpper, arguments: transformed_arguments }),
+                "lower" => Ok(ExpressionTree::Function { function: Function::StringToLower, arguments: transformed_arguments }),
                 _ => Err(ConvertParseTreeError::UndefinedExpression)
             }
         }

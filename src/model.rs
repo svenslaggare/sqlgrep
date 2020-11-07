@@ -242,7 +242,13 @@ pub enum UnaryArithmeticOperator {
 #[derive(Debug, PartialEq)]
 pub enum Function {
     Max,
-    Min
+    Min,
+    Abs,
+    Sqrt,
+    Power,
+    StringLength,
+    StringToUpper,
+    StringToLower,
 }
 
 #[derive(Debug, PartialEq)]
@@ -250,7 +256,7 @@ pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
     Wildcard,
-    Compare { left: Box<ExpressionTree>, right: Box<ExpressionTree>, operator: CompareOperator },
+    Compare { operator: CompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     And { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },

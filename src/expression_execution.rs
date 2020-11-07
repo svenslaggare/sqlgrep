@@ -145,6 +145,65 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
+                    Function::Abs if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        arg.map(
+                            || Some(Value::Null),
+                            |x| Some(x.abs()),
+                            |x| Some(x.abs()),
+                            |_| None,
+                            |_| None
+                        ).ok_or(EvaluationError::UndefinedOperation)
+                    }
+                    Function::Sqrt if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        arg.map(
+                            || Some(Value::Null),
+                            |_| None,
+                            |x| Some(x.abs()),
+                            |_| None,
+                            |_| None
+                        ).ok_or(EvaluationError::UndefinedOperation)
+                    }
+                    Function::Power if arguments.len() == 2 => {
+                        let arg0 = executed_arguments.remove(0);
+                        let arg1 = executed_arguments.remove(0);
+
+                        arg0.map_same_type(
+                            &arg1,
+                            || Some(Value::Null),
+                            |x, y| Some(x.pow(y as u32)),
+                            |x, y| Some(x.powf(y)),
+                            |_, _| None,
+                            |_, _| None
+                        ).ok_or(EvaluationError::UndefinedOperation)
+                    }
+                    Function::StringLength if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        match arg {
+                            Value::String(str) => Ok(Value::Int(str.chars().count() as i64)),
+                            _ => Err(EvaluationError::UndefinedOperation)
+                        }
+                    }
+                    Function::StringToUpper if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        match arg {
+                            Value::String(str) => Ok(Value::String(str.to_uppercase())),
+                            _ => Err(EvaluationError::UndefinedOperation)
+                        }
+                    }
+                    Function::StringToLower if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        match arg {
+                            Value::String(str) => Ok(Value::String(str.to_lowercase())),
+                            _ => Err(EvaluationError::UndefinedOperation)
+                        }
+                    }
                     _ => Err(EvaluationError::UndefinedFunction)
                 }
             }
