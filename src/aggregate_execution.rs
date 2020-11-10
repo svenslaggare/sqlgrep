@@ -6,10 +6,11 @@ use crate::execution_model::{ColumnProvider, ExecutionResult, ExecutionError, Re
 use crate::expression_execution::ExpressionExecutionEngine;
 
 type GroupKey = Vec<Value>;
+type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
 
 pub struct AggregateExecutionEngine {
-    groups: BTreeMap<GroupKey, HashMap<usize, Value>>,
-    summary_statistics: BTreeMap<GroupKey, HashMap<usize, (Value, i64)>>
+    groups: Groups<Value>,
+    summary_statistics: Groups<(Value, i64)>
 }
 
 impl AggregateExecutionEngine {
@@ -154,12 +155,29 @@ impl AggregateExecutionEngine {
     }
 
     fn get_group(&mut self, group_key: GroupKey, aggregate_index: usize, default_value: Value) -> &mut Value {
-        self.groups.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
+        AggregateExecutionEngine::get_generic_group(
+            &mut self.groups,
+            group_key,
+            aggregate_index,
+            default_value
+        )
     }
 
     fn get_summary_group(&mut self, group_key: GroupKey, aggregate_index: usize, value_type: ValueType) -> &mut (Value, i64) {
         let default_value = value_type.default_value();
-        self.summary_statistics.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert((default_value, 0))
+        AggregateExecutionEngine::get_generic_group(
+            &mut self.summary_statistics,
+            group_key,
+            aggregate_index,
+            (default_value, 0)
+        )
+    }
+
+    fn get_generic_group<T>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
+                            group_key: GroupKey,
+                            aggregate_index: usize,
+                            default_value: T) -> &mut T {
+        groups.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
     }
 
     pub fn execute_result_only(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
