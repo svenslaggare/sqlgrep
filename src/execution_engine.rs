@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::data_model::{Tables, TableDefinition};
+use crate::data_model::{Tables, TableDefinition, Row};
 use crate::model::{SelectStatement, Value, AggregateStatement, Statement};
 use crate::execution_model::{HashMapColumnProvider, ExecutionResult, ExecutionError, ResultRow};
 use crate::aggregate_execution::AggregateExecutionEngine;
@@ -44,21 +44,15 @@ impl<'a> ExecutionEngine<'a> {
         let row = table_definition.extract(&line);
 
         if row.any_result() {
-            let mut columns_mapping = HashMap::new();
-            for (column_index, column) in table_definition.columns.iter().enumerate() {
-                columns_mapping.insert(column.name.as_str(), &row.columns[column_index]);
-            }
-
             let line_value = Value::String(line);
-            columns_mapping.insert("input", &line_value);
 
-            return select_execution_engine.execute(
+            select_execution_engine.execute(
                 select_statement,
-                HashMapColumnProvider::new(columns_mapping)
-            );
+                HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
+            )
+        } else {
+            Ok(None)
         }
-
-        Ok(None)
     }
 
     pub fn execute_aggregate(&mut self,
@@ -68,21 +62,25 @@ impl<'a> ExecutionEngine<'a> {
         let row = table_definition.extract(&line);
 
         if row.any_result() {
-            let mut columns_mapping = HashMap::new();
-            for (column_index, column) in table_definition.columns.iter().enumerate() {
-                columns_mapping.insert(column.name.as_str(), &row.columns[column_index]);
-            }
-
             let line_value = Value::String(line);
-            columns_mapping.insert("input", &line_value);
 
-            return self.aggregate_execution_engine.execute(
+            self.aggregate_execution_engine.execute(
                 aggregate_statement,
-                HashMapColumnProvider::new(columns_mapping)
-            );
+                HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
+            )
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn create_columns_mapping(&self, table_definition: &'a TableDefinition, row: &'a Row, line: &'a Value) -> HashMap<&'a str, &'a Value> {
+        let mut columns_mapping = HashMap::new();
+        for (column_index, column) in table_definition.columns.iter().enumerate() {
+            columns_mapping.insert(column.name.as_str(), &row.columns[column_index]);
         }
 
-        Ok(None)
+        columns_mapping.insert("input", line);
+        columns_mapping
     }
 
     fn get_table(&self, name: &str) -> ExecutionResult<&TableDefinition> {
