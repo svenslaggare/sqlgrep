@@ -162,7 +162,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         arg.map(
                             || Some(Value::Null),
                             |_| None,
-                            |x| Some(x.abs()),
+                            |x| Some(x.sqrt()),
                             |_| None,
                             |_| None
                         ).ok_or(EvaluationError::UndefinedOperation)
@@ -174,7 +174,13 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         arg0.map_same_type(
                             &arg1,
                             || Some(Value::Null),
-                            |x, y| Some(x.pow(y as u32)),
+                            |x, y| {
+                                if y >= 0 {
+                                    Some(x.pow(y as u32))
+                                } else {
+                                    None
+                                }
+                            },
                             |x, y| Some(x.powf(y)),
                             |_, _| None,
                             |_, _| None
