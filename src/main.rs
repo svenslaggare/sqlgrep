@@ -129,6 +129,7 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, running: Arc<
             let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone());
             if filename.is_none() {
                 println!("The input filename must be defined.");
+                return false;
             }
             let filename = filename.unwrap();
 
