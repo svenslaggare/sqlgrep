@@ -304,6 +304,13 @@ impl Statement {
         }
     }
 
+    pub fn is_aggregate(&self) -> bool {
+        match self {
+            Statement::Aggregate(_) => true,
+            _ => false
+        }
+    }
+
     pub fn extract_select(self) -> Option<SelectStatement> {
         match self {
             Statement::Select(statement) => Some(statement),

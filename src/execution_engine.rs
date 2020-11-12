@@ -6,6 +6,20 @@ use crate::execution_model::{HashMapColumnProvider, ExecutionResult, ExecutionEr
 use crate::aggregate_execution::AggregateExecutionEngine;
 use crate::select_execution::SelectExecutionEngine;
 
+pub struct ExecutionConfig {
+    pub result: bool,
+    pub update: bool
+}
+
+impl Default for ExecutionConfig {
+    fn default() -> Self {
+        ExecutionConfig {
+            result: true,
+            update: true
+        }
+    }
+}
+
 pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
     aggregate_execution_engine: AggregateExecutionEngine
@@ -19,13 +33,21 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    pub fn execute(&mut self, statement: &Statement, line: String) -> (ExecutionResult<Option<ResultRow>>, bool) {
+    pub fn execute(&mut self, statement: &Statement, line: String, config: &ExecutionConfig) -> (ExecutionResult<Option<ResultRow>>, bool) {
         match statement {
             Statement::Select(select_statement) => {
                 (self.execute_select(&select_statement, line), false)
             }
             Statement::Aggregate(aggregate_statement) => {
-                (self.execute_aggregate(&aggregate_statement, line), true)
+                if config.update && config.result {
+                    (self.execute_aggregate(&aggregate_statement, line), true)
+                } else if config.update && !config.result {
+                    (self.execute_aggregate_update(&aggregate_statement, line).map(|_| None), false)
+                } else if !config.update && config.result {
+                    (self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x)), false)
+                } else {
+                    (Err(ExecutionError::NotSupportedOperation), false)
+                }
             }
             Statement::CreateTable(_) => {
                 (Err(ExecutionError::NotSupportedOperation), false)
@@ -71,6 +93,30 @@ impl<'a> ExecutionEngine<'a> {
         } else {
             Ok(None)
         }
+    }
+
+    pub fn execute_aggregate_update(&mut self,
+                                    aggregate_statement: &AggregateStatement,
+                                    line: String) -> ExecutionResult<bool> {
+        let table_definition = self.tables.get(&aggregate_statement.from).ok_or(ExecutionError::TableNotFound)?;
+        let row = table_definition.extract(&line);
+
+        if row.any_result() {
+            let line_value = Value::String(line);
+
+            self.aggregate_execution_engine.execute_update_only(
+                aggregate_statement,
+                HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
+            )?;
+
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+        self.aggregate_execution_engine.execute_result_only(aggregate_statement)
     }
 
     fn create_columns_mapping(&self, table_definition: &'a TableDefinition, row: &'a Row, line: &'a Value) -> HashMap<&'a str, &'a Value> {

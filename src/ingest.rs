@@ -6,7 +6,7 @@ use std::sync::Arc;
 use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
 use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
 use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
-use crate::execution_engine::{ExecutionEngine};
+use crate::execution_engine::{ExecutionEngine, ExecutionConfig};
 use crate::execution_model::{ExecutionResult, ResultRow};
 
 pub struct FileIngester<'a> {
@@ -36,19 +36,18 @@ impl<'a> FileIngester<'a> {
     }
 
     pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
-        let mut print_only_last = false;
-        let mut last_result_raw = None;
+        let mut config = ExecutionConfig::default();
+        if statement.is_aggregate() {
+            config.result = false;
+        }
 
         for line in self.reader.take().unwrap().lines() {
             if let Ok(line) = line {
-                let (result, print_only_last_this) = self.execution_engine.execute(&statement, line);
-                print_only_last = print_only_last_this;
-
+                let (result, _) = self.execution_engine.execute(&statement, line, &config);
                 if let Some(result_row) = result? {
-                    if self.print_result && !print_only_last {
+                    if self.print_result {
                         OutputPrinter::new(self.single_result).print(&result_row)
                     }
-                    last_result_raw = Some(result_row);
                 }
             } else {
                 break;
@@ -59,9 +58,15 @@ impl<'a> FileIngester<'a> {
             }
         }
 
-        if self.print_result && print_only_last {
-            if let Some(result_row) = last_result_raw {
-                OutputPrinter::new(true).print(&result_row)
+        if statement.is_aggregate() {
+            config.result = true;
+            config.update = false;
+
+            let (result, _) = self.execution_engine.execute(&statement, String::new(), &config);
+            if self.print_result {
+                if let Some(result_row) = result? {
+                    OutputPrinter::new(true).print(&result_row)
+                }
             }
         }
 
@@ -119,7 +124,7 @@ impl<'a> FollowFileIngester<'a> {
             let mut input_line = String::new();
             std::mem::swap(&mut input_line, &mut line);
 
-            let (result, refresh) = self.execution_engine.execute(&statement, input_line);
+            let (result, refresh) = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default());
             if let Some(result_row) = result? {
                 if refresh {
                     print!("\x1B[2J\x1B[1;1H");
