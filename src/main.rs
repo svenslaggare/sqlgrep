@@ -26,8 +26,8 @@ struct CommandLineInput {
     head: bool,
     #[structopt(short, long, help="Executes the given query")]
     command: Option<String>,
-    #[structopt(long, help="Displays the run time of queries")]
-    show_run_time: bool,
+    #[structopt(long, help="Displays the execution statistics of queries")]
+    show_run_stats: bool,
 }
 
 struct ReadLinePrompt {
@@ -157,7 +157,6 @@ fn execute(command_line_input: &CommandLineInput,
                     }
                 }
             } else {
-                let t0 = std::time::Instant::now();
                 let ingester = FileIngester::new(
                     running,
                     &filename,
@@ -168,8 +167,13 @@ fn execute(command_line_input: &CommandLineInput,
                 match ingester {
                     Ok(mut ingester) => {
                         let result = ingester.process(statement);
-                        if command_line_input.show_run_time {
-                            println!("Executed query in {:.2} seconds.", (std::time::Instant::now() - t0).as_micros() as f64 / 1.0E6);
+                        if command_line_input.show_run_stats {
+                            println!(
+                                "Executed query in {:.2} seconds, ingested {:.2} MB, processed {} lines.",
+                                ingester.statistics.execution_time(),
+                                ingester.statistics.ingested_megabytes(),
+                                ingester.statistics.total_lines
+                            );
                         }
                         result
                     }

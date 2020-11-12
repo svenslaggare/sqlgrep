@@ -9,11 +9,36 @@ use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
 use crate::execution_engine::{ExecutionEngine, ExecutionConfig};
 use crate::execution_model::{ExecutionResult, ResultRow};
 
+pub struct ExecutionStatistics {
+    execution_start: std::time::Instant,
+    pub ingested_bytes: usize,
+    pub total_lines: u64
+}
+
+impl ExecutionStatistics {
+    pub fn new() -> ExecutionStatistics {
+        ExecutionStatistics {
+            execution_start: std::time::Instant::now(),
+            ingested_bytes: 0,
+            total_lines: 0
+        }
+    }
+
+    pub fn execution_time(&self) -> f64 {
+        (std::time::Instant::now() - self.execution_start).as_micros() as f64 / 1.0E6
+    }
+
+    pub fn ingested_megabytes(&self) -> f64 {
+        self.ingested_bytes as f64 / 1024.0 / 1024.0
+    }
+}
+
 pub struct FileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     single_result: bool,
     execution_engine: ExecutionEngine<'a>,
+    pub statistics: ExecutionStatistics,
     pub print_result: bool
 }
 
@@ -30,7 +55,8 @@ impl<'a> FileIngester<'a> {
                 reader: Some(reader),
                 single_result,
                 execution_engine,
-                print_result: true
+                print_result: true,
+                statistics: ExecutionStatistics::new()
             }
         )
     }
@@ -43,6 +69,9 @@ impl<'a> FileIngester<'a> {
 
         for line in self.reader.take().unwrap().lines() {
             if let Ok(line) = line {
+                self.statistics.total_lines += 1;
+                self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
+
                 let (result, _) = self.execution_engine.execute(&statement, line, &config);
                 if let Some(result_row) = result? {
                     if self.print_result {
