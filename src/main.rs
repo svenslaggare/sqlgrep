@@ -26,6 +26,8 @@ struct CommandLineInput {
     head: bool,
     #[structopt(short, long, help="Executes the given query")]
     command: Option<String>,
+    #[structopt(long, help="Displays the run time of queries")]
+    show_run_time: bool,
 }
 
 struct ReadLinePrompt {
@@ -117,7 +119,11 @@ fn parse_statement(line: &str) -> Option<Statement> {
     statement.ok()
 }
 
-fn execute(command_line_input: &CommandLineInput, tables: &Tables, running: Arc<AtomicBool>, query_line: String, single_result: bool) -> bool {
+fn execute(command_line_input: &CommandLineInput,
+           tables: &Tables,
+           running: Arc<AtomicBool>,
+           query_line: String,
+           single_result: bool) -> bool {
     if query_line == "exit" {
         return true;
     }
@@ -151,6 +157,7 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, running: Arc<
                     }
                 }
             } else {
+                let t0 = std::time::Instant::now();
                 let ingester = FileIngester::new(
                     running,
                     &filename,
@@ -160,7 +167,11 @@ fn execute(command_line_input: &CommandLineInput, tables: &Tables, running: Arc<
 
                 match ingester {
                     Ok(mut ingester) => {
-                        ingester.process(statement)
+                        let result = ingester.process(statement);
+                        if command_line_input.show_run_time {
+                            println!("Executed query in {:.2} seconds.", (std::time::Instant::now() - t0).as_micros() as f64 / 1.0E6);
+                        }
+                        result
                     }
                     Err(err) => {
                         println!("{}", err);

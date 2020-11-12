@@ -79,9 +79,12 @@ impl AggregateExecutionEngine {
                     }
                 }
                 Aggregate::Count => {
-                    if let Some(group_value) = self.get_group(group_key.clone(), aggregate_index, Value::Int(0)).int_mut() {
-                        *group_value += 1;
-                    }
+                    self.get_group(group_key.clone(), aggregate_index, Value::Int(0)).modify(
+                        |group_value| { *group_value += 1; },
+                        |_| {},
+                        |_| {},
+                        |_| {}
+                    );
                 }
                 Aggregate::Min(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;

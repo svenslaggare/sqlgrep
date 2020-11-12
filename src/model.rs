@@ -76,20 +76,6 @@ impl Value {
         }
     }
 
-    pub fn int(&self) -> Option<i64> {
-        match self {
-            Value::Int(x) => Some(*x),
-            _ => None
-        }
-    }
-
-    pub fn int_mut(&mut self) -> Option<&mut i64> {
-        match self {
-            Value::Int(x) => Some(x),
-            _ => None
-        }
-    }
-
     pub fn value_type(&self) -> Option<ValueType> {
         match self {
             Value::Null => None,
