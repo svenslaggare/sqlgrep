@@ -88,6 +88,7 @@ pub enum ParserError {
     NotDefinedBinaryOperator(Operator),
     NotDefinedUnaryOperator(Operator),
     NotDefinedType(String),
+    TrimOnlyForString,
     ReachedEndOfTokens,
     TooManyTokens
 }
@@ -117,7 +118,8 @@ pub struct ParseColumnDefinition {
     pub pattern_index: usize,
     pub name: String,
     pub column_type: ValueType,
-    pub nullable: Option<bool>
+    pub nullable: Option<bool>,
+    pub trim: Option<bool>
 }
 
 impl ParseColumnDefinition {
@@ -130,7 +132,8 @@ impl ParseColumnDefinition {
             pattern_index,
             name,
             column_type,
-            nullable: None
+            nullable: None,
+            trim: None
         }
     }
 }
@@ -623,14 +626,27 @@ impl<'a> Parser<'a> {
         let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
 
         let mut nullable = None;
-        if self.current() == &Token::Keyword(Keyword::Not) {
-            self.next()?;
-            self.expect_and_consume_token(
-                Token::Null,
-                ParserError::ExpectedNull
-            )?;
+        let mut trim = None;
 
-            nullable = Some(true);
+        match self.current().clone() {
+            Token::Keyword(Keyword::Not) => {
+                self.next()?;
+                self.expect_and_consume_token(
+                    Token::Null,
+                    ParserError::ExpectedNull
+                )?;
+
+                nullable = Some(false);
+            }
+            Token::Identifier(identifier) if identifier.to_lowercase() == "trim" => {
+                if column_type != ValueType::String {
+                    return Err(ParserError::TrimOnlyForString);
+                }
+
+                self.next()?;
+                trim = Some(true);
+            }
+            _ => {}
         }
 
         Ok(
@@ -639,7 +655,8 @@ impl<'a> Parser<'a> {
                 pattern_index,
                 name: column_name,
                 column_type,
-                nullable
+                nullable,
+                trim
             }
         )
     }
@@ -1959,7 +1976,8 @@ fn test_parse_create_table5() {
                 pattern_index: 1,
                 name: "x".to_string(),
                 column_type: ValueType::Int,
-                nullable: Some(true)
+                nullable: Some(false),
+                trim: None
             }]
         },
         tree

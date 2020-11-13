@@ -132,6 +132,10 @@ fn create_create_table_statement(name: String,
                 column_definition.options.nullable = *nullable;
             }
 
+            if let Some(trim) = column.trim.as_ref() {
+                column_definition.options.trim = *trim;
+            }
+
             column_definition
         })
         .collect::<Vec<_>>();

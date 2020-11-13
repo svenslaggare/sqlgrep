@@ -40,13 +40,21 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 let left_value = self.evaluate(left)?;
                 let right_value = self.evaluate(right)?;
 
-                match operator {
-                    CompareOperator::Equal => Ok(Value::Bool(left_value == right_value)),
-                    CompareOperator::NotEqual => Ok(Value::Bool(left_value != right_value)),
-                    CompareOperator::GreaterThan => Ok(Value::Bool(left_value > right_value)),
-                    CompareOperator::GreaterThanOrEqual => Ok(Value::Bool(left_value >= right_value)),
-                    CompareOperator::LessThan => Ok(Value::Bool(left_value < right_value)),
-                    CompareOperator::LessThanOrEqual => Ok(Value::Bool(left_value <= right_value))
+                if left_value.is_null() || right_value.is_null() {
+                    match operator {
+                        CompareOperator::Equal => Ok(Value::Bool(left_value == right_value)),
+                        CompareOperator::NotEqual => Ok(Value::Bool(left_value != right_value)),
+                        _ => Ok(Value::Bool(false))
+                    }
+                } else {
+                    match operator {
+                        CompareOperator::Equal => Ok(Value::Bool(left_value == right_value)),
+                        CompareOperator::NotEqual => Ok(Value::Bool(left_value != right_value)),
+                        CompareOperator::GreaterThan => Ok(Value::Bool(left_value > right_value)),
+                        CompareOperator::GreaterThanOrEqual => Ok(Value::Bool(left_value >= right_value)),
+                        CompareOperator::LessThan => Ok(Value::Bool(left_value < right_value)),
+                        CompareOperator::LessThanOrEqual => Ok(Value::Bool(left_value <= right_value))
+                    }
                 }
             }
             ExpressionTree::Arithmetic { left, right, operator } => {

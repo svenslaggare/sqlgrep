@@ -61,7 +61,17 @@ impl TableDefinition {
                     columns.push(Value::Bool(group_result.is_some()));
                 } else {
                     if let Some(group) = group_result {
-                        columns.push(Value::from_option(column.column_type.parse(group.as_str())));
+                        let mut value = Value::from_option(column.column_type.parse(group.as_str()));
+                        if column.options.trim {
+                            value.modify(
+                                |_| {},
+                                |_| {},
+                                |_| {},
+                                |x| *x = x.trim().to_owned()
+                            )
+                        }
+
+                        columns.push(value);
                     } else {
                         columns.push(Value::Null);
                         is_null = true;
@@ -85,13 +95,15 @@ impl TableDefinition {
 }
 
 pub struct ColumnOptions {
-    pub nullable: bool
+    pub nullable: bool,
+    pub trim: bool
 }
 
 impl ColumnOptions {
     pub fn new() -> ColumnOptions {
         ColumnOptions {
-            nullable: true
+            nullable: true,
+            trim: false
         }
     }
 
