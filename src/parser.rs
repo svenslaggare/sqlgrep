@@ -1985,6 +1985,59 @@ fn test_parse_create_table5() {
 }
 
 #[test]
+fn test_parse_create_table6() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("TEXT".to_owned()),
+            Token::Identifier("TRIM".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+            columns: vec![ParseColumnDefinition {
+                pattern_name: "line".to_string(),
+                pattern_index: 1,
+                name: "x".to_owned(),
+                column_type: ValueType::String,
+                nullable: None,
+                trim: Some(true)
+            }]
+        },
+        tree
+    );
+}
+
+#[test]
 fn test_parse_str1() {
     let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x").unwrap();
 

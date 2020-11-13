@@ -111,6 +111,11 @@ impl ColumnOptions {
         self.nullable = false;
         self
     }
+
+    pub fn trim(mut self) -> Self {
+        self.trim = true;
+        self
+    }
 }
 
 pub struct ColumnDefinition {
@@ -248,6 +253,19 @@ fn test_table_extract5() {
     assert_eq!(Value::Float(Float(4711.1337)), result.columns[0]);
 }
 
+#[test]
+fn test_table_extract6() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9 ]+)")],
+        vec![
+            ColumnDefinition::with_options("line", 1, "x", ValueType::String, ColumnOptions::new().trim())
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 4711    ");
+    assert_eq!(Value::String("4711".to_owned()), result.columns[0]);
+}
 
 #[test]
 fn test_table_extract_multiple1() {
