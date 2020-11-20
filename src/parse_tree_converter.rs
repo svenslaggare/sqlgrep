@@ -213,13 +213,25 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
             let operand = Box::new(transform_expression(*operand)?);
             Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Invert, operand })
         }
-        ParseExpressionTree::AndExpression { left, right } => {
+        ParseExpressionTree::Is { left, right } => {
+            let left = Box::new(transform_expression(*left)?);
+            let right = Box::new(transform_expression(*right)?);
+
+            Ok(ExpressionTree::Is { left, right })
+        }
+        ParseExpressionTree::IsNot { left, right } => {
+            let left = Box::new(transform_expression(*left)?);
+            let right = Box::new(transform_expression(*right)?);
+
+            Ok(ExpressionTree::IsNot { left, right })
+        }
+        ParseExpressionTree::And { left, right } => {
             let left = Box::new(transform_expression(*left)?);
             let right = Box::new(transform_expression(*right)?);
 
             Ok(ExpressionTree::And { left, right })
         }
-        ParseExpressionTree::OrExpression { left, right } => {
+        ParseExpressionTree::Or { left, right } => {
             let left = Box::new(transform_expression(*left)?);
             let right = Box::new(transform_expression(*right)?);
 

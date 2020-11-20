@@ -40,13 +40,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 let left_value = self.evaluate(left)?;
                 let right_value = self.evaluate(right)?;
 
-                if left_value.is_null() || right_value.is_null() {
-                    match operator {
-                        CompareOperator::Equal => Ok(Value::Bool(left_value == right_value)),
-                        CompareOperator::NotEqual => Ok(Value::Bool(left_value != right_value)),
-                        _ => Ok(Value::Bool(false))
-                    }
-                } else {
+                if !left_value.is_null() && !right_value.is_null() {
                     match operator {
                         CompareOperator::Equal => Ok(Value::Bool(left_value == right_value)),
                         CompareOperator::NotEqual => Ok(Value::Bool(left_value != right_value)),
@@ -55,7 +49,21 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         CompareOperator::LessThan => Ok(Value::Bool(left_value < right_value)),
                         CompareOperator::LessThanOrEqual => Ok(Value::Bool(left_value <= right_value))
                     }
+                } else {
+                    Ok(Value::Bool(false))
                 }
+            }
+            ExpressionTree::Is { left, right } => {
+                let left_value = self.evaluate(left)?;
+                let right_value = self.evaluate(right)?;
+
+                Ok(Value::Bool(left_value == right_value))
+            }
+            ExpressionTree::IsNot { left, right } => {
+                let left_value = self.evaluate(left)?;
+                let right_value = self.evaluate(right)?;
+
+                Ok(Value::Bool(left_value != right_value))
             }
             ExpressionTree::Arithmetic { left, right, operator } => {
                 let left_value = self.evaluate(left)?;
@@ -266,7 +274,7 @@ fn test_evaluate_column() {
 }
 
 #[test]
-fn test_evaluate_compare() {
+fn test_evaluate_compare1() {
     let column_provider = TestColumnProvider::new();
 
     let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
@@ -286,6 +294,45 @@ fn test_evaluate_compare() {
             left: Box::new(ExpressionTree::Value(Value::Int(4))),
             right: Box::new(ExpressionTree::Value(Value::Int(10))),
             operator: CompareOperator::GreaterThan
+        })
+    );
+}
+
+#[test]
+fn test_evaluate_compare2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Bool(false)),
+        expression_execution_engine.evaluate(&ExpressionTree::Compare {
+            left: Box::new(ExpressionTree::Value(Value::Null)),
+            right: Box::new(ExpressionTree::Value(Value::Null)),
+            operator: CompareOperator::Equal
+        })
+    );
+}
+
+#[test]
+fn test_evaluate_compare3() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Bool(true)),
+        expression_execution_engine.evaluate(&ExpressionTree::Is {
+            left: Box::new(ExpressionTree::Value(Value::Null)),
+            right: Box::new(ExpressionTree::Value(Value::Null)),
+        })
+    );
+
+    assert_eq!(
+        Ok(Value::Bool(true)),
+        expression_execution_engine.evaluate(&ExpressionTree::IsNot {
+            left: Box::new(ExpressionTree::Value(Value::Int(10))),
+            right: Box::new(ExpressionTree::Value(Value::Null)),
         })
     );
 }

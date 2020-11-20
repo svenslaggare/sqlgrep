@@ -20,7 +20,9 @@ pub enum Keyword {
     Or,
     Create,
     Table,
-    Not
+    Not,
+    Is,
+    IsNot
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -107,8 +109,10 @@ pub enum ParseExpressionTree {
     BinaryOperator { operator: Operator, left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
     UnaryOperator { operator: Operator, operand: Box<ParseExpressionTree>},
     Invert { operand: Box<ParseExpressionTree> },
-    AndExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    OrExpression { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    Is { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    IsNot { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    And { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
+    Or { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
     Call(String, Vec<ParseExpressionTree>)
 }
 
@@ -170,6 +174,7 @@ lazy_static! {
             ("create".to_owned(), Keyword::Create),
             ("table".to_owned(), Keyword::Table),
             ("not".to_owned(), Keyword::Not),
+            ("is".to_owned(), Keyword::Is),
         ].into_iter()
     );
 
@@ -223,7 +228,11 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             }
 
             if let Some(keyword) = KEYWORDS.get(&identifier.to_lowercase()) {
-                tokens.push(Token::Keyword(keyword.clone()));
+                if keyword == &Keyword::Not && !tokens.is_empty() && tokens.last().unwrap() == &Token::Keyword(Keyword::Is) {
+                    *tokens.last_mut().unwrap() = Token::Keyword(Keyword::IsNot);
+                } else {
+                    tokens.push(Token::Keyword(keyword.clone()));
+                }
             } else if identifier.to_lowercase() == "null" {
                 tokens.push(Token::Null);
             } else if identifier.to_lowercase() == "true" {
@@ -586,12 +595,6 @@ impl<'a> Parser<'a> {
                     patterns.push((pattern_name.clone(), pattern.clone()));
 
                     columns.push(self.parse_define_column(pattern_name, pattern_index as usize)?);
-
-                    // let column_name = self.consume_identifier()?;
-                    // let column_type = self.consume_identifier()?;
-                    // let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
-                    //
-                    // columns.push((column_name, column_type, pattern_name, pattern_index as usize));
                 }
                 _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
             }
@@ -692,11 +695,17 @@ impl<'a> Parser<'a> {
                 Token::Operator(op) => {
                     lhs = ParseExpressionTree::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) };
                 }
+                Token::Keyword(Keyword::Is) => {
+                    lhs = ParseExpressionTree::Is { left: Box::new(lhs), right: Box::new(rhs) };
+                }
+                Token::Keyword(Keyword::IsNot) => {
+                    lhs = ParseExpressionTree::IsNot { left: Box::new(lhs), right: Box::new(rhs) };
+                }
                 Token::Keyword(Keyword::And) => {
-                    lhs = ParseExpressionTree::AndExpression { left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParseExpressionTree::And { left: Box::new(lhs), right: Box::new(rhs) };
                 }
                 Token::Keyword(Keyword::Or) => {
-                    lhs = ParseExpressionTree::OrExpression { left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParseExpressionTree::Or { left: Box::new(lhs), right: Box::new(rhs) };
                 }
                 _ => { return Err(ParserError::ExpectedOperator); }
             }
@@ -873,6 +882,8 @@ impl<'a> Parser<'a> {
                     None => Err(ParserError::NotDefinedBinaryOperator(op.clone()))
                 }
             }
+            Token::Keyword(Keyword::Is) => Ok(2),
+            Token::Keyword(Keyword::IsNot) => Ok(2),
             Token::Keyword(Keyword::And) => Ok(1),
             Token::Keyword(Keyword::Or) => Ok(1),
             _ => Ok(-1)
@@ -1060,6 +1071,20 @@ fn test_tokenize11() {
     assert_eq!(
         vec![
             Token::Float(4.0),
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize12() {
+    let tokens = tokenize("x IS NOT NULL");
+    assert_eq!(
+        vec![
+            Token::Identifier("x".to_owned()),
+            Token::Keyword(Keyword::IsNot),
+            Token::Null,
             Token::End
         ],
         tokens.unwrap()
@@ -1303,7 +1328,7 @@ fn test_parse_expression5() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::AndExpression {
+        ParseExpressionTree::And {
             left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
             right: Box::new(ParseExpressionTree::Value(Value::Bool(false)))
         },
@@ -1355,6 +1380,52 @@ fn test_parse_expression7() {
     assert_eq!(
         ParseExpressionTree::Invert {
             operand: Box::new(ParseExpressionTree::Value(Value::Bool(true)))
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_expression8() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::True,
+            Token::Keyword(Keyword::Is),
+            Token::Null,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::Is {
+            left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
+            right: Box::new(ParseExpressionTree::Value(Value::Null))
+        },
+        tree
+    );
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::True,
+            Token::Keyword(Keyword::IsNot),
+            Token::Null,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::IsNot {
+            left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
+            right: Box::new(ParseExpressionTree::Value(Value::Null))
         },
         tree
     );

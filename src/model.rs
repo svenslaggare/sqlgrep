@@ -243,6 +243,8 @@ pub enum ExpressionTree {
     ColumnAccess(String),
     Wildcard,
     Compare { operator: CompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    Is { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    IsNot { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     And { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
