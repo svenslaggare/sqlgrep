@@ -92,7 +92,7 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
                               group_by: Option<Vec<String>>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
-        let (default_name, aggregate) = transform_aggregate(tree)?;
+        let (default_name, aggregate) = transform_aggregate(tree, projection_index)?;
         let name = name.or(default_name).unwrap_or(format!("p{}", projection_index));
 
         transformed_aggregates.push((name, aggregate));
@@ -250,14 +250,14 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
     }
 }
 
-fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
+fn transform_aggregate(tree: ParseExpressionTree, index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
     match tree {
         ParseExpressionTree::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name))),
         ParseExpressionTree::Call(name, mut arguments) => {
             let name_lowercase = name.to_lowercase();
             if name_lowercase == "count" {
                 if arguments.is_empty() {
-                    Ok((None, Aggregate::Count))
+                    Ok((Some(format!("count{}", index)), Aggregate::Count))
                 } else {
                     Err(ConvertParseTreeError::UnexpectedArguments)
                 }
@@ -272,7 +272,7 @@ fn transform_aggregate(tree: ParseExpressionTree) -> Result<(Option<String>, Agg
                         _ => { panic!("should not happen") }
                     };
 
-                    Ok((None, aggregate))
+                    Ok((Some(format!("{}{}", name_lowercase, index)), aggregate))
                 } else if arguments.is_empty() {
                     Err(ConvertParseTreeError::ExpectedArgument)
                 } else {
@@ -553,7 +553,7 @@ fn test_aggregate_statement1() {
     assert_eq!("x", statement.aggregates[0].0);
     assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
-    assert_eq!("p1", statement.aggregates[1].0);
+    assert_eq!("max1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
 
 
@@ -585,7 +585,7 @@ fn test_aggregate_statement2() {
     assert_eq!("x", statement.aggregates[0].0);
     assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
-    assert_eq!("p1", statement.aggregates[1].0);
+    assert_eq!("sum1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
 
 
@@ -617,7 +617,7 @@ fn test_aggregate_statement3() {
     assert_eq!("x", statement.aggregates[0].0);
     assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
-    assert_eq!("p1", statement.aggregates[1].0);
+    assert_eq!("count1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Count, statement.aggregates[1].1);
 
     assert_eq!("test", statement.from);
@@ -644,7 +644,7 @@ fn test_aggregate_statement4() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("p0", statement.aggregates[0].0);
+    assert_eq!("count0", statement.aggregates[0].0);
     assert_eq!(Aggregate::Count, statement.aggregates[0].1);
 }
 
@@ -668,7 +668,7 @@ fn test_aggregate_statement5() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("p0", statement.aggregates[0].0);
+    assert_eq!("max0", statement.aggregates[0].0);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
 }
 
