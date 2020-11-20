@@ -227,8 +227,8 @@ pub enum UnaryArithmeticOperator {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Function {
-    Max,
-    Min,
+    Greatest,
+    Least,
     Abs,
     Sqrt,
     Pow,

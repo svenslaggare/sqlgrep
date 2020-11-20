@@ -135,7 +135,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 }
 
                 match function {
-                    Function::Max if arguments.len() == 2 => {
+                    Function::Greatest if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
                         let arg1 = executed_arguments.remove(0);
 
@@ -148,7 +148,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
-                    Function::Min if arguments.len() == 2 => {
+                    Function::Least if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
                         let arg1 = executed_arguments.remove(0);
 
@@ -471,7 +471,7 @@ fn test_function1() {
     assert_eq!(
         Ok(Value::Int(5000)),
         expression_execution_engine.evaluate(&ExpressionTree::Function {
-            function: Function::Max,
+            function: Function::Greatest,
             arguments: vec![
                 ExpressionTree::Value(Value::Int(-1000)),
                 ExpressionTree::Value(Value::Int(5000))

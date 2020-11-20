@@ -151,13 +151,19 @@ fn create_create_table_statement(name: String,
 
 lazy_static! {
     static ref AGGREGATE_FUNCTIONS: HashSet<String> = HashSet::from_iter(
-        vec!["min".to_owned(), "max".to_owned(), "avg".to_owned(), "sum".to_owned()].into_iter()
+        vec![
+            "count".to_owned(),
+            "min".to_owned(),
+            "max".to_owned(),
+            "avg".to_owned(),
+            "sum".to_owned()
+         ].into_iter()
     );
 
     static ref FUNCTIONS: HashMap<String, Function> = HashMap::from_iter(
         vec![
-            ("min".to_owned(), Function::Min),
-            ("max".to_owned(), Function::Max),
+            ("least".to_owned(), Function::Least),
+            ("greatest".to_owned(), Function::Greatest),
             ("abs".to_owned(), Function::Abs),
             ("sqrt".to_owned(), Function::Sqrt),
             ("pow".to_owned(), Function::Pow),
@@ -171,8 +177,7 @@ lazy_static! {
 fn any_aggregates(projections: &Vec<(Option<String>, ParseExpressionTree)>) -> bool {
     projections.iter().any(|(_, projection)| {
         match projection {
-            ParseExpressionTree::Call(name, arguments) if name.to_lowercase() == "count" && arguments.is_empty() => true,
-            ParseExpressionTree::Call(name, arguments) if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) && arguments.len() == 1 => true,
+            ParseExpressionTree::Call(name, _) if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => true,
             _ => false
         }
     })
@@ -495,7 +500,7 @@ fn test_select_statement7() {
             (
                 None,
                 ParseExpressionTree::Call(
-                    "MAX".to_owned(),
+                    "GREATEST".to_owned(),
                     vec![
                         ParseExpressionTree::ColumnAccess("x".to_owned()),
                         ParseExpressionTree::ColumnAccess("y".to_owned())
@@ -520,7 +525,7 @@ fn test_select_statement7() {
     assert_eq!("p0", statement.projections[0].0.as_str());
     assert_eq!(
         &ExpressionTree::Function {
-            function: Function::Max,
+            function: Function::Greatest,
             arguments: vec![ExpressionTree::ColumnAccess("x".to_owned()), ExpressionTree::ColumnAccess("y".to_owned())]
         },
         &statement.projections[0].1
