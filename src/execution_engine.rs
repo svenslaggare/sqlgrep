@@ -44,7 +44,7 @@ impl<'a> ExecutionEngine<'a> {
                 } else if config.update && !config.result {
                     (self.execute_aggregate_update(&aggregate_statement, line).map(|_| None), false)
                 } else if !config.update && config.result {
-                    (self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x)), false)
+                    (self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x)), true)
                 } else {
                     (Err(ExecutionError::NotSupportedOperation), false)
                 }
