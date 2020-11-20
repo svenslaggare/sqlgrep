@@ -31,7 +31,7 @@ fn filtering() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/test1_large.log",
+        "testdata/ftpd_data_large.txt",
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -86,7 +86,7 @@ fn aggregate() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/test1_large.log",
+        "testdata/ftpd_data_large.txt",
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -105,7 +105,7 @@ fn aggregate() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: Some("hour".to_owned())
+        group_by: Some(vec!["hour".to_owned()])
     }));
 
     if let Err(err) = result {
