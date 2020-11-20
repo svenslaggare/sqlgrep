@@ -202,22 +202,24 @@ impl AggregateExecutionEngine {
 
         for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
             columns.push(aggregate.0.clone());
-            result_rows_by_column.push(Vec::new());
+            let mut result_row = Vec::new();
 
             match aggregate.1 {
                 Aggregate::GroupKey(ref column) => {
                     for group_key in self.groups.keys() {
-                        result_rows_by_column.last_mut().unwrap().push(group_key[group_key_mapping[&column]].clone());
+                        result_row.push(group_key[group_key_mapping[&column]].clone());
                     }
                 }
                 Aggregate::Count | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
                     for subgroups in self.groups.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
-                            result_rows_by_column.last_mut().unwrap().push(group_value.clone());
+                            result_row.push(group_value.clone());
                         }
                     }
                 }
             }
+
+            result_rows_by_column.push(result_row);
         }
 
         let num_columns = result_rows_by_column.len();
