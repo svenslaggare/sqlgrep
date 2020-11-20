@@ -66,7 +66,7 @@ impl AggregateExecutionEngine {
             vec![Value::Null]
         };
 
-        for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
+        let mut update_aggregate = |aggregate_index: usize, aggregate: &(String, Aggregate)| {
             match &aggregate.1 {
                 Aggregate::GroupKey(group_column) => {
                     match aggregate_statement.group_by.as_ref() {
@@ -152,6 +152,12 @@ impl AggregateExecutionEngine {
                     *self.get_group(group_key.clone(), aggregate_index, sum.clone()) = sum.clone();
                 }
             }
+
+            Ok(())
+        };
+
+        for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
+            update_aggregate(aggregate_index, aggregate)?;
         }
 
         Ok(())

@@ -75,3 +75,21 @@ fn test_ftpd1() {
     ingester.process(query).unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
+
+#[test]
+fn test_ftpd2() {
+    let tables = create_tables("testdata/ftpd.txt");
+
+    let query_tree = parser::parse_str("SELECT hostname, COUNT() FROM connections WHERE hostname IS NOT NULL GROUP BY hostname").unwrap();
+    let query = parse_tree_converter::transform_statement(query_tree).unwrap();
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/ftpd_data.txt",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    ingester.process(query).unwrap();
+    assert_eq!(8, ingester.statistics.total_result_rows);
+}
