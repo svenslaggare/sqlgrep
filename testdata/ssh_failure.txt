@@ -1,0 +1,6 @@
+CREATE TABLE ssh(
+    line = 'rhost=([a-zA-Z0-9_\\.\\-]+)\\s+user=(\\w+)',
+
+    line[1] => hostname TEXT,
+    line[2] => username TEXT
+);

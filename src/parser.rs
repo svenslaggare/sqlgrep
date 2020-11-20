@@ -2259,7 +2259,7 @@ fn test_parse_str4() {
 
 #[test]
 fn test_parse_str_from_file1() {
-    let tree = parse_str(&std::fs::read_to_string("testdata/definition1.txt").unwrap()).unwrap();
+    let tree = parse_str(&std::fs::read_to_string("testdata/ftpd.txt").unwrap()).unwrap();
 
     assert_eq!(
         ParseOperationTree::CreateTable {

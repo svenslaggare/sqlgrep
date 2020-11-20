@@ -8,3 +8,4 @@ pub mod parser;
 pub mod parse_tree_converter;
 pub mod execution_engine;
 pub mod ingest;
+pub mod integration_tests;
