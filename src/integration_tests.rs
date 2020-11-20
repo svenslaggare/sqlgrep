@@ -12,13 +12,19 @@ fn load_table_definition(filename: &str) -> TableDefinition {
     table_definition_tree.extract_create_table().unwrap()
 }
 
-#[test]
-fn test_ssh1() {
-    let table_definition = load_table_definition("testdata/ssh_failure.txt");
+fn create_tables(filename: &str) -> Tables {
+    let table_definition = load_table_definition(filename);
 
     let mut tables = Tables::new();
     let table_name = table_definition.name.clone();
     tables.add_table(&table_name, table_definition);
+
+    tables
+}
+
+#[test]
+fn test_ssh1() {
+    let tables = create_tables("testdata/ssh_failure.txt");
 
     let query_tree = parser::parse_str("SELECT * FROM ssh").unwrap();
     let query = parse_tree_converter::transform_statement(query_tree).unwrap();
@@ -36,11 +42,7 @@ fn test_ssh1() {
 
 #[test]
 fn test_ssh2() {
-    let table_definition = load_table_definition("testdata/ssh_failure.txt");
-
-    let mut tables = Tables::new();
-    let table_name = table_definition.name.clone();
-    tables.add_table(&table_name, table_definition);
+    let tables = create_tables("testdata/ssh_failure.txt");
 
     let query_tree = parser::parse_str("SELECT hostname, COUNT() AS count FROM ssh GROUP BY hostname").unwrap();
     let query = parse_tree_converter::transform_statement(query_tree).unwrap();
@@ -58,11 +60,7 @@ fn test_ssh2() {
 
 #[test]
 fn test_ftpd1() {
-    let table_definition = load_table_definition("testdata/ftpd.txt");
-
-    let mut tables = Tables::new();
-    let table_name = table_definition.name.clone();
-    tables.add_table(&table_name, table_definition);
+    let tables = create_tables("testdata/ftpd.txt");
 
     let query_tree = parser::parse_str("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
     let query = parse_tree_converter::transform_statement(query_tree).unwrap();
