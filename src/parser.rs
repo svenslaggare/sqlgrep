@@ -228,7 +228,7 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             }
 
             if let Some(keyword) = KEYWORDS.get(&identifier.to_lowercase()) {
-                if keyword == &Keyword::Not && !tokens.is_empty() && tokens.last().unwrap() == &Token::Keyword(Keyword::Is) {
+                if keyword == &Keyword::Not && tokens.last() == Some(Token::Keyword(Keyword::Is)).as_ref() {
                     *tokens.last_mut().unwrap() = Token::Keyword(Keyword::IsNot);
                 } else {
                     tokens.push(Token::Keyword(keyword.clone()));
@@ -290,8 +290,8 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
         } else {
             //If the previous token is an operator and the current one also is, upgrade to a two-op char
             let mut is_dual = false;
-            if !tokens.is_empty() {
-                match tokens.last().unwrap() {
+            if let Some(last) = tokens.last() {
+                match last {
                     Token::Operator(Operator::Single('=')) if current == '>' => {
                         *tokens.last_mut().unwrap() = Token::RightArrow;
                         is_dual = true;
