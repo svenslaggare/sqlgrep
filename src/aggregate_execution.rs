@@ -24,16 +24,16 @@ impl AggregateExecutionEngine {
     pub fn execute<TColumnProvider: ColumnProvider>(&mut self,
                                                     aggregate_statement: &AggregateStatement,
                                                     row: TColumnProvider) -> ExecutionResult<Option<ResultRow>> {
-        if !self.execute_update_only(aggregate_statement, row)? {
+        if !self.execute_update(aggregate_statement, row)? {
             return Ok(None);
         }
 
-        self.execute_result_only(aggregate_statement).map(|result| Some(result))
+        self.execute_result(aggregate_statement).map(|result| Some(result))
     }
 
-    pub fn execute_update_only<TColumnProvider: ColumnProvider>(&mut self,
-                                                                aggregate_statement: &AggregateStatement,
-                                                                row: TColumnProvider) -> ExecutionResult<bool> {
+    pub fn execute_update<TColumnProvider: ColumnProvider>(&mut self,
+                                                           aggregate_statement: &AggregateStatement,
+                                                           row: TColumnProvider) -> ExecutionResult<bool> {
         let expression_execution_engine = ExpressionExecutionEngine::new(&row);
 
         let valid = if let Some(filter) = aggregate_statement.filter.as_ref() {
@@ -183,7 +183,7 @@ impl AggregateExecutionEngine {
         groups.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
     }
 
-    pub fn execute_result_only(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+    pub fn execute_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         let mut result_rows_by_column = Vec::new();
         let mut columns = Vec::new();
 

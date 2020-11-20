@@ -104,7 +104,7 @@ impl<'a> ExecutionEngine<'a> {
         if row.any_result() {
             let line_value = Value::String(line);
 
-            self.aggregate_execution_engine.execute_update_only(
+            self.aggregate_execution_engine.execute_update(
                 aggregate_statement,
                 HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
             )?;
@@ -116,7 +116,7 @@ impl<'a> ExecutionEngine<'a> {
     }
 
     pub fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
-        self.aggregate_execution_engine.execute_result_only(aggregate_statement)
+        self.aggregate_execution_engine.execute_result(aggregate_statement)
     }
 
     fn create_columns_mapping(&self, table_definition: &'a TableDefinition, row: &'a Row, line: &'a Value) -> HashMap<&'a str, &'a Value> {
