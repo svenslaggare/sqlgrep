@@ -41,6 +41,8 @@ If we want to know how many connection attempts we get per hostname (i.e. a grou
 sqlgrep -d testdata/definition1.txt testdata/test1.log -c "SELECT hostname, COUNT() AS count FROM connections GROUP BY hostname"
 ```
 
+See `testdata` folder and `src/integration_tests.rs` for more examples.
+
 # Documentation
 Tries to follow the SQL standard, so you should expect that normal SQL queries work. However, not every feature is supported yet.
 
