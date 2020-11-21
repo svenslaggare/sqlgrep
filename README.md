@@ -65,8 +65,8 @@ Supported functions:
 * Sqrt
 * Pow
 
-##Tables
-###Syntax
+## Tables
+### Syntax
 ```
 CREATE TABLE <name>(
     Separate pattern and column definition. Pattern can be used in multiple column definitions.
@@ -85,7 +85,7 @@ Multiple tables can be defined in the same file.
 * `REAL`: 64-bits float type.
 * `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
 
-###Modifiers
+### Modifiers
 Placed after the column type and add additional constraints/transforms.
 * `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is _not_ inserted.
 * `TRIM`: Trim string types for whitespaces.
