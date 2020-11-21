@@ -5,6 +5,9 @@ use std::sync::Arc;
 use structopt::StructOpt;
 
 use rustyline::Editor;
+use rustyline::validate::{Validator, ValidationContext, ValidationResult};
+use rustyline::error::ReadlineError;
+use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 
 use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
@@ -54,6 +57,20 @@ impl std::iter::Iterator for ReadLinePrompt {
         match std::io::stdin().read_line(&mut line) {
             Ok(_) => Some(line.trim().to_string()),
             Err(_) => None
+        }
+    }
+}
+
+#[derive(Completer, Helper, Highlighter, Hinter)]
+struct InputValidator {}
+
+impl Validator for InputValidator {
+    fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
+        let input = ctx.input();
+        if !input.ends_with(';') {
+            Ok(ValidationResult::Incomplete)
+        } else {
+            Ok(ValidationResult::Valid(None))
         }
     }
 }
@@ -120,7 +137,7 @@ fn parse_statement(line: &str) -> Option<Statement> {
 }
 
 fn execute(command_line_input: &CommandLineInput,
-           tables: &Tables,
+           tables: &mut Tables,
            running: Arc<AtomicBool>,
            query_line: String,
            single_result: bool) -> bool {
@@ -131,6 +148,11 @@ fn execute(command_line_input: &CommandLineInput,
     running.store(true, Ordering::SeqCst);
 
     match parse_statement(&query_line) {
+        Some(Statement::CreateTable(table_definition)) => {
+            let table_name = table_definition.name.clone();
+            tables.add_table(&table_name, table_definition);
+            return false;
+        },
         Some(statement) => {
             let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone());
             if filename.is_none() {
@@ -215,16 +237,19 @@ fn main() {
     }).expect("Error setting Ctrl-C handler");
 
     if let Some(command) = command_line_input.command.clone() {
-        execute(&command_line_input, &tables, running.clone(), command, true);
+        execute(&command_line_input, &mut tables, running.clone(), command, true);
     } else {
-        let mut line_editor = Editor::<()>::new();
+        let mut line_editor = Editor::new();
+        let validator = InputValidator {};
+        line_editor.set_helper(Some(validator));
+
         while let Ok(mut line) = line_editor.readline("> ") {
             if line.ends_with('\n') {
                 line.pop();
             }
 
             line_editor.add_history_entry(line.clone());
-            if execute(&command_line_input, &tables, running.clone(), line, false) {
+            if execute(&command_line_input, &mut tables, running.clone(), line, false) {
                 break;
             }
         }

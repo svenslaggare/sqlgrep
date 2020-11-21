@@ -23,22 +23,22 @@ CREATE TABLE connections(
 );
 ```
 
-If we want to know the IP and hostname for all connections which have a hostname in the file `testdata/test1.log` with the table definition above in `testdata/definition1.txt`  we can do:
+If we want to know the IP and hostname for all connections which have a hostname in the file `testdata/ftpd_data.txt` with the table definition above in `testdata/ftpd.txt`  we can do:
 
 ```
-sqlgrep -d testdata/definition1.txt testdata/test1.log -c "SELECT ip, hostname FROM connections WHERE hostname != NULL"
+sqlgrep -d testdata/ftpd.txt testdata/ftpd_data.txt -c "SELECT ip, hostname FROM connections WHERE hostname IS NOT NULL"
 ```
 
 We can also do it "live" by tail following the file (note the `-f` argument):
 
 ```
-sqlgrep -d testdata/definition1.txt testdata/test1.log -f -c "SELECT ip, hostname FROM connections WHERE hostname != NULL"
+sqlgrep -d testdata/ftpd.txt testdata/ftpd_data.txt -f -c "SELECT ip, hostname FROM connections WHERE hostname IS NOT NULL"
 ```
 
 If we want to know how many connection attempts we get per hostname (i.e. a group by query):
 
 ```
-sqlgrep -d testdata/definition1.txt testdata/test1.log -c "SELECT hostname, COUNT() AS count FROM connections GROUP BY hostname"
+sqlgrep -d testdata/ftpd.txt testdata/ftpd_data.txt -c "SELECT hostname, COUNT() AS count FROM connections GROUP BY hostname"
 ```
 
 See `testdata` folder and `src/integration_tests.rs` for more examples.
