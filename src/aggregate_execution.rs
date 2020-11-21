@@ -168,7 +168,7 @@ impl AggregateExecutionEngine {
             let mut having_aggregate_index = 0;
             having.visit(&mut |tree| {
                 match tree {
-                    ExpressionTree::Aggregate(aggregate) => {
+                    ExpressionTree::Aggregate(_, aggregate) => {
                         match aggregate.as_ref() {
                             Aggregate::GroupKey(_) => {}
                             aggregate => {
@@ -287,16 +287,16 @@ impl AggregateExecutionEngine {
     }
 }
 
-fn extract_having_aggregates<'a>(aggregate_statement: &'a AggregateStatement) -> ExecutionResult<Vec<&'a Aggregate>> {
+fn extract_having_aggregates<'a>(aggregate_statement: &'a AggregateStatement) -> ExecutionResult<Vec<(usize, &'a Aggregate)>> {
     let mut having_aggregates = Vec::new();
     if let Some(having) = aggregate_statement.having.as_ref() {
         having.visit(&mut |tree| {
             match tree {
-                ExpressionTree::Aggregate(aggregate) => {
+                ExpressionTree::Aggregate(id, aggregate) => {
                     match aggregate.as_ref() {
                         Aggregate::GroupKey(_) => {}
                         aggregate => {
-                            having_aggregates.push(aggregate);
+                            having_aggregates.push((*id, aggregate));
                         }
                     }
                 },
@@ -311,7 +311,7 @@ fn extract_having_aggregates<'a>(aggregate_statement: &'a AggregateStatement) ->
 }
 
 fn accept_group<'a>(group_key_mapping: &HashMap<&String, usize>,
-                    having_aggregates: &Vec<&'a Aggregate>,
+                    having_aggregates: &Vec<(usize, &'a Aggregate)>,
                     group_key_value: &GroupKey,
                     group_value: &HashMap<usize, Value>,
                     aggregate_statement: &AggregateStatement,
@@ -324,13 +324,13 @@ fn accept_group<'a>(group_key_mapping: &HashMap<&String, usize>,
         );
     }
 
-    for (having_aggregate_index, &aggregate) in having_aggregates.iter().enumerate() {
+    for (having_aggregate_index, &(aggregate_id, aggregate)) in having_aggregates.iter().enumerate() {
         let mut hasher = FnvHasher::default();
         aggregate.hash(&mut hasher);
         let hash = hasher.finish();
 
         columns.insert(
-            format!("$group_value_{}", hash),
+            format!("$group_value_{}_{}", aggregate_id, hash),
             &group_value[&(aggregate_statement.aggregates.len() + having_aggregate_index)]
         );
     }
@@ -817,7 +817,7 @@ fn test_group_by_and_count_and_having1() {
         having: Some(
             ExpressionTree::Compare {
                 operator: CompareOperator::Equal,
-                left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey("x".to_owned())))),
+                left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("x".to_owned())))),
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
         )
@@ -881,7 +881,7 @@ fn test_group_by_and_count_and_having2() {
         having: Some(
             ExpressionTree::Compare {
                 operator: CompareOperator::NotEqual,
-                left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey("x".to_owned())))),
+                left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("x".to_owned())))),
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
         )
@@ -945,7 +945,7 @@ fn test_group_by_and_count_and_having3() {
         having: Some(
             ExpressionTree::Compare {
                 operator: CompareOperator::GreaterThan,
-                left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::Count))),
+                left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count))),
                 right: Box::new(ExpressionTree::Value(Value::Int(1)))
             }
         )
@@ -1036,12 +1036,12 @@ fn test_group_by_and_count_and_having4() {
             ExpressionTree::And {
                 left: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::GreaterThan,
-                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::Count))),
+                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count))),
                     right: Box::new(ExpressionTree::Value(Value::Int(1)))
                 }),
                 right: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::Equal,
-                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey("x".to_owned())))),
+                    left: Box::new(ExpressionTree::Aggregate(1, Box::new(Aggregate::GroupKey("x".to_owned())))),
                     right: Box::new(ExpressionTree::Value(Value::Int(1000)))
                 })
             }

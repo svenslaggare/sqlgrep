@@ -6,7 +6,6 @@ use fnv::FnvHasher;
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate};
 use crate::execution_model::ColumnProvider;
 
-
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
     ColumnNotFound,
@@ -238,7 +237,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     _ => Err(EvaluationError::UndefinedFunction)
                 }
             }
-            ExpressionTree::Aggregate(aggregate) => {
+            ExpressionTree::Aggregate(id, aggregate) => {
                 match aggregate.as_ref() {
                     Aggregate::GroupKey(column) => {
                         self.column_access
@@ -252,7 +251,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         let hash = hasher.finish();
 
                         self.column_access
-                            .get(&format!("$group_value_{}", hash))
+                            .get(&format!("$group_value_{}_{}", id, hash))
                             .map(|value| value.clone())
                             .ok_or(EvaluationError::GroupValueNotFound)
                     }

@@ -509,12 +509,12 @@ fn test_file_ingest6() {
         having: Some(
             ExpressionTree::And {
                 left: Box::new(ExpressionTree::IsNot {
-                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey("hostname".to_owned())))),
+                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("hostname".to_owned())))),
                     right: Box::new(ExpressionTree::Value(Value::Null))
                 }),
                 right: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::GreaterThan,
-                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::Count))),
+                    left: Box::new(ExpressionTree::Aggregate(1, Box::new(Aggregate::Count))),
                     right: Box::new(ExpressionTree::Value(Value::Int(30)))
                 })
             }

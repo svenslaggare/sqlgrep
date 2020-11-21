@@ -260,7 +260,7 @@ pub enum ExpressionTree {
     Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
     Function { function: Function, arguments: Vec<ExpressionTree> },
-    Aggregate(Box<Aggregate>)
+    Aggregate(usize, Box<Aggregate>)
 }
 
 impl ExpressionTree {
@@ -301,7 +301,7 @@ impl ExpressionTree {
                     arg.visit(f)?;
                 }
             }
-            ExpressionTree::Aggregate(aggregate) => {
+            ExpressionTree::Aggregate(_, aggregate) => {
                 match aggregate.as_ref() {
                     Aggregate::GroupKey(_) | Aggregate::Count => {}
                     Aggregate::Min(expression) => {
