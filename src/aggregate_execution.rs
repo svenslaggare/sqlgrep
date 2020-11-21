@@ -70,17 +70,23 @@ impl AggregateExecutionEngine {
             vec![Value::Null]
         };
 
-        let mut update_aggregate = |aggregate_index: usize, aggregate: &Aggregate| {
+        let validate_group_key = |group_column: &String| -> ExecutionResult<()> {
+            match aggregate_statement.group_by.as_ref() {
+                None => { return Err(ExecutionError::GroupKeyNotAvailable(None)); }
+                Some(group_by) => {
+                    if !group_by.iter().any(|column| column == group_column) {
+                        return Err(ExecutionError::GroupKeyNotAvailable(Some(group_column.clone())));
+                    }
+                }
+            }
+
+            Ok(())
+        };
+
+        let mut update_aggregate = |aggregate_index: usize, aggregate: &Aggregate| -> ExecutionResult<()> {
             match aggregate {
                 Aggregate::GroupKey(group_column) => {
-                    match aggregate_statement.group_by.as_ref() {
-                        None => { return Err(ExecutionError::GroupKeyNotAvailable(None)); }
-                        Some(group_by) => {
-                            if !group_by.iter().any(|column| column == group_column) {
-                                return Err(ExecutionError::GroupKeyNotAvailable(Some(group_column.clone())));
-                            }
-                        }
-                    }
+                    validate_group_key(group_column)?;
                 }
                 Aggregate::Count => {
                     self.get_group(group_key.clone(), aggregate_index, Value::Int(0)).modify(
@@ -170,7 +176,9 @@ impl AggregateExecutionEngine {
                 match tree {
                     ExpressionTree::Aggregate(_, aggregate) => {
                         match aggregate.as_ref() {
-                            Aggregate::GroupKey(_) => {}
+                            Aggregate::GroupKey(group_column) => {
+                                validate_group_key(group_column)?;
+                            }
                             aggregate => {
                                 update_aggregate(aggregate_statement.aggregates.len() + having_aggregate_index, aggregate)?;
                                 having_aggregate_index += 1;
@@ -295,9 +303,7 @@ fn extract_having_aggregates<'a>(aggregate_statement: &'a AggregateStatement) ->
                 ExpressionTree::Aggregate(id, aggregate) => {
                     match aggregate.as_ref() {
                         Aggregate::GroupKey(_) => {}
-                        aggregate => {
-                            having_aggregates.push((*id, aggregate));
-                        }
+                        aggregate => { having_aggregates.push((*id, aggregate)); }
                     }
                 },
                 _ => {}
