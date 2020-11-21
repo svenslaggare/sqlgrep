@@ -105,7 +105,8 @@ fn aggregate() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: Some(vec!["hour".to_owned()])
+        group_by: Some(vec!["hour".to_owned()]),
+        having: None
     }));
 
     if let Err(err) = result {
