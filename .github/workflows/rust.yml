@@ -26,5 +26,5 @@ jobs:
       run: cargo build --release --verbose
     - uses: actions/upload-artifact@v2
       with:
-        name: sqlgrep
+        name: sqlgrep_linux_x86_64
         path: target/release/sqlgrep
