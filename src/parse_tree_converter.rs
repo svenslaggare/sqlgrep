@@ -20,7 +20,8 @@ pub enum ConvertParseTreeError {
     UndefinedStatement,
     UndefinedExpression,
     UndefinedFunction,
-    InvalidPattern
+    InvalidPattern,
+    HavingClauseNotPossible
 }
 
 impl std::fmt::Display for ConvertParseTreeError {
@@ -31,13 +32,17 @@ impl std::fmt::Display for ConvertParseTreeError {
 
 pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, ConvertParseTreeError> {
     match tree {
-        ParseOperationTree::Select { projections, from, filter, group_by } => {
+        ParseOperationTree::Select { projections, from, filter, group_by, having } => {
             if let Some(group_by) = group_by {
-                create_aggregate_statement(projections, from, filter, Some(group_by))
+                create_aggregate_statement(projections, from, filter, Some(group_by), having)
             } else {
                 if any_aggregates(&projections) {
-                    create_aggregate_statement(projections, from, filter, None)
+                    create_aggregate_statement(projections, from, filter, None, having)
                 } else {
+                    if having.is_some() {
+                        return Err(ConvertParseTreeError::HavingClauseNotPossible);
+                    }
+
                     create_select_statement(projections, from, filter)
                 }
             }
@@ -59,7 +64,7 @@ fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree
                            filter: Option<ParseExpressionTree>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_projections = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
-        let expression = transform_expression(tree)?;
+        let expression = transform_expression(tree, false)?;
 
         let mut default_name = format!("p{}", projection_index);
         if let ExpressionTree::ColumnAccess(column) = &expression {
@@ -71,7 +76,7 @@ fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree
     }
 
     let transformed_filter = if let Some(filter) = filter {
-        Some(transform_expression(filter)?)
+        Some(transform_expression(filter, false)?)
     } else {
         None
     };
@@ -89,7 +94,8 @@ fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree
 fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionTree)>,
                               from: (String, Option<String>),
                               filter: Option<ParseExpressionTree>,
-                              group_by: Option<Vec<String>>) -> Result<Statement, ConvertParseTreeError> {
+                              group_by: Option<Vec<String>>,
+                              having: Option<ParseExpressionTree>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let (default_name, aggregate) = transform_aggregate(tree, projection_index)?;
@@ -99,7 +105,13 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
     }
 
     let transformed_filter = if let Some(filter) = filter {
-        Some(transform_expression(filter)?)
+        Some(transform_expression(filter, false)?)
+    } else {
+        None
+    };
+
+    let transformed_having = if let Some(having) = having {
+        Some(transform_expression(having, true)?)
     } else {
         None
     };
@@ -109,7 +121,8 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
         from: from.0,
         filename: from.1,
         filter: transformed_filter,
-        group_by
+        group_by,
+        having: transformed_having
     };
 
     Ok(Statement::Aggregate(aggregate_statement))
@@ -183,14 +196,20 @@ fn any_aggregates(projections: &Vec<(Option<String>, ParseExpressionTree)>) -> b
     })
 }
 
-pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree, ConvertParseTreeError> {
+pub fn transform_expression(tree: ParseExpressionTree, allow_aggregates: bool) -> Result<ExpressionTree, ConvertParseTreeError> {
     match tree {
         ParseExpressionTree::Value(value) => Ok(ExpressionTree::Value(value)),
-        ParseExpressionTree::ColumnAccess(name) => Ok(ExpressionTree::ColumnAccess(name)),
+        ParseExpressionTree::ColumnAccess(name) => {
+            if allow_aggregates {
+                Ok(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey(name))))
+            } else {
+                Ok(ExpressionTree::ColumnAccess(name))
+            }
+        }
         ParseExpressionTree::Wildcard => Ok(ExpressionTree::Wildcard),
         ParseExpressionTree::BinaryOperator { operator, left, right } => {
-            let left = Box::new(transform_expression(*left)?);
-            let right = Box::new(transform_expression(*right)?);
+            let left = Box::new(transform_expression(*left, allow_aggregates)?);
+            let right = Box::new(transform_expression(*right, allow_aggregates)?);
 
             match operator {
                 Operator::Single('+') => Ok(ExpressionTree::Arithmetic { operator: ArithmeticOperator::Add, left, right }),
@@ -207,7 +226,7 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
             }
         }
         ParseExpressionTree::UnaryOperator { operator, operand } => {
-            let operand = Box::new(transform_expression(*operand)?);
+            let operand = Box::new(transform_expression(*operand, allow_aggregates)?);
 
             match operator {
                 Operator::Single('-') => Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Negative, operand }),
@@ -215,37 +234,49 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
             }
         }
         ParseExpressionTree::Invert { operand } => {
-            let operand = Box::new(transform_expression(*operand)?);
+            let operand = Box::new(transform_expression(*operand, allow_aggregates)?);
             Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Invert, operand })
         }
         ParseExpressionTree::Is { left, right } => {
-            let left = Box::new(transform_expression(*left)?);
-            let right = Box::new(transform_expression(*right)?);
+            let left = Box::new(transform_expression(*left, allow_aggregates)?);
+            let right = Box::new(transform_expression(*right, allow_aggregates)?);
 
             Ok(ExpressionTree::Is { left, right })
         }
         ParseExpressionTree::IsNot { left, right } => {
-            let left = Box::new(transform_expression(*left)?);
-            let right = Box::new(transform_expression(*right)?);
+            let left = Box::new(transform_expression(*left, allow_aggregates)?);
+            let right = Box::new(transform_expression(*right, allow_aggregates)?);
 
             Ok(ExpressionTree::IsNot { left, right })
         }
         ParseExpressionTree::And { left, right } => {
-            let left = Box::new(transform_expression(*left)?);
-            let right = Box::new(transform_expression(*right)?);
+            let left = Box::new(transform_expression(*left, allow_aggregates)?);
+            let right = Box::new(transform_expression(*right, allow_aggregates)?);
 
             Ok(ExpressionTree::And { left, right })
         }
         ParseExpressionTree::Or { left, right } => {
-            let left = Box::new(transform_expression(*left)?);
-            let right = Box::new(transform_expression(*right)?);
+            let left = Box::new(transform_expression(*left, allow_aggregates)?);
+            let right = Box::new(transform_expression(*right, allow_aggregates)?);
 
             Ok(ExpressionTree::Or { left, right })
         }
         ParseExpressionTree::Call(name, arguments) => {
+            if allow_aggregates {
+                match transform_call_aggregate(&name, arguments.clone(), 0) {
+                    Ok((_, aggregate)) => { return Ok(ExpressionTree::Aggregate(Box::new(aggregate))); }
+                    Err(err) => {
+                        match err {
+                            ConvertParseTreeError::UndefinedAggregate => {}
+                            err => { return Err(err); }
+                        }
+                    }
+                }
+            }
+
             let mut transformed_arguments = Vec::new();
             for argument in arguments {
-                transformed_arguments.push(transform_expression(argument)?);
+                transformed_arguments.push(transform_expression(argument, allow_aggregates)?);
             }
 
             FUNCTIONS.get(&name.to_lowercase()).map(|function| {
@@ -258,36 +289,40 @@ pub fn transform_expression(tree: ParseExpressionTree) -> Result<ExpressionTree,
 fn transform_aggregate(tree: ParseExpressionTree, index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
     match tree {
         ParseExpressionTree::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name))),
-        ParseExpressionTree::Call(name, mut arguments) => {
-            let name_lowercase = name.to_lowercase();
-            if name_lowercase == "count" {
-                if arguments.is_empty() {
-                    Ok((Some(format!("count{}", index)), Aggregate::Count))
-                } else {
-                    Err(ConvertParseTreeError::UnexpectedArguments)
-                }
-            } else if AGGREGATE_FUNCTIONS.contains(&name_lowercase) {
-                if arguments.len() == 1 {
-                    let expression = transform_expression(arguments.remove(0))?;
-                    let aggregate = match name_lowercase.as_str() {
-                        "max" => Aggregate::Max(expression),
-                        "min" => Aggregate::Min(expression),
-                        "avg" => Aggregate::Average(expression),
-                        "sum" => Aggregate::Sum(expression),
-                        _ => { panic!("should not happen") }
-                    };
-
-                    Ok((Some(format!("{}{}", name_lowercase, index)), aggregate))
-                } else if arguments.is_empty() {
-                    Err(ConvertParseTreeError::ExpectedArgument)
-                } else {
-                    Err(ConvertParseTreeError::TooManyArguments)
-                }
-            } else {
-                Err(ConvertParseTreeError::UndefinedAggregate)
-            }
-        }
+        ParseExpressionTree::Call(name, arguments) => transform_call_aggregate(&name, arguments, index),
         _ => { return Err(ConvertParseTreeError::UndefinedAggregate); }
+    }
+}
+
+fn transform_call_aggregate(name: &str,
+                            mut arguments: Vec<ParseExpressionTree>,
+                            index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
+    let name_lowercase = name.to_lowercase();
+    if name_lowercase == "count" {
+        if arguments.is_empty() {
+            Ok((Some(format!("count{}", index)), Aggregate::Count))
+        } else {
+            Err(ConvertParseTreeError::UnexpectedArguments)
+        }
+    } else if AGGREGATE_FUNCTIONS.contains(&name_lowercase) {
+        if arguments.len() == 1 {
+            let expression = transform_expression(arguments.remove(0), false)?;
+            let aggregate = match name_lowercase.as_str() {
+                "max" => Aggregate::Max(expression),
+                "min" => Aggregate::Min(expression),
+                "avg" => Aggregate::Average(expression),
+                "sum" => Aggregate::Sum(expression),
+                _ => { panic!("should not happen") }
+            };
+
+            Ok((Some(format!("{}{}", name_lowercase, index)), aggregate))
+        } else if arguments.is_empty() {
+            Err(ConvertParseTreeError::ExpectedArgument)
+        } else {
+            Err(ConvertParseTreeError::TooManyArguments)
+        }
+    } else {
+        Err(ConvertParseTreeError::UndefinedAggregate)
     }
 }
 
@@ -297,7 +332,8 @@ fn test_select_statement1() {
         projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -321,7 +357,8 @@ fn test_select_statement2() {
         projections: vec![(Some("x".to_owned()), ParseExpressionTree::ColumnAccess("x".to_owned()))],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -351,7 +388,8 @@ fn test_select_statement3() {
                 right: Box::new(ParseExpressionTree::Value(Value::Int(10)))
             }
         ),
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -399,7 +437,8 @@ fn test_select_statement4() {
                 right: Box::new(ParseExpressionTree::Value(Value::Int(10)))
             }
         ),
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -439,7 +478,8 @@ fn test_select_statement5() {
         projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
         from: ("test".to_string(), Some("test.log".to_owned())),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -472,7 +512,8 @@ fn test_select_statement6() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -510,7 +551,8 @@ fn test_select_statement7() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -543,7 +585,8 @@ fn test_aggregate_statement1() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: Some(vec!["x".to_owned()])
+        group_by: Some(vec!["x".to_owned()]),
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -575,7 +618,8 @@ fn test_aggregate_statement2() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: Some(vec!["x".to_owned()])
+        group_by: Some(vec!["x".to_owned()]),
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -607,7 +651,8 @@ fn test_aggregate_statement3() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: Some(vec!["x".to_owned()])
+        group_by: Some(vec!["x".to_owned()]),
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -637,7 +682,8 @@ fn test_aggregate_statement4() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -661,7 +707,8 @@ fn test_aggregate_statement5() {
         ],
         from: ("test".to_string(), None),
         filter: None,
-        group_by: None
+        group_by: None,
+        having: None
     };
 
     let statement = transform_statement(tree);
@@ -675,6 +722,61 @@ fn test_aggregate_statement5() {
     assert_eq!(1, statement.aggregates.len());
     assert_eq!("max0", statement.aggregates[0].0);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+}
+
+#[test]
+fn test_aggregate_statement6() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![
+            (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: None,
+        having: Some(
+            ParseExpressionTree::And {
+                left: Box::new(ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('='),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(1337))),
+                }),
+                right: Box::new(ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('>'),
+                    left: Box::new(ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(2000))),
+                })
+            }
+        )
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("max0", statement.aggregates[0].0);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!(
+        Some(
+            ExpressionTree::And {
+                left: Box::new(ExpressionTree::Compare {
+                    operator: CompareOperator::Equal,
+                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey("x".to_owned())))),
+                    right: Box::new(ExpressionTree::Value(Value::Int(1337))),
+                }),
+                right: Box::new(ExpressionTree::Compare {
+                    operator: CompareOperator::GreaterThan,
+                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned()))))),
+                    right: Box::new(ExpressionTree::Value(Value::Int(2000))),
+                })
+            }
+        ),
+        statement.having
+    );
 }
 
 #[test]

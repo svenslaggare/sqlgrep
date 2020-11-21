@@ -26,6 +26,24 @@ impl<'a> ColumnProvider for HashMapColumnProvider<'a> {
     }
 }
 
+pub struct HashMapOwnedKeyColumnProvider<'a> {
+    columns: HashMap<String, &'a Value>
+}
+
+impl<'a> HashMapOwnedKeyColumnProvider<'a> {
+    pub fn new(columns: HashMap<String, &'a Value>) -> HashMapOwnedKeyColumnProvider<'a> {
+        HashMapOwnedKeyColumnProvider {
+            columns
+        }
+    }
+}
+
+impl<'a> ColumnProvider for HashMapOwnedKeyColumnProvider<'a> {
+    fn get(&self, name: &str) -> Option<&Value> {
+        self.columns.get(name).map(|x| *x)
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError {
     Expression(EvaluationError),

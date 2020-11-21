@@ -163,7 +163,7 @@ impl std::fmt::Display for Value {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Hash)]
 pub enum ValueType {
     Int,
     Float,
@@ -201,7 +201,7 @@ impl ValueType {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum CompareOperator {
     Equal,
     NotEqual,
@@ -211,7 +211,7 @@ pub enum CompareOperator {
     LessThanOrEqual
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum ArithmeticOperator {
     Add,
     Subtract,
@@ -219,13 +219,13 @@ pub enum ArithmeticOperator {
     Divide
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum UnaryArithmeticOperator {
     Negative,
     Invert
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Hash)]
 pub enum Function {
     Greatest,
     Least,
@@ -237,7 +237,17 @@ pub enum Function {
     StringToLower,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Hash, Clone)]
+pub enum Aggregate {
+    GroupKey(String),
+    Count,
+    Min(ExpressionTree),
+    Max(ExpressionTree),
+    Average(ExpressionTree),
+    Sum(ExpressionTree)
+}
+
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
@@ -249,17 +259,70 @@ pub enum ExpressionTree {
     Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
-    Function { function: Function, arguments: Vec<ExpressionTree> }
+    Function { function: Function, arguments: Vec<ExpressionTree> },
+    Aggregate(Box<Aggregate>)
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Aggregate {
-    GroupKey(String),
-    Count,
-    Min(ExpressionTree),
-    Max(ExpressionTree),
-    Average(ExpressionTree),
-    Sum(ExpressionTree)
+impl ExpressionTree {
+    pub fn visit<'a, E, F: FnMut(&'a ExpressionTree) -> Result<(), E>>(&'a self, f: &mut F) -> Result<(), E> {
+        match self {
+            ExpressionTree::Value(_) => {}
+            ExpressionTree::ColumnAccess(_) => {}
+            ExpressionTree::Wildcard => {}
+            ExpressionTree::Compare { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::Is { left, right } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::IsNot { left, right } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::And { left, right } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::Or { left, right } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::Arithmetic { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::UnaryArithmetic { operand, .. } => {
+                operand.visit(f)?;
+            }
+            ExpressionTree::Function { arguments, .. } => {
+                for arg in arguments {
+                    arg.visit(f)?;
+                }
+            }
+            ExpressionTree::Aggregate(aggregate) => {
+                match aggregate.as_ref() {
+                    Aggregate::GroupKey(_) | Aggregate::Count => {}
+                    Aggregate::Min(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::Max(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::Average(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::Sum(expression) => {
+                        expression.visit(f)?;
+                    }
+                }
+            }
+        }
+
+        f(self)?;
+        Ok(())
+    }
 }
 
 pub struct SelectStatement {
@@ -280,7 +343,8 @@ pub struct AggregateStatement {
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
-    pub group_by: Option<Vec<String>>
+    pub group_by: Option<Vec<String>>,
+    pub having: Option<ExpressionTree>
 }
 
 pub struct CreateTableStatement {

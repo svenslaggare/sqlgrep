@@ -1,11 +1,17 @@
+use std::hash::{Hasher, Hash};
 use std::collections::HashMap;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function};
+use fnv::FnvHasher;
+
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate};
 use crate::execution_model::ColumnProvider;
+
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
     ColumnNotFound,
+    GroupKeyNotFound,
+    GroupValueNotFound,
     UndefinedOperation,
     UndefinedFunction
 }
@@ -33,7 +39,10 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
         match expression {
             ExpressionTree::Value(value) => Ok(value.clone()),
             ExpressionTree::ColumnAccess(name) => {
-                self.column_access.get(name.as_str()).map(|value| value.clone()).ok_or(EvaluationError::ColumnNotFound)
+                self.column_access
+                    .get(name.as_str())
+                    .map(|value| value.clone())
+                    .ok_or(EvaluationError::ColumnNotFound)
             }
             ExpressionTree::Wildcard => Err(EvaluationError::UndefinedOperation),
             ExpressionTree::Compare { left, right, operator } => {
@@ -227,6 +236,26 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         }
                     }
                     _ => Err(EvaluationError::UndefinedFunction)
+                }
+            }
+            ExpressionTree::Aggregate(aggregate) => {
+                match aggregate.as_ref() {
+                    Aggregate::GroupKey(column) => {
+                        self.column_access
+                            .get(&format!("$group_key_{}", column))
+                            .map(|value| value.clone())
+                            .ok_or(EvaluationError::GroupKeyNotFound)
+                    }
+                    aggregate => {
+                        let mut hasher = FnvHasher::default();
+                        aggregate.hash(&mut hasher);
+                        let hash = hasher.finish();
+
+                        self.column_access
+                            .get(&format!("$group_value_{}", hash))
+                            .map(|value| value.clone())
+                            .ok_or(EvaluationError::GroupValueNotFound)
+                    }
                 }
             }
         }

@@ -22,7 +22,8 @@ pub enum Keyword {
     Table,
     Not,
     Is,
-    IsNot
+    IsNot,
+    Having
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -148,7 +149,8 @@ pub enum ParseOperationTree {
         projections: Vec<(Option<String>, ParseExpressionTree)>,
         from: (String, Option<String>),
         filter: Option<ParseExpressionTree>,
-        group_by: Option<Vec<String>>
+        group_by: Option<Vec<String>>,
+        having: Option<ParseExpressionTree>
     },
     CreateTable {
         name: String,
@@ -175,6 +177,7 @@ lazy_static! {
             ("table".to_owned(), Keyword::Table),
             ("not".to_owned(), Keyword::Not),
             ("is".to_owned(), Keyword::Is),
+            ("having".to_owned(), Keyword::Having),
         ].into_iter()
     );
 
@@ -466,6 +469,7 @@ impl<'a> Parser<'a> {
 
         let mut filter = None;
         let mut group_by = None;
+        let mut having = None;
 
         if self.current() != &Token::End {
             loop {
@@ -491,6 +495,10 @@ impl<'a> Parser<'a> {
 
                         group_by = Some(group_by_keys);
                     },
+                    Token::Keyword(Keyword::Having) => {
+                        self.next()?;
+                        having = Some(self.parse_expression_internal()?);
+                    }
                     Token::SemiColon => {
                         self.next()?;
                         break;
@@ -509,7 +517,8 @@ impl<'a> Parser<'a> {
                 projections,
                 from: (table_name, filename),
                 filter,
-                group_by
+                group_by,
+                having
             }
         )
     }
@@ -1455,7 +1464,8 @@ fn test_parse_select1() {
             projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
             from: ("test".to_string(), None),
             filter: None,
-            group_by: None
+            group_by: None,
+            having: None
         },
         tree
     );
@@ -1485,7 +1495,8 @@ fn test_parse_select2() {
             projections: vec![(None, ParseExpressionTree::Wildcard)],
             from: ("test".to_string(), None),
             filter: None,
-            group_by: None
+            group_by: None,
+            having: None
         },
         tree
     );
@@ -1525,7 +1536,8 @@ fn test_parse_select_and_filter1() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
-            group_by: None
+            group_by: None,
+            having: None
         },
         tree
     );
@@ -1567,7 +1579,8 @@ fn test_parse_select_and_filter2() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
-            group_by: None
+            group_by: None,
+            having: None
         },
         tree
     );
@@ -1610,7 +1623,8 @@ fn test_parse_select_and_filter3() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
-            group_by: None
+            group_by: None,
+            having: None
         },
         tree
     );
@@ -1643,7 +1657,8 @@ fn test_parse_with_filename() {
             projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
             from: ("test".to_string(), Some("test.log".to_owned())),
             filter: None,
-            group_by: None
+            group_by: None,
+            having: None
         },
         tree
     );
@@ -1686,7 +1701,8 @@ fn test_parse_select_group_by1() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
-            group_by: Some(vec!["x".to_owned()])
+            group_by: Some(vec!["x".to_owned()]),
+            having: None
         },
         tree
     );
@@ -1731,7 +1747,59 @@ fn test_parse_select_group_by2() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
                 }
             ),
-            group_by: Some(vec!["x".to_owned(), "y".to_owned()])
+            group_by: Some(vec!["x".to_owned(), "y".to_owned()]),
+            having: None
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_select_having() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Keyword(Keyword::Where),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('>')),
+            Token::Int(4),
+            Token::Keyword(Keyword::Having),
+            Token::Identifier("y".to_string()),
+            Token::Operator(Operator::Single('<')),
+            Token::Int(4),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('>'),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+                }
+            ),
+            group_by: None,
+            having: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('<'),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("y".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+                }
+            ),
         },
         tree
     );
@@ -2126,7 +2194,8 @@ fn test_parse_str1() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
                 }
             ),
-            group_by: Some(vec!["x".to_owned()])
+            group_by: Some(vec!["x".to_owned()]),
+            having: None
         },
         tree
     );
@@ -2150,7 +2219,8 @@ fn test_parse_str2() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
                 }
             ),
-            group_by: Some(vec!["x".to_owned()])
+            group_by: Some(vec!["x".to_owned()]),
+            having: None
         },
         tree
     );
@@ -2251,7 +2321,8 @@ fn test_parse_str4() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
                 }
             ),
-            group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()])
+            group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()]),
+            having: None
         },
         tree
     );

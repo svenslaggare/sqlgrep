@@ -305,7 +305,8 @@ fn test_file_ingest2() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: Some(vec!["hour".to_owned()])
+        group_by: Some(vec!["hour".to_owned()]),
+        having: None
     }));
 
     if let Err(err) = result {
@@ -355,7 +356,8 @@ fn test_file_ingest3() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: None
+        group_by: None,
+        having: None
     }));
 
     if let Err(err) = result {
@@ -402,7 +404,8 @@ fn test_file_ingest4() {
         from: "connections".to_string(),
         filename: None,
         filter: None,
-        group_by: Some(vec!["hostname".to_owned()])
+        group_by: Some(vec!["hostname".to_owned()]),
+        having: None
     }));
 
     if let Err(err) = result {
@@ -454,7 +457,68 @@ fn test_file_ingest5() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: Some(vec!["hostname".to_owned(), "hour".to_owned()])
+        group_by: Some(vec!["hostname".to_owned(), "hour".to_owned()]),
+        having: None
+    }));
+
+    if let Err(err) = result {
+        println!("{:?}", err);
+        assert!(false);
+    }
+}
+
+#[test]
+fn test_file_ingest6() {
+    let table_definition = TableDefinition::new(
+        "connections",
+        vec![
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+        ],
+        vec![
+            ColumnDefinition::new("line", 1, "ip", ValueType::String),
+            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::new("line", 9, "year", ValueType::Int),
+            ColumnDefinition::new("line", 4, "month", ValueType::String),
+            ColumnDefinition::new("line", 5, "day", ValueType::Int),
+            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+        ]
+    ).unwrap();
+
+    let mut tables = Tables::new();
+    tables.add_table("connections", table_definition);
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/ftpd_data.txt",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+        aggregates: vec![
+            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned())),
+            ("count".to_owned(), Aggregate::Count),
+            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned()))),
+        ],
+        from: "connections".to_string(),
+        filename: None,
+        filter: None,
+        group_by: Some(vec!["hostname".to_owned()]),
+        having: Some(
+            ExpressionTree::And {
+                left: Box::new(ExpressionTree::IsNot {
+                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::GroupKey("hostname".to_owned())))),
+                    right: Box::new(ExpressionTree::Value(Value::Null))
+                }),
+                right: Box::new(ExpressionTree::Compare {
+                    operator: CompareOperator::GreaterThan,
+                    left: Box::new(ExpressionTree::Aggregate(Box::new(Aggregate::Count))),
+                    right: Box::new(ExpressionTree::Value(Value::Int(30)))
+                })
+            }
+        )
     }));
 
     if let Err(err) = result {
