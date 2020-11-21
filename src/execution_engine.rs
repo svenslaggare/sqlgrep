@@ -80,7 +80,8 @@ impl<'a> ExecutionEngine<'a> {
     pub fn execute_aggregate(&mut self,
                              aggregate_statement: &AggregateStatement,
                              line: String) -> ExecutionResult<Option<ResultRow>> {
-        let table_definition = self.tables.get(&aggregate_statement.from).ok_or(ExecutionError::TableNotFound)?;
+        let table_definition = self.tables.get(&aggregate_statement.from)
+            .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
         let row = table_definition.extract(&line);
 
         if row.any_result() {
@@ -98,7 +99,9 @@ impl<'a> ExecutionEngine<'a> {
     pub fn execute_aggregate_update(&mut self,
                                     aggregate_statement: &AggregateStatement,
                                     line: String) -> ExecutionResult<bool> {
-        let table_definition = self.tables.get(&aggregate_statement.from).ok_or(ExecutionError::TableNotFound)?;
+        let table_definition = self.tables.get(&aggregate_statement.from)
+            .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
+
         let row = table_definition.extract(&line);
 
         if row.any_result() {
@@ -130,6 +133,6 @@ impl<'a> ExecutionEngine<'a> {
     }
 
     fn get_table(&self, name: &str) -> ExecutionResult<&TableDefinition> {
-        self.tables.get(&name).ok_or(ExecutionError::TableNotFound)
+        self.tables.get(&name).ok_or_else(|| ExecutionError::TableNotFound(name.to_owned()))
     }
 }

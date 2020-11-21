@@ -8,7 +8,7 @@ use crate::execution_model::ColumnProvider;
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
-    ColumnNotFound,
+    ColumnNotFound(String),
     GroupKeyNotFound,
     GroupValueNotFound,
     UndefinedOperation,
@@ -17,7 +17,13 @@ pub enum EvaluationError {
 
 impl std::fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            EvaluationError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name)  }
+            EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
+            EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
+            EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
+            EvaluationError::UndefinedFunction => { write!(f, "Undefined function") }
+        }
     }
 }
 
@@ -41,7 +47,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 self.column_access
                     .get(name.as_str())
                     .map(|value| value.clone())
-                    .ok_or(EvaluationError::ColumnNotFound)
+                    .ok_or_else(|| EvaluationError::ColumnNotFound(name.to_owned()))
             }
             ExpressionTree::Wildcard => Err(EvaluationError::UndefinedOperation),
             ExpressionTree::Compare { left, right, operator } => {
@@ -296,7 +302,7 @@ fn test_evaluate_column() {
     );
 
     assert_eq!(
-        Err(EvaluationError::ColumnNotFound),
+        Err(EvaluationError::ColumnNotFound("y".to_owned())),
         expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess("y".to_owned()))
     );
 }

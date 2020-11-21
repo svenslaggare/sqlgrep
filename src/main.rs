@@ -104,7 +104,7 @@ fn define_table(tables: &mut Tables, text: String) -> bool {
 fn parse_statement(line: &str) -> Option<Statement> {
     let parse_tree = parser::parse_str(&line);
     if let Err(err) = parse_tree {
-        println!("Failed parsing input: {}", err);
+        println!("Failed parsing input: {}.", err);
         return None;
     }
 
@@ -112,7 +112,7 @@ fn parse_statement(line: &str) -> Option<Statement> {
 
     let statement = parse_tree_converter::transform_statement(parse_tree);
     if let Err(err) = statement {
-        println!("Failed parsing input: {}", err);
+        println!("Failed parsing input: {}.", err);
         return None;
     }
 
@@ -185,7 +185,7 @@ fn execute(command_line_input: &CommandLineInput,
             };
 
             if let Err(err) = result {
-                println!("Execution error: {}", err);
+                println!("Execution error: {}.", err);
             }
         }
         _ => {}

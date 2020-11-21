@@ -62,7 +62,7 @@ impl AggregateExecutionEngine {
         let group_key = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
             let mut group_key = Vec::new();
             for column in group_by {
-                group_key.push(row.get(column).map(|x| x.clone()).ok_or(ExecutionError::ColumnNotFound)?);
+                group_key.push(row.get(column).map(|x| x.clone()).ok_or_else(|| ExecutionError::ColumnNotFound(column.clone()))?);
             }
 
             group_key
@@ -74,10 +74,10 @@ impl AggregateExecutionEngine {
             match aggregate {
                 Aggregate::GroupKey(group_column) => {
                     match aggregate_statement.group_by.as_ref() {
-                        None => { return Err(ExecutionError::GroupKeyNotAvailable); }
+                        None => { return Err(ExecutionError::GroupKeyNotAvailable(None)); }
                         Some(group_by) => {
                             if !group_by.iter().any(|column| column == group_column) {
-                                return Err(ExecutionError::GroupKeyNotAvailable);
+                                return Err(ExecutionError::GroupKeyNotAvailable(Some(group_column.clone())));
                             }
                         }
                     }

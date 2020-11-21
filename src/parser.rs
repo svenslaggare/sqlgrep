@@ -26,6 +26,12 @@ pub enum Keyword {
     Having
 }
 
+impl std::fmt::Display for Keyword {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Operator {
     Single(char),
@@ -98,7 +104,38 @@ pub enum ParserError {
 
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        // write!(f, "{:?}", self)
+        match self {
+            ParserError::Unknown => { write!(f, "Unknown error") }
+            ParserError::IntConvertError => { write!(f, "Failed to parse integer") }
+            ParserError::FloatConvertError => { write!(f, "Failed to parse float") }
+            ParserError::AlreadyHasDot => { write!(f, "The number already has a dot") }
+            ParserError::ExpectedKeyword(keyword) => { write!(f, "Expected {} keyword", keyword) }
+            ParserError::ExpectedAnyKeyword(keywords) => { write!(f, "Expected {} keywords", keywords.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(" or ")) }
+            ParserError::ExpectedLeftParentheses => { write!(f, "Expected '('") }
+            ParserError::ExpectedRightParentheses => { write!(f, "Expected ')'") }
+            ParserError::ExpectedLeftSquareParentheses => { write!(f, "Expected '['") }
+            ParserError::ExpectedRightSquareParentheses => { write!(f, "Expected ']'") }
+            ParserError::ExpectedExpression => { write!(f, "Expected an expression") }
+            ParserError::ExpectedArgumentListContinuation => { write!(f, "Expected ',' or ')'") }
+            ParserError::ExpectedProjectionContinuation => { write!(f, "Expected ','") }
+            ParserError::ExpectedColumnDefinitionStart => { write!(f, "Expected start of column definition.")  }
+            ParserError::ExpectedColumnDefinitionContinuation => { write!(f, "Expected ',' or ')'")  }
+            ParserError::ExpectedIdentifier => { write!(f, "Expected an identifier") }
+            ParserError::ExpectedString => { write!(f, "Expected a string") }
+            ParserError::ExpectedInt => { write!(f, "Expected an integer") }
+            ParserError::ExpectedOperator => { write!(f, "Expected an operator") }
+            ParserError::ExpectedColon => { write!(f, "Expected ':'") }
+            ParserError::ExpectedRightArrow => { write!(f, "Expected '=>'") }
+            ParserError::ExpectedSemiColon => { write!(f, "Expected ';'") }
+            ParserError::ExpectedNull => { write!(f, "Expected NULL") }
+            ParserError::NotDefinedBinaryOperator(operator) => { write!(f, "'{}' is not a valid binary operator", operator) }
+            ParserError::NotDefinedUnaryOperator(operator) => { write!(f, "'{}' is not a valid unary operator", operator) }
+            ParserError::NotDefinedType(value_type) => { write!(f, "'{}' is not a valid type", value_type) }
+            ParserError::TrimOnlyForString => { write!(f, "The 'TRIM' modifier is only available for 'TEXT' columns") }
+            ParserError::ReachedEndOfTokens => { write!(f, "Reached end of tokens") }
+            ParserError::TooManyTokens => { write!(f, "Too many tokens") }
+        }
     }
 }
 

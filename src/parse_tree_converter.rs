@@ -11,7 +11,7 @@ use crate::data_model::{ColumnDefinition, TableDefinition};
 
 #[derive(Debug)]
 pub enum ConvertParseTreeError {
-    UndefinedOperator,
+    UndefinedOperator(Operator),
     UnexpectedArguments,
     ExpectedArgument,
     TooManyArguments,
@@ -26,7 +26,19 @@ pub enum ConvertParseTreeError {
 
 impl std::fmt::Display for ConvertParseTreeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            ConvertParseTreeError::UndefinedOperator(operator) => { write!(f, "The operator '{}' is not defined", operator) }
+            ConvertParseTreeError::UnexpectedArguments => { write!(f, "Expected arguments") }
+            ConvertParseTreeError::ExpectedArgument => { write!(f, "Expected an argument") }
+            ConvertParseTreeError::TooManyArguments => { write!(f, "Too many arguments") }
+            ConvertParseTreeError::ExpectedColumnAccess => { write!(f, "Expected column access") }
+            ConvertParseTreeError::UndefinedAggregate => { write!(f, "Undefined aggregate") }
+            ConvertParseTreeError::UndefinedStatement => { write!(f, "Undefined statement") }
+            ConvertParseTreeError::UndefinedExpression => { write!(f, "Undefined expression") }
+            ConvertParseTreeError::UndefinedFunction => { write!(f, "Undefined function") }
+            ConvertParseTreeError::InvalidPattern => { write!(f, "Undefined pattern") }
+            ConvertParseTreeError::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") }
+        }
     }
 }
 
@@ -240,7 +252,7 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
                 Operator::Dual('!', '=') => Ok(ExpressionTree::Compare { operator: CompareOperator::NotEqual, left, right }),
                 Operator::Dual('>', '=') => Ok(ExpressionTree::Compare { operator: CompareOperator::GreaterThanOrEqual, left, right }),
                 Operator::Dual('<', '=') => Ok(ExpressionTree::Compare { operator: CompareOperator::LessThanOrEqual, left, right }),
-                _ => { return Err(ConvertParseTreeError::UndefinedOperator); }
+                _ => { return Err(ConvertParseTreeError::UndefinedOperator(operator)); }
             }
         }
         ParseExpressionTree::UnaryOperator { operator, operand } => {
@@ -248,7 +260,7 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
 
             match operator {
                 Operator::Single('-') => Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Negative, operand }),
-                _ => { return Err(ConvertParseTreeError::UndefinedOperator); }
+                _ => { return Err(ConvertParseTreeError::UndefinedOperator(operator)); }
             }
         }
         ParseExpressionTree::Invert { operand } => {

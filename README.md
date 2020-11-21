@@ -40,3 +40,52 @@ If we want to know how many connection attempts we get per hostname (i.e. a grou
 ```
 sqlgrep -d testdata/definition1.txt testdata/test1.log -c "SELECT hostname, COUNT() AS count FROM connections GROUP BY hostname"
 ```
+
+# Documentation
+Tries to follow the SQL standard, so you should expect that normal SQL queries work. However, not every feature is supported yet.
+
+## Queries
+Supported features:
+* Where
+* Group by
+* Aggregates
+* Having
+
+Supported aggregates:
+* Count
+* Min
+* Max
+* Sum
+* Avg
+
+Supported functions:
+* Least
+* Greatest
+* Abs
+* Sqrt
+* Pow
+
+##Tables
+###Syntax
+```
+CREATE TABLE <name>(
+    Separate pattern and column definition. Pattern can be used in multiple column definitions.
+    <pattern name> = '<regex patern>',
+    <pattern name>[<group index>] => <column name> <column type>,
+
+    Inline regex. Will be bound to the first group
+    '<regex patern>' => <column name> <column type> 
+);
+```
+Multiple tables can be defined in the same file.
+
+### Supported types
+* `TEXT`: String type.
+* `ÌNT`: 64-bits integer type.
+* `REAL`: 64-bits float type.
+* `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
+
+###Modifiers
+Placed after the column type and add additional constraints/transforms.
+* `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is _not_ inserted.
+* `TRIM`: Trim string types for whitespaces.
