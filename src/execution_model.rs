@@ -69,10 +69,10 @@ impl std::fmt::Display for ExecutionError {
             ExecutionError::GroupKeyNotAvailable(name) => {
                 match name {
                     None => {
-                        write!(f, "The group key not available for non group by aggregates.")
+                        write!(f, "Column names can only be used with group by clause")
                     }
                     Some(name) => {
-                        write!(f, "The group key '{}' is not available", name)
+                        write!(f, "The column '{}' is not used in group by", name)
                     }
                 }
             }
