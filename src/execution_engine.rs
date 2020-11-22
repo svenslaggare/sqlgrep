@@ -1,10 +1,14 @@
 use std::collections::HashMap;
+use std::hash::{Hasher, Hash};
+
+use fnv::FnvHasher;
 
 use crate::data_model::{Tables, TableDefinition, Row};
 use crate::model::{SelectStatement, Value, AggregateStatement, Statement};
 use crate::execution_model::{HashMapColumnProvider, ExecutionResult, ExecutionError, ResultRow};
 use crate::aggregate_execution::AggregateExecutionEngine;
 use crate::select_execution::SelectExecutionEngine;
+
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -22,6 +26,7 @@ impl Default for ExecutionConfig {
 
 pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
+    aggregate_statement_hash: Option<u64>,
     aggregate_execution_engine: AggregateExecutionEngine
 }
 
@@ -29,6 +34,7 @@ impl<'a> ExecutionEngine<'a> {
     pub fn new(tables: &'a Tables) -> ExecutionEngine<'a> {
         ExecutionEngine {
             tables,
+            aggregate_statement_hash: None,
             aggregate_execution_engine: AggregateExecutionEngine::new()
         }
     }
@@ -62,7 +68,7 @@ impl<'a> ExecutionEngine<'a> {
                           select_statement: &SelectStatement,
                           line: String) -> ExecutionResult<Option<ResultRow>> {
         let table_definition = self.get_table(&select_statement.from)?;
-        let select_execution_engine = SelectExecutionEngine::new(&table_definition);
+        let select_execution_engine = SelectExecutionEngine::new(&self.tables);
         let row = table_definition.extract(&line);
 
         if row.any_result() {
@@ -80,6 +86,8 @@ impl<'a> ExecutionEngine<'a> {
     pub fn execute_aggregate(&mut self,
                              aggregate_statement: &AggregateStatement,
                              line: String) -> ExecutionResult<Option<ResultRow>> {
+        self.try_clear_aggregate_state(aggregate_statement);
+
         let table_definition = self.tables.get(&aggregate_statement.from)
             .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
         let row = table_definition.extract(&line);
@@ -99,6 +107,8 @@ impl<'a> ExecutionEngine<'a> {
     pub fn execute_aggregate_update(&mut self,
                                     aggregate_statement: &AggregateStatement,
                                     line: String) -> ExecutionResult<bool> {
+        self.try_clear_aggregate_state(aggregate_statement);
+
         let table_definition = self.tables.get(&aggregate_statement.from)
             .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
 
@@ -134,5 +144,19 @@ impl<'a> ExecutionEngine<'a> {
 
     fn get_table(&self, name: &str) -> ExecutionResult<&TableDefinition> {
         self.tables.get(&name).ok_or_else(|| ExecutionError::TableNotFound(name.to_owned()))
+    }
+
+    fn try_clear_aggregate_state(&mut self, aggregate_statement: &AggregateStatement) {
+        let mut hasher = FnvHasher::default();
+        aggregate_statement.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        if let Some(current_hash) = self.aggregate_statement_hash {
+            if current_hash != hash {
+                self.aggregate_execution_engine.clear();
+            }
+        }
+
+        self.aggregate_statement_hash = Some(hash);
     }
 }

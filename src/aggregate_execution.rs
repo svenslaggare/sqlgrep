@@ -25,6 +25,11 @@ impl AggregateExecutionEngine {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.groups.clear();
+        self.summary_statistics.clear();
+    }
+
     pub fn execute<TColumnProvider: ColumnProvider>(&mut self,
                                                     aggregate_statement: &AggregateStatement,
                                                     row: TColumnProvider) -> ExecutionResult<Option<ResultRow>> {

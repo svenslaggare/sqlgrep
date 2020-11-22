@@ -338,6 +338,7 @@ impl SelectStatement {
     }
 }
 
+#[derive(Hash)]
 pub struct AggregateStatement {
     pub aggregates: Vec<(String, Aggregate)>,
     pub from: String,

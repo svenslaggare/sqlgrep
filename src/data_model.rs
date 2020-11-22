@@ -166,6 +166,17 @@ impl Tables {
         }
     }
 
+    pub fn with_tables(tables: Vec<TableDefinition>) -> Tables {
+        let mut new_tables = Tables::new();
+
+        for table in tables {
+            let name = table.name.clone();
+            new_tables.add_table(&name, table);
+        }
+
+        new_tables
+    }
+
     pub fn add_table(&mut self, name: &str, definition: TableDefinition) {
         self.tables.insert(name.to_owned(), definition);
     }

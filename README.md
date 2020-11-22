@@ -83,7 +83,7 @@ Multiple tables can be defined in the same file.
 
 ### Supported types
 * `TEXT`: String type.
-* `ÌNT`: 64-bits integer type.
+* `INT`: 64-bits integer type.
 * `REAL`: 64-bits float type.
 * `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
 
