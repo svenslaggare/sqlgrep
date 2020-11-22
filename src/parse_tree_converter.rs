@@ -12,7 +12,6 @@ use crate::data_model::{ColumnDefinition, TableDefinition};
 #[derive(Debug)]
 pub enum ConvertParseTreeError {
     UndefinedOperator(Operator),
-    UnexpectedArguments,
     ExpectedArgument,
     TooManyArguments,
     ExpectedColumnAccess,
@@ -28,7 +27,6 @@ impl std::fmt::Display for ConvertParseTreeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ConvertParseTreeError::UndefinedOperator(operator) => { write!(f, "The operator '{}' is not defined", operator) }
-            ConvertParseTreeError::UnexpectedArguments => { write!(f, "Expected arguments") }
             ConvertParseTreeError::ExpectedArgument => { write!(f, "Expected an argument") }
             ConvertParseTreeError::TooManyArguments => { write!(f, "Too many arguments") }
             ConvertParseTreeError::ExpectedColumnAccess => { write!(f, "Expected column access") }
@@ -333,10 +331,18 @@ fn transform_call_aggregate(name: &str,
                             index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
     let name_lowercase = name.to_lowercase();
     if name_lowercase == "count" {
+        let default_name = Some(format!("count{}", index));
         if arguments.is_empty() {
-            Ok((Some(format!("count{}", index)), Aggregate::Count))
+            Ok((default_name, Aggregate::Count(None)))
+        } else if arguments.len() == 1 {
+            let expression = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
+            match expression {
+                ExpressionTree::Wildcard => Ok((default_name, Aggregate::Count(None))),
+                ExpressionTree::ColumnAccess(column) => Ok((default_name, Aggregate::Count(Some(column)))),
+                _ => { Err(ConvertParseTreeError::ExpectedColumnAccess) }
+            }
         } else {
-            Err(ConvertParseTreeError::UnexpectedArguments)
+            Err(ConvertParseTreeError::TooManyArguments)
         }
     } else if AGGREGATE_FUNCTIONS.contains(&name_lowercase) {
         if arguments.len() == 1 {
@@ -702,7 +708,7 @@ fn test_aggregate_statement3() {
     assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
     assert_eq!("count1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Count, statement.aggregates[1].1);
+    assert_eq!(Aggregate::Count(None), statement.aggregates[1].1);
 
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
@@ -730,7 +736,7 @@ fn test_aggregate_statement4() {
 
     assert_eq!(1, statement.aggregates.len());
     assert_eq!("count0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Count, statement.aggregates[0].1);
+    assert_eq!(Aggregate::Count(None), statement.aggregates[0].1);
 }
 
 #[test]
