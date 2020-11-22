@@ -67,6 +67,12 @@ Supported functions:
 * Sqrt
 * Pow
 
+## Special features
+The input filename can either be specified with the CLI or as an additonal argument to the `FROM` statement as following:
+```
+SELECT * FROM connections::'file.log';
+```
+
 ## Tables
 ### Syntax
 ```
