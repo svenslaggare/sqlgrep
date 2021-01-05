@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use fnv::FnvHasher;
 
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate};
-use crate::execution_model::ColumnProvider;
+use crate::execution::ColumnProvider;
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {

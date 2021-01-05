@@ -6,7 +6,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables};
 use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate};
 use sqlgrep::ingest::FileIngester;
-use sqlgrep::execution_engine::ExecutionEngine;
+use sqlgrep::execution::execution_engine::ExecutionEngine;
 
 fn filtering() {
     let table_definition = TableDefinition::new(

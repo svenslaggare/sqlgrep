@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use crate::model::{SelectStatement, ExpressionTree, ArithmeticOperator, Value, ValueType, CompareOperator};
-use crate::execution_model::{ColumnProvider, ExecutionResult, ResultRow, HashMapColumnProvider, ExecutionError};
-use crate::expression_execution::{ExpressionExecutionEngine};
-use crate::data_model::{Row, TableDefinition, ColumnDefinition, Tables};
+use crate::data_model::{ColumnDefinition, Row, TableDefinition, Tables};
+use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::expression_execution::ExpressionExecutionEngine;
+use crate::model::{ArithmeticOperator, CompareOperator, ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct SelectExecutionEngine<'a>{
     tables: &'a Tables

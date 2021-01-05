@@ -5,7 +5,7 @@ use std::iter::FromIterator;
 
 use lazy_static::lazy_static;
 
-use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition};
+use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function};
 use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing};
 

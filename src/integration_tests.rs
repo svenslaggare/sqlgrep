@@ -1,10 +1,10 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
-use crate::{parser, parse_tree_converter};
-use crate::data_model::{Tables, TableDefinition};
+use crate::data_model::{TableDefinition, Tables};
+use crate::execution::execution_engine::ExecutionEngine;
 use crate::ingest::FileIngester;
-use crate::execution_engine::ExecutionEngine;
+use crate::parsing::{parse_tree_converter, parser};
 
 fn load_table_definition(filename: &str) -> TableDefinition {
     let table_definition_tree = parser::parse_str(&std::fs::read_to_string(filename).unwrap()).unwrap();

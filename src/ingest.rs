@@ -1,13 +1,13 @@
-use std::io::{BufReader, BufRead, Seek, SeekFrom};
 use std::fs::File;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::model::{CompareOperator, Aggregate, AggregateStatement, Statement};
-use crate::data_model::{TableDefinition, ColumnDefinition, Tables};
-use crate::model::{ValueType, SelectStatement, ExpressionTree, Value};
-use crate::execution_engine::{ExecutionEngine, ExecutionConfig};
-use crate::execution_model::{ExecutionResult, ResultRow};
+use crate::data_model::{ColumnDefinition, TableDefinition, Tables};
+use crate::execution::{ExecutionResult, ResultRow};
+use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
+use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct ExecutionStatistics {
     execution_start: std::time::Instant,

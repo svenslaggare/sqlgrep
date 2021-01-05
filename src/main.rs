@@ -12,9 +12,10 @@ use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
 use sqlgrep::ingest::{FileIngester, FollowFileIngester};
-use sqlgrep::execution_engine::ExecutionEngine;
-use sqlgrep::parser;
-use sqlgrep::parse_tree_converter;
+use sqlgrep::execution::execution_engine::ExecutionEngine;
+use sqlgrep::parsing::{parser, CommonParserError};
+use sqlgrep::parsing::parse_tree_converter;
+use sqlgrep::parsing;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -76,18 +77,12 @@ impl Validator for InputValidator {
 }
 
 fn define_table(tables: &mut Tables, text: String) -> bool {
-    let table_definition_tree = parser::parse_str(&text);
-    if let Err(err) = table_definition_tree {
-        println!("Failed to parse data definition: {}", err);
-        return false;
-    }
-    let table_definition_tree = table_definition_tree.unwrap();
-
-    let create_table_statement = parse_tree_converter::transform_statement(table_definition_tree);
+    let create_table_statement = parsing::parse(&text);
     if let Err(err) = create_table_statement {
         println!("Failed to create table: {}", err);
         return false;
     }
+
     let create_table_statement = create_table_statement.unwrap();
 
     match create_table_statement {
@@ -119,21 +114,13 @@ fn define_table(tables: &mut Tables, text: String) -> bool {
 }
 
 fn parse_statement(line: &str) -> Option<Statement> {
-    let parse_tree = parser::parse_str(&line);
-    if let Err(err) = parse_tree {
-        println!("Failed parsing input: {}.", err);
-        return None;
+    match parsing::parse(line) {
+        Ok(statement) => Some(statement),
+        Err(err) => {
+            println!("Failed parsing input: {}", err);
+            None
+        }
     }
-
-    let parse_tree = parse_tree.unwrap();
-
-    let statement = parse_tree_converter::transform_statement(parse_tree);
-    if let Err(err) = statement {
-        println!("Failed parsing input: {}.", err);
-        return None;
-    }
-
-    statement.ok()
 }
 
 fn execute(command_line_input: &CommandLineInput,

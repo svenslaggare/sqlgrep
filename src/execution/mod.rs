@@ -1,8 +1,13 @@
+pub mod expression_execution;
+pub mod select_execution;
+pub mod aggregate_execution;
+pub mod execution_engine;
+
 use std::collections::HashMap;
 
-use crate::model::Value;
-use crate::expression_execution::EvaluationError;
 use crate::data_model::Row;
+use crate::execution::expression_execution::EvaluationError;
+use crate::model::Value;
 
 pub trait ColumnProvider {
     fn get(&self, name: &str) -> Option<&Value>;

@@ -1,14 +1,13 @@
 use std::collections::HashMap;
-use std::hash::{Hasher, Hash};
+use std::hash::{Hash, Hasher};
 
 use fnv::FnvHasher;
 
-use crate::data_model::{Tables, TableDefinition, Row};
-use crate::model::{SelectStatement, Value, AggregateStatement, Statement};
-use crate::execution_model::{HashMapColumnProvider, ExecutionResult, ExecutionError, ResultRow};
-use crate::aggregate_execution::AggregateExecutionEngine;
-use crate::select_execution::SelectExecutionEngine;
-
+use crate::data_model::{Row, TableDefinition, Tables};
+use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::aggregate_execution::AggregateExecutionEngine;
+use crate::execution::select_execution::SelectExecutionEngine;
+use crate::model::{AggregateStatement, SelectStatement, Statement, Value};
 
 pub struct ExecutionConfig {
     pub result: bool,
