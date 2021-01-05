@@ -216,14 +216,14 @@ fn test_file_ingest1() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -271,14 +271,14 @@ fn test_file_ingest2() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -323,14 +323,14 @@ fn test_file_ingest3() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -374,14 +374,14 @@ fn test_file_ingest4() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -422,14 +422,14 @@ fn test_file_ingest5() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -475,14 +475,14 @@ fn test_file_ingest6() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 

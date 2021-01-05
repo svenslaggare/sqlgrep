@@ -15,14 +15,14 @@ fn filtering() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -70,14 +70,14 @@ fn aggregate() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -95,7 +95,7 @@ fn aggregate() {
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned())),
-            ("count".to_owned(), Aggregate::Count),
+            ("count".to_owned(), Aggregate::Count(None)),
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
         ],
         from: "connections".to_string(),

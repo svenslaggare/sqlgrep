@@ -7,6 +7,7 @@ use std::fmt::Formatter;
 use lazy_static::lazy_static;
 
 use crate::model::{Value, ValueType, Float};
+use crate::data_model::{JsonAccess, ColumnParsing};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -62,6 +63,8 @@ pub enum Token {
     RightParentheses,
     LeftSquareParentheses,
     RightSquareParentheses,
+    LeftCurlyParentheses,
+    RightCurlyParentheses,
     Comma,
     SemiColon,
     Colon,
@@ -86,6 +89,7 @@ pub enum ParserError {
     ExpectedProjectionContinuation,
     ExpectedColumnDefinitionStart,
     ExpectedColumnDefinitionContinuation,
+    ExpectedJsonColumnPartStart,
     ExpectedIdentifier,
     ExpectedString,
     ExpectedInt,
@@ -104,7 +108,6 @@ pub enum ParserError {
 
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        // write!(f, "{:?}", self)
         match self {
             ParserError::Unknown => { write!(f, "Unknown error") }
             ParserError::IntConvertError => { write!(f, "Failed to parse integer") }
@@ -120,6 +123,7 @@ impl std::fmt::Display for ParserError {
             ParserError::ExpectedArgumentListContinuation => { write!(f, "Expected ',' or ')'") }
             ParserError::ExpectedProjectionContinuation => { write!(f, "Expected ','") }
             ParserError::ExpectedColumnDefinitionStart => { write!(f, "Expected start of column definition.")  }
+            ParserError::ExpectedJsonColumnPartStart => { write!(f, "Expected '.', '[' or '}}'")  }
             ParserError::ExpectedColumnDefinitionContinuation => { write!(f, "Expected ',' or ')'")  }
             ParserError::ExpectedIdentifier => { write!(f, "Expected an identifier") }
             ParserError::ExpectedString => { write!(f, "Expected a string") }
@@ -156,12 +160,12 @@ pub enum ParseExpressionTree {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ParseColumnDefinition {
-    pub pattern_name: String,
-    pub pattern_index: usize,
+    pub parsing: ColumnParsing,
     pub name: String,
     pub column_type: ValueType,
     pub nullable: Option<bool>,
-    pub trim: Option<bool>
+    pub trim: Option<bool>,
+    pub convert: Option<bool>
 }
 
 impl ParseColumnDefinition {
@@ -170,12 +174,12 @@ impl ParseColumnDefinition {
                name: String,
                column_type: ValueType) -> ParseColumnDefinition {
         ParseColumnDefinition {
-            pattern_name,
-            pattern_index,
+            parsing: ColumnParsing::Regex { pattern_name, group_index: pattern_index },
             name,
             column_type,
             nullable: None,
-            trim: None
+            trim: None,
+            convert: None
         }
     }
 }
@@ -319,6 +323,10 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             tokens.push(Token::LeftSquareParentheses);
         } else if current == ']' {
             tokens.push(Token::RightSquareParentheses);
+        } else if current == '{' {
+            tokens.push(Token::LeftCurlyParentheses);
+        } else if current == '}' {
+            tokens.push(Token::RightCurlyParentheses);
         } else if current == ',' {
             tokens.push(Token::Comma);
         } else if current == ';' {
@@ -610,7 +618,7 @@ impl<'a> Parser<'a> {
                         }
                         Token::LeftSquareParentheses => {
                             self.next()?;
-                            let pattern_index = self.consume_int()?;
+                            let group_index = self.consume_int()? as usize;
 
                             self.expect_and_consume_token(
                                 Token::RightSquareParentheses,
@@ -622,7 +630,7 @@ impl<'a> Parser<'a> {
                                 ParserError::ExpectedRightArrow
                             )?;
 
-                            columns.push(self.parse_define_column(pattern_name, pattern_index as usize)?);
+                            columns.push(self.parse_define_column(ColumnParsing::Regex { pattern_name, group_index })?);
                         }
                         _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
                     }
@@ -637,10 +645,42 @@ impl<'a> Parser<'a> {
                     )?;
 
                     let pattern_name = format!("_pattern{}", patterns.len());
-                    let pattern_index = 1;
                     patterns.push((pattern_name.clone(), pattern.clone()));
 
-                    columns.push(self.parse_define_column(pattern_name, pattern_index as usize)?);
+                    columns.push(self.parse_define_column(ColumnParsing::Regex { pattern_name, group_index: 1 })?);
+                }
+                Token::LeftCurlyParentheses => {
+                    self.next()?;
+                    let mut json_access_parts = Vec::new();
+
+                    loop {
+                        match self.current() {
+                            Token::Operator(Operator::Single('.')) => {
+                                self.next()?;
+                                let identifier = self.consume_identifier()?;
+                                json_access_parts.push(JsonAccess::Field { name: identifier, inner: None });
+                            }
+                            Token::LeftSquareParentheses => {
+                                self.next()?;
+                                let index = self.consume_int()? as usize;
+                                self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightSquareParentheses)?;
+                                json_access_parts.push(JsonAccess::Array { index, inner: None });
+                            },
+                            Token::RightCurlyParentheses => {
+                                self.next()?;
+                                break;
+                            }
+                            _ => { return Err(ParserError::ExpectedJsonColumnPartStart) }
+                        }
+                    }
+
+                    self.expect_and_consume_token(
+                        Token::RightArrow,
+                        ParserError::ExpectedRightArrow
+                    )?;
+
+                    let json_access = JsonAccess::from_linear(json_access_parts);
+                    columns.push(self.parse_define_column(ColumnParsing::Json(json_access))?);
                 }
                 _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
             }
@@ -669,13 +709,14 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_define_column(&mut self, pattern_name: String, pattern_index: usize) -> ParserResult<ParseColumnDefinition> {
+    fn parse_define_column(&mut self, parsing: ColumnParsing) -> ParserResult<ParseColumnDefinition> {
         let column_name = self.consume_identifier()?;
         let column_type = self.consume_identifier()?;
         let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
 
         let mut nullable = None;
         let mut trim = None;
+        let mut convert = None;
 
         match self.current().clone() {
             Token::Keyword(Keyword::Not) => {
@@ -695,17 +736,21 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 trim = Some(true);
             }
+            Token::Identifier(identifier) if identifier.to_lowercase() == "convert" => {
+                self.next()?;
+                convert = Some(true);
+            }
             _ => {}
         }
 
         Ok(
             ParseColumnDefinition {
-                pattern_name,
-                pattern_index,
+                parsing,
                 name: column_name,
                 column_type,
                 nullable,
-                trim
+                trim,
+                convert
             }
         )
     }
@@ -2148,12 +2193,12 @@ fn test_parse_create_table5() {
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
             columns: vec![ParseColumnDefinition {
-                pattern_name: "line".to_string(),
-                pattern_index: 1,
+                parsing: ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 },
                 name: "x".to_string(),
                 column_type: ValueType::Int,
                 nullable: Some(false),
-                trim: None
+                trim: None,
+                convert: None
             }]
         },
         tree
@@ -2201,13 +2246,73 @@ fn test_parse_create_table6() {
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
             columns: vec![ParseColumnDefinition {
-                pattern_name: "line".to_string(),
-                pattern_index: 1,
+                parsing: ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 },
                 name: "x".to_owned(),
                 column_type: ValueType::String,
                 nullable: None,
-                trim: Some(true)
+                trim: Some(true),
+                convert: None
             }]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_json_table1() {
+    let tree = parse_str("CREATE TABLE connections({.test1.test2} => x INT);").unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "connections".to_string(),
+            patterns: vec![],
+            columns: vec![
+                ParseColumnDefinition {
+                    parsing: ColumnParsing::Json(JsonAccess::Field { name: "test1".to_owned(), inner: Some(Box::new(JsonAccess::Field { name: "test2".to_string(), inner: None })) }),
+                    name: "x".to_string(),
+                    column_type: ValueType::Int,
+                    nullable: None,
+                    trim: None,
+                    convert: None,
+                }
+            ]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_json_table2() {
+    let tree = parse_str("CREATE TABLE connections({.test1[3].test2.test3[4]} => x INT);").unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "connections".to_string(),
+            patterns: vec![],
+            columns: vec![
+                ParseColumnDefinition {
+                    parsing: ColumnParsing::Json(JsonAccess::Field {
+                        name: "test1".to_owned(),
+                        inner: Some(
+                            Box::new(JsonAccess::Array {
+                                index: 3,
+                                inner: Some(Box::new(JsonAccess::Field {
+                                    name: "test2".to_owned(),
+                                    inner: Some(Box::new(JsonAccess::Field {
+                                        name: "test3".to_owned(),
+                                        inner: Some(Box::new(JsonAccess::Array { index: 4, inner: None }))
+                                    }))
+                                }))
+                            })
+                        )
+                    }),
+                    name: "x".to_string(),
+                    column_type: ValueType::Int,
+                    nullable: None,
+                    trim: None,
+                    convert: None
+                }
+            ]
         },
         tree
     );

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use regex::Regex;
+use regex::{Regex, Captures};
+
+use serde_json::json;
 
 use crate::model::{Value, Float};
 use crate::model::ValueType;
@@ -24,7 +26,8 @@ impl Row {
 pub struct TableDefinition {
     pub name: String,
     pub patterns: Vec<(String, Regex)>,
-    pub columns: Vec<ColumnDefinition>
+    pub columns: Vec<ColumnDefinition>,
+    any_json_columns: bool,
 }
 
 impl TableDefinition {
@@ -35,11 +38,20 @@ impl TableDefinition {
             compiled_patterns.push((name.to_owned(), pattern));
         }
 
+        let mut any_json_columns = false;
+        for column in &columns {
+            if let ColumnParsing::Json(..) = column.parsing {
+                any_json_columns = true;
+                break;
+            }
+        }
+
         Some(
             TableDefinition {
                 name: name.to_owned(),
                 patterns: compiled_patterns,
-                columns
+                columns,
+                any_json_columns
             }
         )
     }
@@ -52,36 +64,34 @@ impl TableDefinition {
             }
         }
 
+        let json_value: serde_json::Value = if self.any_json_columns {
+            serde_json::from_str(line).unwrap_or(serde_json::Value::Null)
+        } else {
+            serde_json::Value::Null
+        };
+
         let mut columns = Vec::new();
         for column in &self.columns {
-            let mut is_null = false;
-            if let Some(capture_result) = extracted_results.get(&column.pattern_name) {
-                let group_result = capture_result.get(column.group_index);
-                if column.column_type == ValueType::Bool {
-                    columns.push(Value::Bool(group_result.is_some()));
-                } else {
-                    if let Some(group) = group_result {
-                        let mut value = Value::from_option(column.column_type.parse(group.as_str()));
-                        if column.options.trim {
-                            value.modify(
-                                |_| {},
-                                |_| {},
-                                |_| {},
-                                |x| *x = x.trim().to_owned()
-                            )
-                        }
-
-                        columns.push(value);
-                    } else {
-                        columns.push(Value::Null);
-                        is_null = true;
-                    }
+            let mut value = match &column.parsing {
+                parsing @ ColumnParsing::Regex { .. } => {
+                    parsing.extract_regex(&column, &extracted_results)
                 }
-            } else {
-                columns.push(Value::Null);
-                is_null = true;
+                parsing @ ColumnParsing::Json(_) => {
+                    parsing.extract_json(&column, &json_value)
+                }
+            };
+
+            if column.options.trim {
+                value.modify(
+                    |_| {},
+                    |_| {},
+                    |_| {},
+                    |x| *x = x.trim().to_owned()
+                )
             }
 
+            let is_null = value.is_null();
+            columns.push(value);
             if is_null && !column.options.nullable {
                 columns.clear();
                 break;
@@ -94,16 +104,174 @@ impl TableDefinition {
     }
 }
 
+pub struct ColumnDefinition {
+    pub parsing: ColumnParsing,
+    pub name: String,
+    pub column_type: ValueType,
+    pub options: ColumnOptions
+}
+
+impl ColumnDefinition {
+    pub fn with_regex(pattern_name: &str,
+                      group_index: usize,
+                      name: &str,
+                      column_type: ValueType) -> ColumnDefinition {
+        ColumnDefinition {
+            parsing: ColumnParsing::Regex {
+                pattern_name: pattern_name.to_owned(),
+                group_index,
+            },
+            name: name.to_owned(),
+            column_type,
+            options: ColumnOptions::new()
+        }
+    }
+
+    pub fn with_parsing(parsing: ColumnParsing,
+                        name: &str,
+                        column_type: ValueType) -> ColumnDefinition {
+        ColumnDefinition {
+            parsing,
+            name: name.to_owned(),
+            column_type,
+            options: ColumnOptions::new()
+        }
+    }
+
+    pub fn with_options(parsing: ColumnParsing,
+                        name: &str,
+                        column_type: ValueType,
+                        options: ColumnOptions) -> ColumnDefinition {
+        ColumnDefinition {
+            parsing,
+            name: name.to_owned(),
+            column_type,
+            options
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum ColumnParsing {
+    Regex { pattern_name: String, group_index: usize },
+    Json(JsonAccess)
+}
+
+impl ColumnParsing {
+    pub fn extract_regex(&self, column: &ColumnDefinition, extracted_results: &HashMap<&String, Captures>) -> Value {
+        match self {
+            ColumnParsing::Regex { pattern_name, group_index } => {
+                if let Some(capture_result) = extracted_results.get(&pattern_name) {
+                    let group_result = capture_result.get(*group_index);
+                    if column.column_type == ValueType::Bool {
+                        Value::Bool(group_result.is_some())
+                    } else {
+                        if let Some(group) = group_result {
+                            Value::from_option(column.column_type.parse(group.as_str()))
+                        } else {
+                            Value::Null
+                        }
+                    }
+                } else {
+                    Value::Null
+                }
+            }
+            ColumnParsing::Json(_) => { Value::Null }
+        }
+    }
+
+    pub fn extract_json(&self, column: &ColumnDefinition, json_value: &serde_json::Value) -> Value {
+        match self {
+            ColumnParsing::Json(access) => {
+                if let Some(value) = access.get_value(json_value) {
+                    if column.options.convert {
+                        value
+                            .as_str()
+                            .map(|value| column.column_type.parse(value).unwrap_or(Value::Null))
+                            .unwrap_or(Value::Null)
+                    } else {
+                        match column.column_type {
+                            ValueType::Int => value.as_i64().map(|value| Value::Int(value)),
+                            ValueType::Float => value.as_f64().map(|value| Value::Float(Float(value))),
+                            ValueType::Bool => value.as_bool().map(|value| Value::Bool(value)),
+                            ValueType::String => value.as_str().map(|value| Value::String(value.to_owned()))
+                        }.unwrap_or(Value::Null)
+                    }
+                } else {
+                    Value::Null
+                }
+            }
+            ColumnParsing::Regex { .. } => {Value::Null  }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum JsonAccess {
+    Field { name: String, inner: Option<Box<JsonAccess>> },
+    Array { index: usize, inner: Option<Box<JsonAccess>> }
+}
+
+impl JsonAccess {
+    pub fn from_linear(parts: Vec<JsonAccess>) -> JsonAccess {
+        let mut current = None;
+        for mut part in parts.into_iter().rev() {
+            part.set_inner(current);
+            current = Some(part);
+        }
+
+        current.unwrap()
+    }
+
+    pub fn get_value<'a>(&self, json_value: &'a serde_json::Value) -> Option<&'a serde_json::Value> {
+        match self {
+            JsonAccess::Field { name, inner } => {
+                let value = json_value.get(name)?;
+
+                if let Some(inner) = inner {
+                    inner.get_value(value)
+                } else {
+                    Some(value)
+                }
+            }
+            JsonAccess::Array { index, inner } => {
+                let value = json_value.as_array()?.get(*index)?;
+
+                if let Some(inner) = inner {
+                    inner.get_value(value)
+                } else {
+                    Some(value)
+                }
+            }
+        }
+    }
+
+    fn set_inner(&mut self, new_inner: Option<JsonAccess>) {
+        if let Some(new_inner) = new_inner {
+            match self {
+                JsonAccess::Field { inner, .. } => {
+                    *inner = Some(Box::new(new_inner));
+                }
+                JsonAccess::Array { inner, .. } => {
+                    *inner = Some(Box::new(new_inner));
+                }
+            }
+        }
+    }
+}
+
 pub struct ColumnOptions {
     pub nullable: bool,
-    pub trim: bool
+    pub trim: bool,
+    pub convert: bool
 }
 
 impl ColumnOptions {
     pub fn new() -> ColumnOptions {
         ColumnOptions {
             nullable: true,
-            trim: false
+            trim: false,
+            convert: false
         }
     }
 
@@ -116,42 +284,10 @@ impl ColumnOptions {
         self.trim = true;
         self
     }
-}
 
-pub struct ColumnDefinition {
-    pub pattern_name: String,
-    pub group_index: usize,
-    pub name: String,
-    pub column_type: ValueType,
-    pub options: ColumnOptions
-}
-
-impl ColumnDefinition {
-    pub fn new(pattern_name: &str,
-               group_index: usize,
-               name: &str,
-               column_type: ValueType) -> ColumnDefinition {
-        ColumnDefinition {
-            pattern_name: pattern_name.to_owned(),
-            group_index,
-            name: name.to_owned(),
-            column_type,
-            options: ColumnOptions::new()
-        }
-    }
-
-    pub fn with_options(pattern_name: &str,
-                        group_index: usize,
-                        name: &str,
-                        column_type: ValueType,
-                        options: ColumnOptions) -> ColumnDefinition {
-        ColumnDefinition {
-            pattern_name: pattern_name.to_owned(),
-            group_index,
-            name: name.to_owned(),
-            column_type,
-            options
-        }
+    pub fn convert(mut self) -> Self {
+        self.convert = true;
+        self
     }
 }
 
@@ -192,7 +328,7 @@ fn test_table_extract1() {
         "test",
         vec![("line", "([0-9]+)")],
         vec![
-            ColumnDefinition::new("line", 1, "x", ValueType::Int)
+            ColumnDefinition::with_regex("line", 1, "x", ValueType::Int)
         ]
     ).unwrap();
 
@@ -206,8 +342,8 @@ fn test_table_extract2() {
         "test",
         vec![("line", "([A-Z]): ([0-9]+)")],
         vec![
-            ColumnDefinition::new("line", 2, "x", ValueType::Int),
-            ColumnDefinition::new("line", 1, "y", ValueType::String)
+            ColumnDefinition::with_regex("line", 2, "x", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "y", ValueType::String)
         ]
     ).unwrap();
 
@@ -222,7 +358,7 @@ fn test_table_extract3() {
         "test",
         vec![("line", "([0-9]+)")],
         vec![
-            ColumnDefinition::new("line", 1, "x", ValueType::Int)
+            ColumnDefinition::with_regex("line", 1, "x", ValueType::Int)
         ]
     ).unwrap();
 
@@ -236,7 +372,7 @@ fn test_table_extract4() {
         "test",
         vec![("line", "A: ([0-9]+)?")],
         vec![
-            ColumnDefinition::new("line", 1, "x", ValueType::Bool),
+            ColumnDefinition::with_regex("line", 1, "x", ValueType::Bool),
         ]
     ).unwrap();
 
@@ -253,7 +389,7 @@ fn test_table_extract5() {
         "test",
         vec![("line", "([0-9\\.]+)")],
         vec![
-            ColumnDefinition::new("line", 1, "x", ValueType::Float)
+            ColumnDefinition::with_regex("line", 1, "x", ValueType::Float)
         ]
     ).unwrap();
 
@@ -270,7 +406,7 @@ fn test_table_extract6() {
         "test",
         vec![("line", "([0-9 ]+)")],
         vec![
-            ColumnDefinition::with_options("line", 1, "x", ValueType::String, ColumnOptions::new().trim())
+            ColumnDefinition::with_options(ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 }, "x", ValueType::String, ColumnOptions::new().trim())
         ]
     ).unwrap();
 
@@ -287,8 +423,8 @@ fn test_table_extract_multiple1() {
             ("line2", "B: ([a-z]+)")
         ],
         vec![
-            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::new("line2", 1, "y", ValueType::String)
+            ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_regex("line2", 1, "y", ValueType::String)
         ]
     ).unwrap();
 
@@ -306,8 +442,8 @@ fn test_table_extract_multiple2() {
             ("line2", "B: ([a-z]+)")
         ],
         vec![
-            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::new("line2", 1, "y", ValueType::String)
+            ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_regex("line2", 1, "y", ValueType::String)
         ]
     ).unwrap();
 
@@ -325,8 +461,8 @@ fn test_table_extract_multiple3() {
             ("line2", "B: ([a-z]+)")
         ],
         vec![
-            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::new("line2", 1, "y", ValueType::String)
+            ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_regex("line2", 1, "y", ValueType::String)
         ]
     ).unwrap();
 
@@ -344,8 +480,8 @@ fn test_table_extract_multiple4() {
             ("line2", "B: ([a-z]+)")
         ],
         vec![
-            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::with_options("line2", 1, "y", ValueType::String, ColumnOptions::new().not_null())
+            ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_options(ColumnParsing::Regex { pattern_name: "line2".to_string(), group_index: 1 }, "y", ValueType::String, ColumnOptions::new().not_null())
         ]
     ).unwrap();
 
@@ -363,8 +499,8 @@ fn test_table_extract_multiple5() {
             ("line2", "B: ([a-z]+)")
         ],
         vec![
-            ColumnDefinition::new("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::with_options("line2", 1, "y", ValueType::String, ColumnOptions::new().not_null())
+            ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
+            ColumnDefinition::with_options(ColumnParsing::Regex { pattern_name: "line2".to_string(), group_index: 1 }, "y", ValueType::String, ColumnOptions::new().not_null())
         ]
     ).unwrap();
 
@@ -380,14 +516,14 @@ fn test_table_extract_complex1() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -411,14 +547,14 @@ fn test_table_extract_complex2() {
             ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -442,14 +578,14 @@ fn test_table_extract_complex3() {
             ("line", "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
         ],
         vec![
-            ColumnDefinition::new("line", 1, "ip", ValueType::String),
-            ColumnDefinition::new("line", 2, "hostname", ValueType::String),
-            ColumnDefinition::new("line", 9, "year", ValueType::Int),
-            ColumnDefinition::new("line", 4, "month", ValueType::String),
-            ColumnDefinition::new("line", 5, "day", ValueType::Int),
-            ColumnDefinition::new("line", 6, "hour", ValueType::Int),
-            ColumnDefinition::new("line", 7, "minute", ValueType::Int),
-            ColumnDefinition::new("line", 8, "second", ValueType::Int),
+            ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+            ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+            ColumnDefinition::with_regex("line", 9, "year", ValueType::Int),
+            ColumnDefinition::with_regex("line", 4, "month", ValueType::String),
+            ColumnDefinition::with_regex("line", 5, "day", ValueType::Int),
+            ColumnDefinition::with_regex("line", 6, "hour", ValueType::Int),
+            ColumnDefinition::with_regex("line", 7, "minute", ValueType::Int),
+            ColumnDefinition::with_regex("line", 8, "second", ValueType::Int),
         ]
     ).unwrap();
 
@@ -463,4 +599,108 @@ fn test_table_extract_complex3() {
     assert_eq!(&Value::Int(2), &result.columns[5]);
     assert_eq!(&Value::Int(8), &result.columns[6]);
     assert_eq!(&Value::Int(12), &result.columns[7]);
+}
+
+#[test]
+fn test_json_access1() {
+    let value = json!({
+        "test1": 4711,
+        "test2": {
+            "test3": 1337
+        }
+    });
+
+    assert_eq!(
+        Some(&serde_json::Value::Number(serde_json::Number::from(4711))),
+        JsonAccess::Field { name: "test1".to_owned(), inner: None }.get_value(&value)
+    );
+
+    assert_eq!(
+        Some(&serde_json::Value::Number(serde_json::Number::from(1337))),
+        JsonAccess::Field { name: "test2".to_owned(), inner: Some(Box::new(JsonAccess::Field { name: "test3".to_owned(), inner: None })) }.get_value(&value)
+    );
+}
+
+#[test]
+fn test_json_access2() {
+    let value = json!({
+        "test1": [1, 2],
+        "test2": {
+            "test3": [3, 4]
+        }
+    });
+
+    assert_eq!(
+        Some(&serde_json::Value::Number(serde_json::Number::from(1))),
+        JsonAccess::Field {
+            name: "test1".to_owned(),
+            inner: Some(Box::new(JsonAccess::Array { index: 0, inner: None }))
+        }.get_value(&value)
+    );
+
+    assert_eq!(
+        Some(&serde_json::Value::Number(serde_json::Number::from(4))),
+        JsonAccess::Field {
+            name: "test2".to_owned(),
+            inner: Some(Box::new(JsonAccess::Field {
+                name: "test3".to_owned(),
+                inner: Some(Box::new(JsonAccess::Array { index: 1, inner: None }))
+            }))
+        }.get_value(&value)
+    );
+}
+
+#[test]
+fn test_table_json1() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![],
+        vec![
+            ColumnDefinition::with_parsing(
+                ColumnParsing::Json(JsonAccess::Field { name: "test2".to_owned(), inner: Some(Box::new(JsonAccess::Field { name: "test3".to_owned(), inner: None })) }),
+                "x",
+                ValueType::Int
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract(r#"{ "test2": { "test3": 4711 } }"#);
+    assert_eq!(Value::Int(4711), result.columns[0]);
+}
+
+#[test]
+fn test_table_json2() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9 ]+)")],
+        vec![
+            ColumnDefinition::with_parsing(
+                ColumnParsing::Json(JsonAccess::Field { name: "test2".to_owned(), inner: Some(Box::new(JsonAccess::Field { name: "test3".to_owned(), inner: None })) }),
+                "x",
+                ValueType::Int
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract(r#"{ "test2": { "test3": 4711 } }"#);
+    assert_eq!(Value::Int(4711), result.columns[0]);
+}
+
+#[test]
+fn test_table_json3() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![],
+        vec![
+            ColumnDefinition::with_options(
+                ColumnParsing::Json(JsonAccess::Field { name: "test2".to_owned(), inner: Some(Box::new(JsonAccess::Field { name: "test3".to_owned(), inner: None })) }),
+                "x",
+                ValueType::Int,
+                ColumnOptions::new().convert()
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract(r#"{ "test2": { "test3": "4711" } }"#);
+    assert_eq!(Value::Int(4711), result.columns[0]);
 }

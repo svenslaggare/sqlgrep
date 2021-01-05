@@ -182,8 +182,8 @@ fn test_project4() {
         "test",
         Vec::new(),
         vec![
-            ColumnDefinition::new("", 0, "x", ValueType::Int),
-            ColumnDefinition::new("", 0, "y", ValueType::Bool),
+            ColumnDefinition::with_regex("", 0, "x", ValueType::Int),
+            ColumnDefinition::with_regex("", 0, "y", ValueType::Bool),
         ]
     ).unwrap();
 

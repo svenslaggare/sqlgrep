@@ -68,7 +68,7 @@ Supported functions:
 * Pow
 
 ## Special features
-The input filename can either be specified with the CLI or as an additonal argument to the `FROM` statement as following:
+The input filename can either be specified with the CLI or as an additional argument to the `FROM` statement as following:
 ```
 SELECT * FROM connections::'file.log';
 ```
@@ -82,7 +82,11 @@ CREATE TABLE <name>(
     <pattern name>[<group index>] => <column name> <column type>,
 
     Inline regex. Will be bound to the first group
-    '<regex patern>' => <column name> <column type> 
+    '<regex patern>' => <column name> <column type>
+    
+    Json pattern. Will access the given attribute.
+    {.field1.field2} => <column name> <column type>,
+    {.field1[<array index>]} => <column name> <column type>,
 );
 ```
 Multiple tables can be defined in the same file.
@@ -97,3 +101,4 @@ Multiple tables can be defined in the same file.
 Placed after the column type and add additional constraints/transforms.
 * `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is _not_ inserted.
 * `TRIM`: Trim string types for whitespaces.
+* `CONVERT`: Tries to convert a string value into the value type. Usable for JSON input.

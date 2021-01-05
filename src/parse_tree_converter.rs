@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 
 use crate::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function};
-use crate::data_model::{ColumnDefinition, TableDefinition};
+use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing};
 
 #[derive(Debug)]
 pub enum ConvertParseTreeError {
@@ -146,9 +146,8 @@ fn create_create_table_statement(name: String,
     let column_definitions = columns
         .into_iter()
         .map(|column| {
-            let mut column_definition = ColumnDefinition::new(
-                &column.pattern_name,
-                column.pattern_index,
+            let mut column_definition = ColumnDefinition::with_parsing(
+                column.parsing,
                 &column.name,
                 column.column_type
             );
@@ -159,6 +158,10 @@ fn create_create_table_statement(name: String,
 
             if let Some(trim) = column.trim.as_ref() {
                 column_definition.options.trim = *trim;
+            }
+
+            if let Some(convert) = column.convert.as_ref() {
+                column_definition.options.convert = *convert;
             }
 
             column_definition
@@ -851,6 +854,5 @@ fn test_create_table_statement1() {
     assert_eq!(1, table_definition.columns.len());
     assert_eq!("x", table_definition.columns[0].name);
     assert_eq!(ValueType::Int, table_definition.columns[0].column_type);
-    assert_eq!("line", table_definition.columns[0].pattern_name);
-    assert_eq!(1, table_definition.columns[0].group_index);
+    assert_eq!(ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 }, table_definition.columns[0].parsing);
 }

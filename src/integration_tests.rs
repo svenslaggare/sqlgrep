@@ -129,3 +129,21 @@ fn test_ftpd4() {
     ingester.process(query).unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
+
+#[test]
+fn test_client1() {
+    let tables = create_tables("testdata/clients.txt");
+
+    let query_tree = parser::parse_str("SELECT * FROM clients WHERE device_id >= 180;").unwrap();
+    let query = parse_tree_converter::transform_statement(query_tree).unwrap();
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        "testdata/clients_data.json",
+        false,
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    ingester.process(query).unwrap();
+    assert_eq!(232, ingester.statistics.total_result_rows);
+}
