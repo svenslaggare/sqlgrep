@@ -85,8 +85,8 @@ CREATE TABLE <name>(
     '<regex patern>' => <column name> <column type>
     
     Json pattern. Will access the given attribute.
-    {.field1.field2} => <column name> <column type>,
-    {.field1[<array index>]} => <column name> <column type>,
+    { .field1.field2 } => <column name> <column type>,
+    { .field1[<array index>] } => <column name> <column type>,
 );
 ```
 Multiple tables can be defined in the same file.

@@ -153,7 +153,7 @@ impl<'a> ParsingInput<'a> {
             serde_json::Value::Null
         };
 
-        ParsingInput{
+        ParsingInput {
             regex_results,
             json_value
         }
