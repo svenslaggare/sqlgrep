@@ -45,4 +45,4 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: sqlgrep_windows_2019_x86_64
-          path: target/release/sqlgrep
+          path: target/release/sqlgrep.exe
