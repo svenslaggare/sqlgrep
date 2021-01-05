@@ -13,7 +13,6 @@ use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
 use sqlgrep::ingest::{FileIngester, FollowFileIngester};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
-use sqlgrep::parsing::{parser, CommonParserError};
 use sqlgrep::parsing::parse_tree_converter;
 use sqlgrep::parsing;
 
