@@ -57,29 +57,11 @@ impl TableDefinition {
     }
 
     pub fn extract(&self, line: &str) -> Row {
-        let mut extracted_results = HashMap::new();
-        for (pattern_name, pattern) in &self.patterns {
-            if let Some(capture) = pattern.captures(line) {
-                extracted_results.insert(pattern_name, capture);
-            }
-        }
-
-        let json_value: serde_json::Value = if self.any_json_columns {
-            serde_json::from_str(line).unwrap_or(serde_json::Value::Null)
-        } else {
-            serde_json::Value::Null
-        };
+        let parsing_input = ParsingInput::new(&self, line);
 
         let mut columns = Vec::new();
         for column in &self.columns {
-            let mut value = match &column.parsing {
-                parsing @ ColumnParsing::Regex { .. } => {
-                    parsing.extract_regex(&column, &extracted_results)
-                }
-                parsing @ ColumnParsing::Json(_) => {
-                    parsing.extract_json(&column, &json_value)
-                }
-            };
+            let mut value = column.parsing.extract(&column, &parsing_input);
 
             if column.options.trim {
                 value.modify(
@@ -151,6 +133,33 @@ impl ColumnDefinition {
     }
 }
 
+pub struct ParsingInput<'a> {
+    regex_results: HashMap<&'a String, Captures<'a>>,
+    json_value: serde_json::Value
+}
+
+impl<'a> ParsingInput<'a> {
+    pub fn new(table: &'a TableDefinition, line: &'a str) -> ParsingInput<'a> {
+        let mut regex_results = HashMap::new();
+        for (pattern_name, pattern) in &table.patterns {
+            if let Some(capture) = pattern.captures(line) {
+                regex_results.insert(pattern_name, capture);
+            }
+        }
+
+        let json_value: serde_json::Value = if table.any_json_columns {
+            serde_json::from_str(line).unwrap_or(serde_json::Value::Null)
+        } else {
+            serde_json::Value::Null
+        };
+
+        ParsingInput{
+            regex_results,
+            json_value
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ColumnParsing {
     Regex { pattern_name: String, group_index: usize },
@@ -158,10 +167,10 @@ pub enum ColumnParsing {
 }
 
 impl ColumnParsing {
-    pub fn extract_regex(&self, column: &ColumnDefinition, extracted_results: &HashMap<&String, Captures>) -> Value {
+    pub fn extract(&self, column: &ColumnDefinition, parsing_input: &ParsingInput) -> Value {
         match self {
             ColumnParsing::Regex { pattern_name, group_index } => {
-                if let Some(capture_result) = extracted_results.get(&pattern_name) {
+                if let Some(capture_result) = parsing_input.regex_results.get(&pattern_name) {
                     let group_result = capture_result.get(*group_index);
                     if column.column_type == ValueType::Bool {
                         Value::Bool(group_result.is_some())
@@ -176,14 +185,8 @@ impl ColumnParsing {
                     Value::Null
                 }
             }
-            ColumnParsing::Json(_) => { Value::Null }
-        }
-    }
-
-    pub fn extract_json(&self, column: &ColumnDefinition, json_value: &serde_json::Value) -> Value {
-        match self {
             ColumnParsing::Json(access) => {
-                if let Some(value) = access.get_value(json_value) {
+                if let Some(value) = access.get_value(&parsing_input.json_value) {
                     if column.options.convert {
                         value
                             .as_str()
@@ -201,7 +204,6 @@ impl ColumnParsing {
                     Value::Null
                 }
             }
-            ColumnParsing::Regex { .. } => {Value::Null  }
         }
     }
 }
