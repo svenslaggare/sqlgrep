@@ -101,4 +101,4 @@ Multiple tables can be defined in the same file.
 Placed after the column type and add additional constraints/transforms.
 * `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is _not_ inserted.
 * `TRIM`: Trim string types for whitespaces.
-* `CONVERT`: Tries to convert a string value into the value type. Usable for JSON input.
+* `CONVERT`: Tries to convert a string value into the value type.
