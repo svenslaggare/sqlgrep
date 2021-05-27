@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::fs::File;
 
 use crate::data_model::{TableDefinition, Tables};
 use crate::execution::execution_engine::ExecutionEngine;
@@ -31,7 +32,7 @@ fn test_ssh1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ssh_data.txt",
+        File::open("testdata/ssh_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -49,7 +50,7 @@ fn test_ssh2() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ssh_data.txt",
+        File::open("testdata/ssh_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -67,7 +68,7 @@ fn test_ftpd1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -85,7 +86,7 @@ fn test_ftpd2() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -103,7 +104,7 @@ fn test_ftpd3() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -121,7 +122,7 @@ fn test_ftpd4() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -139,7 +140,7 @@ fn test_client1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/clients_data.json",
+        File::open("testdata/clients_data.json").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();

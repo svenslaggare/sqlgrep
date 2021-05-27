@@ -46,10 +46,10 @@ pub struct FileIngester<'a> {
 
 impl<'a> FileIngester<'a> {
     pub fn new(running: Arc<AtomicBool>,
-               filename: &str,
+               file: File,
                single_result: bool,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
-        let reader = BufReader::new(File::open(filename)?);
+        let reader = BufReader::new(file);
 
         Ok(
             FileIngester {
@@ -115,10 +115,10 @@ pub struct FollowFileIngester<'a> {
 
 impl<'a> FollowFileIngester<'a> {
     pub fn new(running: Arc<AtomicBool>,
-               filename: &str,
+               file: File,
                head: bool,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
-        let mut reader = BufReader::new(File::open(filename)?);
+        let mut reader = BufReader::new(file);
 
         if head {
             reader.seek(SeekFrom::Start(0))?;
@@ -232,7 +232,7 @@ fn test_file_ingest1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -287,7 +287,7 @@ fn test_file_ingest2() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -339,7 +339,7 @@ fn test_file_ingest3() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -390,7 +390,7 @@ fn test_file_ingest4() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -438,7 +438,7 @@ fn test_file_ingest5() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -491,7 +491,7 @@ fn test_file_ingest6() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data.txt",
+        File::open("testdata/ftpd_data.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();

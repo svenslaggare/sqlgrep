@@ -15,6 +15,7 @@ use sqlgrep::ingest::{FileIngester, FollowFileIngester};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 use sqlgrep::parsing::parse_tree_converter;
 use sqlgrep::parsing;
+use std::fs::File;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -31,6 +32,8 @@ struct CommandLineInput {
     command: Option<String>,
     #[structopt(long, help="Displays the execution statistics of queries")]
     show_run_stats: bool,
+    #[structopt(long, help="The input data is given on stdin")]
+    stdin: bool
 }
 
 struct ReadLinePrompt {
@@ -140,17 +143,28 @@ fn execute(command_line_input: &CommandLineInput,
             return false;
         },
         Some(statement) => {
-            let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone());
-            if filename.is_none() {
-                println!("The input filename must be defined.");
-                return false;
-            }
-            let filename = filename.unwrap();
+            let file = if !command_line_input.stdin {
+                let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone());
+                if filename.is_none() {
+                    println!("The input filename must be defined.");
+                    return false;
+                }
+                let filename = filename.unwrap();
+                let file = File::open(filename);
+                if let Err(err) = file {
+                    println!("{}", err);
+                    return false;
+                }
+
+                file.unwrap()
+            } else {
+                File::open("/dev/stdin").unwrap()
+            };
 
             let result = if command_line_input.follow {
                 let ingester = FollowFileIngester::new(
                     running,
-                    &filename,
+                    file,
                     command_line_input.head,
                     ExecutionEngine::new(&tables)
                 );
@@ -167,7 +181,7 @@ fn execute(command_line_input: &CommandLineInput,
             } else {
                 let ingester = FileIngester::new(
                     running,
-                    &filename,
+                    file,
                     single_result,
                     ExecutionEngine::new(&tables),
                 );
