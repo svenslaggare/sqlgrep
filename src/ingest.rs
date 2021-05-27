@@ -50,7 +50,7 @@ impl Default for DisplayOptions {
 
 pub struct FileIngester<'a> {
     running: Arc<AtomicBool>,
-    reader: Option<BufReader<File>>,
+    readers: Vec<BufReader<File>>,
     single_result: bool,
     execution_engine: ExecutionEngine<'a>,
     pub statistics: ExecutionStatistics,
@@ -60,16 +60,15 @@ pub struct FileIngester<'a> {
 
 impl<'a> FileIngester<'a> {
     pub fn new(running: Arc<AtomicBool>,
-               file: File,
+               files: Vec<File>,
                single_result: bool,
                display_options: DisplayOptions,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
-        let reader = BufReader::new(file);
 
         Ok(
             FileIngester {
                 running,
-                reader: Some(reader),
+                readers: files.into_iter().map(|file| BufReader::new(file)).collect(),
                 single_result,
                 execution_engine,
                 print_result: true,
@@ -85,24 +84,26 @@ impl<'a> FileIngester<'a> {
             config.result = false;
         }
 
-        for line in self.reader.take().unwrap().lines() {
-            if let Ok(line) = line {
-                self.statistics.total_lines += 1;
-                self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
+        for reader in std::mem::take(&mut self.readers).into_iter() {
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    self.statistics.total_lines += 1;
+                    self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
-                let (result, _) = self.execution_engine.execute(&statement, line, &config);
-                if let Some(result_row) = result? {
-                    if self.print_result {
-                        self.statistics.total_result_rows += result_row.data.len() as u64;
-                        OutputPrinter::new(self.single_result, self.display_options.json_output).print(&result_row)
+                    let (result, _) = self.execution_engine.execute(&statement, line, &config);
+                    if let Some(result_row) = result? {
+                        if self.print_result {
+                            self.statistics.total_result_rows += result_row.data.len() as u64;
+                            OutputPrinter::new(self.single_result, self.display_options.json_output).print(&result_row)
+                        }
                     }
+                } else {
+                    break;
                 }
-            } else {
-                break;
-            }
 
-            if !self.running.load(Ordering::SeqCst) {
-                break;
+                if !self.running.load(Ordering::SeqCst) {
+                    break;
+                }
             }
         }
 
@@ -264,7 +265,7 @@ fn test_file_ingest1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -320,7 +321,7 @@ fn test_file_ingest2() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -373,7 +374,7 @@ fn test_file_ingest3() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -425,7 +426,7 @@ fn test_file_ingest4() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -474,7 +475,7 @@ fn test_file_ingest5() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -528,7 +529,7 @@ fn test_file_ingest6() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)

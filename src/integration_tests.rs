@@ -32,7 +32,7 @@ fn test_ssh1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ssh_data.txt").unwrap(),
+        vec![File::open("testdata/ssh_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -51,7 +51,7 @@ fn test_ssh2() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ssh_data.txt").unwrap(),
+        vec![File::open("testdata/ssh_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -70,7 +70,7 @@ fn test_ftpd1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -89,7 +89,7 @@ fn test_ftpd2() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -108,7 +108,7 @@ fn test_ftpd3() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -127,7 +127,7 @@ fn test_ftpd4() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)
@@ -146,7 +146,7 @@ fn test_client1() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/clients_data.json").unwrap(),
+        vec![File::open("testdata/clients_data.json").unwrap()],
         false,
         Default::default(),
         ExecutionEngine::new(&tables)

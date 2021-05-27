@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Write, Error};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -21,7 +21,8 @@ use std::fs::File;
 #[structopt(name="sqlgrep", about="sqlgrep")]
 struct CommandLineInput {
     #[structopt(name="input_filename", help="The input file")]
-    input_file: Option<String>,
+    // input_file: Option<String>,
+    input_file: Vec<String>,
     #[structopt(short, long("data-file"), help="The data definition file")]
     data_definition_file: Option<String>,
     #[structopt(short("f"), long("follow"), help="Follows the input file")]
@@ -145,22 +146,33 @@ fn execute(command_line_input: &CommandLineInput,
             return false;
         },
         Some(statement) => {
-            let file = if !command_line_input.stdin {
-                let filename = statement.filename().map(|x| x.to_owned()).or(command_line_input.input_file.clone());
-                if filename.is_none() {
+            let mut files = if !command_line_input.stdin {
+                let filenames = match statement.filename() {
+                    Some(filename) => vec![filename.to_owned()],
+                    None => command_line_input.input_file.clone()
+                };
+
+                if filenames.is_empty() {
                     println!("The input filename must be defined.");
                     return false;
                 }
-                let filename = filename.unwrap();
-                let file = File::open(filename);
-                if let Err(err) = file {
-                    println!("{}", err);
-                    return false;
+
+                let mut files = Vec::new();
+                for filename in filenames {
+                    match File::open(filename) {
+                        Ok(file) => {
+                            files.push(file);
+                        }
+                        Err(err) => {
+                            println!("{}", err);
+                            return false;
+                        }
+                    }
                 }
 
-                file.unwrap()
+                files
             } else {
-                File::open("/dev/stdin").unwrap()
+                vec![File::open("/dev/stdin").unwrap()]
             };
 
             let mut display_options: DisplayOptions = Default::default();
@@ -169,7 +181,7 @@ fn execute(command_line_input: &CommandLineInput,
             let result = if command_line_input.follow {
                 let ingester = FollowFileIngester::new(
                     running,
-                    file,
+                    files.remove(0),
                     command_line_input.head,
                     display_options,
                     ExecutionEngine::new(&tables)
@@ -187,7 +199,7 @@ fn execute(command_line_input: &CommandLineInput,
             } else {
                 let ingester = FileIngester::new(
                     running,
-                    file,
+                    files,
                     single_result,
                     display_options,
                     ExecutionEngine::new(&tables),
