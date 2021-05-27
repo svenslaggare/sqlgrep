@@ -253,6 +253,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                                 let pattern = Regex::new(&pattern).map_err(|err| EvaluationError::InvalidRegex(format!("{}", err)))?;
                                 Ok(Value::Bool(pattern.is_match(&value)))
                             },
+                            (Value::Null, Value::String(_)) => Ok(Value::Bool(false)),
                             _ => Err(EvaluationError::UndefinedOperation)
                         }
                     }

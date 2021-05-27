@@ -138,6 +138,25 @@ fn test_ftpd4() {
 }
 
 #[test]
+fn test_ftpd5() {
+    let tables = create_tables("testdata/ftpd.txt");
+
+    let query_tree = parser::parse_str("SELECT hostname, COUNT(hostname) FROM connections WHERE regexp_matches(hostname, '.*in-addr.zen.co.uk') GROUP BY hostname").unwrap();
+    let query = parse_tree_converter::transform_statement(query_tree).unwrap();
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    ingester.process(query).unwrap();
+    assert_eq!(2, ingester.statistics.total_result_rows);
+}
+
+#[test]
 fn test_client1() {
     let tables = create_tables("testdata/clients.txt");
 
