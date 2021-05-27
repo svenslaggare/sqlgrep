@@ -61,11 +61,12 @@ Supported aggregates:
 * Avg
 
 Supported functions:
-* Least
-* Greatest
-* Abs
-* Sqrt
-* Pow
+* least
+* greatest
+* abs
+* sqrt
+* pow
+* regex_matches
 
 ## Special features
 The input filename can either be specified with the CLI or as an additional argument to the `FROM` statement as following:

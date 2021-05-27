@@ -1,6 +1,8 @@
 use std::hash::{Hasher, Hash};
 use std::collections::HashMap;
 
+use regex::Regex;
+
 use fnv::FnvHasher;
 
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate};
@@ -12,7 +14,8 @@ pub enum EvaluationError {
     GroupKeyNotFound,
     GroupValueNotFound,
     UndefinedOperation,
-    UndefinedFunction
+    UndefinedFunction,
+    InvalidRegex(String)
 }
 
 impl std::fmt::Display for EvaluationError {
@@ -22,7 +25,8 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
             EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
             EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
-            EvaluationError::UndefinedFunction => { write!(f, "Undefined function") }
+            EvaluationError::UndefinedFunction => { write!(f, "Undefined function") },
+            EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
         }
     }
 }
@@ -237,6 +241,18 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 
                         match arg {
                             Value::String(str) => Ok(Value::String(str.to_lowercase())),
+                            _ => Err(EvaluationError::UndefinedOperation)
+                        }
+                    }
+                    Function::RegexMatches if arguments.len() == 2 => {
+                        let value = executed_arguments.remove(0);
+                        let pattern = executed_arguments.remove(0);
+
+                        match (value, pattern) {
+                            (Value::String(value), Value::String(pattern)) => {
+                                let pattern = Regex::new(&pattern).map_err(|err| EvaluationError::InvalidRegex(format!("{}", err)))?;
+                                Ok(Value::Bool(pattern.is_match(&value)))
+                            },
                             _ => Err(EvaluationError::UndefinedOperation)
                         }
                     }
@@ -541,6 +557,35 @@ fn test_null2() {
             left: Box::new(ExpressionTree::Value(Value::Null)),
             right: Box::new(ExpressionTree::Value(Value::Null)),
             operator: ArithmeticOperator::Add
+        })
+    );
+}
+
+#[test]
+fn test_regex1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Bool(true)),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::RegexMatches,
+            arguments: vec![
+                ExpressionTree::Value(Value::String("HELLO MY NAME".to_owned())),
+                ExpressionTree::Value(Value::String("(my)|(MY)".to_owned()))
+            ]
+        })
+    );
+
+    assert_eq!(
+        Ok(Value::Bool(false)),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::RegexMatches,
+            arguments: vec![
+                ExpressionTree::Value(Value::String("HELLO me NAME".to_owned())),
+                ExpressionTree::Value(Value::String("(my)|(MY)".to_owned()))
+            ]
         })
     );
 }

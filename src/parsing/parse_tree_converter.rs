@@ -197,7 +197,8 @@ lazy_static! {
             ("pow".to_owned(), Function::Pow),
             ("length".to_owned(), Function::StringLength),
             ("upper".to_owned(), Function::StringToUpper),
-            ("lower".to_owned(), Function::StringToLower)
+            ("lower".to_owned(), Function::StringToLower),
+            ("regexp_matches".to_owned(), Function::RegexMatches)
         ].into_iter()
     );
 }

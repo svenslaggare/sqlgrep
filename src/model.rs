@@ -245,6 +245,7 @@ pub enum Function {
     StringLength,
     StringToUpper,
     StringToLower,
+    RegexMatches
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
