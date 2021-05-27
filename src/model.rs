@@ -149,6 +149,16 @@ impl Value {
             _ => {}
         }
     }
+
+    pub fn json_value(&self) -> serde_json::Value {
+        match self {
+            Value::Null => serde_json::Value::Null,
+            Value::Int(value) => serde_json::Value::Number(serde_json::Number::from(*value)),
+            Value::Float(Float(value)) => serde_json::Value::Number(serde_json::Number::from_f64(*value).unwrap()),
+            Value::Bool(value) => serde_json::Value::Bool(*value),
+            Value::String(value) => serde_json::Value::String(value.clone())
+        }
+    }
 }
 
 impl std::fmt::Display for Value {

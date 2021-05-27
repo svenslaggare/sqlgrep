@@ -34,6 +34,7 @@ fn test_ssh1() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ssh_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -52,6 +53,7 @@ fn test_ssh2() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ssh_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -70,6 +72,7 @@ fn test_ftpd1() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -88,6 +91,7 @@ fn test_ftpd2() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -106,6 +110,7 @@ fn test_ftpd3() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -124,6 +129,7 @@ fn test_ftpd4() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -142,6 +148,7 @@ fn test_client1() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/clients_data.json").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 

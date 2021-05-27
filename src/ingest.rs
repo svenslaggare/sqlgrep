@@ -2,6 +2,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::iter::FromIterator;
 
 use crate::data_model::{ColumnDefinition, TableDefinition, Tables};
 use crate::execution::{ExecutionResult, ResultRow};
@@ -35,19 +36,33 @@ impl ExecutionStatistics {
     }
 }
 
+pub struct DisplayOptions {
+    pub json_output: bool
+}
+
+impl Default for DisplayOptions {
+    fn default() -> Self {
+        DisplayOptions {
+            json_output: false
+        }
+    }
+}
+
 pub struct FileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     single_result: bool,
     execution_engine: ExecutionEngine<'a>,
     pub statistics: ExecutionStatistics,
-    pub print_result: bool
+    pub print_result: bool,
+    display_options: DisplayOptions
 }
 
 impl<'a> FileIngester<'a> {
     pub fn new(running: Arc<AtomicBool>,
                file: File,
                single_result: bool,
+               display_options: DisplayOptions,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
         let reader = BufReader::new(file);
 
@@ -58,7 +73,8 @@ impl<'a> FileIngester<'a> {
                 single_result,
                 execution_engine,
                 print_result: true,
-                statistics: ExecutionStatistics::new()
+                statistics: ExecutionStatistics::new(),
+                display_options
             }
         )
     }
@@ -78,7 +94,7 @@ impl<'a> FileIngester<'a> {
                 if let Some(result_row) = result? {
                     if self.print_result {
                         self.statistics.total_result_rows += result_row.data.len() as u64;
-                        OutputPrinter::new(self.single_result).print(&result_row)
+                        OutputPrinter::new(self.single_result, self.display_options.json_output).print(&result_row)
                     }
                 }
             } else {
@@ -98,7 +114,7 @@ impl<'a> FileIngester<'a> {
             if self.print_result {
                 if let Some(result_row) = result? {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
-                    OutputPrinter::new(true).print(&result_row)
+                    OutputPrinter::new(true, self.display_options.json_output).print(&result_row)
                 }
             }
         }
@@ -110,13 +126,15 @@ impl<'a> FileIngester<'a> {
 pub struct FollowFileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
-    execution_engine: ExecutionEngine<'a>
+    execution_engine: ExecutionEngine<'a>,
+    display_options: DisplayOptions
 }
 
 impl<'a> FollowFileIngester<'a> {
     pub fn new(running: Arc<AtomicBool>,
                file: File,
                head: bool,
+               display_options: DisplayOptions,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
         let mut reader = BufReader::new(file);
 
@@ -130,7 +148,8 @@ impl<'a> FollowFileIngester<'a> {
             FollowFileIngester {
                 running,
                 reader: Some(reader),
-                execution_engine
+                execution_engine,
+                display_options
             }
         )
     }
@@ -163,7 +182,7 @@ impl<'a> FollowFileIngester<'a> {
                     print!("\x1B[2J\x1B[1;1H");
                 }
 
-                OutputPrinter::new(refresh).print(&result_row)
+                OutputPrinter::new(refresh, self.display_options.json_output).print(&result_row)
             }
 
             if !self.running.load(Ordering::SeqCst) {
@@ -176,29 +195,42 @@ impl<'a> FollowFileIngester<'a> {
 }
 
 struct OutputPrinter {
-    single_result: bool
+    single_result: bool,
+    json_output: bool
 }
 
 impl OutputPrinter {
-    pub fn new(single_result: bool) -> OutputPrinter {
+    pub fn new(single_result: bool, json_output: bool) -> OutputPrinter {
         OutputPrinter {
-            single_result
+            single_result,
+            json_output
         }
     }
 
     pub fn print(&self, result_row: &ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
-            if row.columns.len() == 1 && result_row.columns[0] == "input" {
+            if row.columns.len() == 1 && result_row.columns[0] == "input" && !self.json_output {
                 println!("{}", row.columns[0]);
             } else {
-                let columns = result_row.columns
-                    .iter()
-                    .enumerate()
-                    .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
-                    .collect::<Vec<_>>();
+                if self.json_output {
+                    let columns = serde_json::Map::from_iter(
+                        result_row.columns
+                            .iter()
+                            .enumerate()
+                            .map(|(projection_index, projection_name)| (projection_name.to_owned(), row.columns[projection_index].json_value()))
+                    );
 
-                println!("{}", columns.join(", "));
+                    println!("{}", serde_json::to_string(&columns).unwrap());
+                } else {
+                    let columns = result_row.columns
+                        .iter()
+                        .enumerate()
+                        .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
+                        .collect::<Vec<_>>();
+
+                    println!("{}", columns.join(", "));
+                }
             }
         }
 
@@ -234,6 +266,7 @@ fn test_file_ingest1() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -289,6 +322,7 @@ fn test_file_ingest2() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -341,6 +375,7 @@ fn test_file_ingest3() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -392,6 +427,7 @@ fn test_file_ingest4() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -440,6 +476,7 @@ fn test_file_ingest5() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 
@@ -493,6 +530,7 @@ fn test_file_ingest6() {
         Arc::new(AtomicBool::new(true)),
         File::open("testdata/ftpd_data.txt").unwrap(),
         false,
+        Default::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
 

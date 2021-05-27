@@ -7,6 +7,7 @@ use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables};
 use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate};
 use sqlgrep::ingest::FileIngester;
 use sqlgrep::execution::execution_engine::ExecutionEngine;
+use std::fs::File;
 
 fn filtering() {
     let table_definition = TableDefinition::new(
@@ -31,7 +32,7 @@ fn filtering() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data_large.txt",
+        File::open("testdata/ftpd_data_large.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();
@@ -86,7 +87,7 @@ fn aggregate() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        "testdata/ftpd_data_large.txt",
+        File::open("testdata/ftpd_data_large.txt").unwrap(),
         false,
         ExecutionEngine::new(&tables)
     ).unwrap();

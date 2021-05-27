@@ -11,7 +11,7 @@ use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 
 use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
-use sqlgrep::ingest::{FileIngester, FollowFileIngester};
+use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 use sqlgrep::parsing::parse_tree_converter;
 use sqlgrep::parsing;
@@ -33,7 +33,9 @@ struct CommandLineInput {
     #[structopt(long, help="Displays the execution statistics of queries")]
     show_run_stats: bool,
     #[structopt(long, help="The input data is given on stdin")]
-    stdin: bool
+    stdin: bool,
+    #[structopt(long, help="The output data is in JSON format")]
+    json_output: bool
 }
 
 struct ReadLinePrompt {
@@ -161,11 +163,15 @@ fn execute(command_line_input: &CommandLineInput,
                 File::open("/dev/stdin").unwrap()
             };
 
+            let mut display_options: DisplayOptions = Default::default();
+            display_options.json_output = command_line_input.json_output;
+
             let result = if command_line_input.follow {
                 let ingester = FollowFileIngester::new(
                     running,
                     file,
                     command_line_input.head,
+                    display_options,
                     ExecutionEngine::new(&tables)
                 );
 
@@ -183,6 +189,7 @@ fn execute(command_line_input: &CommandLineInput,
                     running,
                     file,
                     single_result,
+                    display_options,
                     ExecutionEngine::new(&tables),
                 );
 
