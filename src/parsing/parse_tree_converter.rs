@@ -5,8 +5,8 @@ use std::iter::FromIterator;
 
 use lazy_static::lazy_static;
 
-use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition};
-use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function};
+use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition, ParseJoinClause};
+use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function, JoinClause};
 use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing};
 
 #[derive(Debug)]
@@ -20,7 +20,9 @@ pub enum ConvertParseTreeError {
     UndefinedExpression,
     UndefinedFunction,
     InvalidPattern,
-    HavingClauseNotPossible
+    HavingClauseNotPossible,
+    InvalidOnJoin,
+    InvalidJoinerTable(String)
 }
 
 impl std::fmt::Display for ConvertParseTreeError {
@@ -35,25 +37,27 @@ impl std::fmt::Display for ConvertParseTreeError {
             ConvertParseTreeError::UndefinedExpression => { write!(f, "Undefined expression") }
             ConvertParseTreeError::UndefinedFunction => { write!(f, "Undefined function") }
             ConvertParseTreeError::InvalidPattern => { write!(f, "Undefined pattern") }
-            ConvertParseTreeError::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") }
+            ConvertParseTreeError::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") },
+            ConvertParseTreeError::InvalidOnJoin => { write!(f, "Left or right join side does not exist") },
+            ConvertParseTreeError::InvalidJoinerTable(table) => { write!(f, "Expected left or right side to be {}", table) },
         }
     }
 }
 
 pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, ConvertParseTreeError> {
     match tree {
-        ParseOperationTree::Select { projections, from, filter, group_by, having } => {
+        ParseOperationTree::Select { projections, from, filter, group_by, having, join } => {
             if let Some(group_by) = group_by {
-                create_aggregate_statement(projections, from, filter, Some(group_by), having)
+                create_aggregate_statement(projections, from, filter, Some(group_by), having, join)
             } else {
                 if any_aggregates(&projections) {
-                    create_aggregate_statement(projections, from, filter, None, having)
+                    create_aggregate_statement(projections, from, filter, None, having, join)
                 } else {
                     if having.is_some() {
                         return Err(ConvertParseTreeError::HavingClauseNotPossible);
                     }
 
-                    create_select_statement(projections, from, filter)
+                    create_select_statement(projections, from, filter, join)
                 }
             }
         }
@@ -71,7 +75,8 @@ pub fn transform_statement(tree: ParseOperationTree) -> Result<Statement, Conver
 
 fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree)>,
                            from: (String, Option<String>),
-                           filter: Option<ParseExpressionTree>) -> Result<Statement, ConvertParseTreeError> {
+                           filter: Option<ParseExpressionTree>,
+                           join: Option<ParseJoinClause>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_projections = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let expression = transform_expression(tree, &mut TransformExpressionState::default())?;
@@ -91,11 +96,14 @@ fn create_select_statement(projections: Vec<(Option<String>, ParseExpressionTree
         None
     };
 
+    let transformed_join = transform_join(&from, join)?;
+
     let select_statement = SelectStatement {
         projections: transformed_projections,
         from: from.0,
         filename: from.1,
-        filter: transformed_filter
+        filter: transformed_filter,
+        join: transformed_join
     };
 
     Ok(Statement::Select(select_statement))
@@ -105,7 +113,8 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
                               from: (String, Option<String>),
                               filter: Option<ParseExpressionTree>,
                               group_by: Option<Vec<String>>,
-                              having: Option<ParseExpressionTree>) -> Result<Statement, ConvertParseTreeError> {
+                              having: Option<ParseExpressionTree>,
+                              join: Option<ParseJoinClause>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let (default_name, aggregate) = transform_aggregate(tree, projection_index)?;
@@ -128,16 +137,59 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
         None
     };
 
+    let transformed_join = transform_join(&from, join)?;
+
     let aggregate_statement = AggregateStatement {
         aggregates: transformed_aggregates,
         from: from.0,
         filename: from.1,
         filter: transformed_filter,
         group_by,
-        having: transformed_having
+        having: transformed_having,
+        join: transformed_join
     };
 
     Ok(Statement::Aggregate(aggregate_statement))
+}
+
+fn transform_join(from: &(String, Option<String>), join: Option<ParseJoinClause>) -> Result<Option<JoinClause>, ConvertParseTreeError> {
+    if let Some(join) = join {
+        if join.left_table == from.0 {
+            if join.right_table == join.joiner_table {
+                Ok(
+                    Some(
+                        JoinClause {
+                            joined_table: join.joiner_table,
+                            joined_filename: join.joiner_filename,
+                            joined_column: join.right_column,
+                            joiner_column: join.left_column
+                        }
+                    )
+                )
+            } else {
+                return Err(ConvertParseTreeError::InvalidJoinerTable(join.joiner_table ));
+            }
+        } else if join.right_table == from.0 {
+            if join.left_table == join.joiner_table {
+                Ok(
+                    Some(
+                        JoinClause {
+                            joined_table: join.joiner_table,
+                            joined_filename: join.joiner_filename,
+                            joined_column: join.left_column,
+                            joiner_column: join.right_column
+                        }
+                    )
+                )
+            } else {
+                return Err(ConvertParseTreeError::InvalidJoinerTable(join.joiner_table ));
+            }
+        } else {
+            return Err(ConvertParseTreeError::InvalidOnJoin);
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 fn create_create_table_statement(name: String,
@@ -377,7 +429,8 @@ fn test_select_statement1() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -402,7 +455,8 @@ fn test_select_statement2() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -433,7 +487,8 @@ fn test_select_statement3() {
             }
         ),
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -482,7 +537,8 @@ fn test_select_statement4() {
             }
         ),
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -523,7 +579,8 @@ fn test_select_statement5() {
         from: ("test".to_string(), Some("test.log".to_owned())),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None,
     };
 
     let statement = transform_statement(tree);
@@ -557,7 +614,8 @@ fn test_select_statement6() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -596,7 +654,8 @@ fn test_select_statement7() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -621,6 +680,94 @@ fn test_select_statement7() {
 }
 
 #[test]
+fn test_select_inner_join1() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        from: ("test".to_string(), Some("test.log".to_owned())),
+        filter: None,
+        group_by: None,
+        having: None,
+        join: Some(ParseJoinClause {
+            joiner_table: "other".to_string(),
+            joiner_filename: "other.log".to_string(),
+            left_table: "test".to_string(),
+            left_column: "x".to_string(),
+            right_table: "other".to_string(),
+            right_column: "y".to_string()
+        }),
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("x", statement.projections[0].0.as_str());
+    assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
+
+    assert_eq!("test", statement.from);
+    assert_eq!(Some("test.log".to_owned()), statement.filename);
+
+    assert_eq!(
+        Some(JoinClause {
+            joined_table: "other".to_string(),
+            joined_filename: "other.log".to_string(),
+            joined_column: "y".to_string(),
+            joiner_column: "x".to_string()
+        }),
+        statement.join
+    );
+}
+
+#[test]
+fn test_select_inner_join2() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        from: ("test".to_string(), Some("test.log".to_owned())),
+        filter: None,
+        group_by: None,
+        having: None,
+        join: Some(ParseJoinClause {
+            joiner_table: "other".to_string(),
+            joiner_filename: "other.log".to_string(),
+            right_table: "test".to_string(),
+            right_column: "x".to_string(),
+            left_table: "other".to_string(),
+            left_column: "y".to_string()
+        }),
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("x", statement.projections[0].0.as_str());
+    assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
+
+    assert_eq!("test", statement.from);
+    assert_eq!(Some("test.log".to_owned()), statement.filename);
+
+    assert_eq!(
+        Some(JoinClause {
+            joined_table: "other".to_string(),
+            joined_filename: "other.log".to_string(),
+            joined_column: "y".to_string(),
+            joiner_column: "x".to_string()
+        }),
+        statement.join
+    );
+}
+
+#[test]
 fn test_aggregate_statement1() {
     let tree = ParseOperationTree::Select {
         projections: vec![
@@ -630,7 +777,8 @@ fn test_aggregate_statement1() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: Some(vec!["x".to_owned()]),
-        having: None
+        having: None,
+        join: None
     };
 
     let statement = transform_statement(tree);
@@ -663,7 +811,8 @@ fn test_aggregate_statement2() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: Some(vec!["x".to_owned()]),
-        having: None
+        having: None,
+        join: None,
     };
 
     let statement = transform_statement(tree);
@@ -696,7 +845,8 @@ fn test_aggregate_statement3() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: Some(vec!["x".to_owned()]),
-        having: None
+        having: None,
+        join: None,
     };
 
     let statement = transform_statement(tree);
@@ -727,7 +877,8 @@ fn test_aggregate_statement4() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None,
     };
 
     let statement = transform_statement(tree);
@@ -752,7 +903,8 @@ fn test_aggregate_statement5() {
         from: ("test".to_string(), None),
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None,
     };
 
     let statement = transform_statement(tree);
@@ -790,7 +942,8 @@ fn test_aggregate_statement6() {
                     right: Box::new(ParseExpressionTree::Value(Value::Int(2000))),
                 })
             }
-        )
+        ),
+        join: None,
     };
 
     let statement = transform_statement(tree);

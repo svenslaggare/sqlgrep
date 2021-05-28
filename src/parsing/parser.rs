@@ -24,7 +24,10 @@ pub enum Keyword {
     Not,
     Is,
     IsNot,
-    Having
+    Having,
+    Inner,
+    Join,
+    On,
 }
 
 impl std::fmt::Display for Keyword {
@@ -94,6 +97,7 @@ pub enum ParserError {
     ExpectedString,
     ExpectedInt,
     ExpectedOperator,
+    ExpectedSpecificOperator(Operator),
     ExpectedColon,
     ExpectedRightArrow,
     ExpectedSemiColon,
@@ -129,6 +133,7 @@ impl std::fmt::Display for ParserError {
             ParserError::ExpectedString => { write!(f, "Expected a string") }
             ParserError::ExpectedInt => { write!(f, "Expected an integer") }
             ParserError::ExpectedOperator => { write!(f, "Expected an operator") }
+            ParserError::ExpectedSpecificOperator(operator) => { write!(f, "Expected '{}' operator", operator) }
             ParserError::ExpectedColon => { write!(f, "Expected ':'") }
             ParserError::ExpectedRightArrow => { write!(f, "Expected '=>'") }
             ParserError::ExpectedSemiColon => { write!(f, "Expected ';'") }
@@ -185,13 +190,24 @@ impl ParseColumnDefinition {
 }
 
 #[derive(PartialEq, Debug, Clone)]
+pub struct ParseJoinClause {
+    pub joiner_table: String,
+    pub joiner_filename: String,
+    pub left_table: String,
+    pub left_column: String,
+    pub right_table: String,
+    pub right_column: String
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub enum ParseOperationTree {
     Select {
         projections: Vec<(Option<String>, ParseExpressionTree)>,
         from: (String, Option<String>),
         filter: Option<ParseExpressionTree>,
         group_by: Option<Vec<String>>,
-        having: Option<ParseExpressionTree>
+        having: Option<ParseExpressionTree>,
+        join: Option<ParseJoinClause>
     },
     CreateTable {
         name: String,
@@ -219,6 +235,9 @@ lazy_static! {
             ("not".to_owned(), Keyword::Not),
             ("is".to_owned(), Keyword::Is),
             ("having".to_owned(), Keyword::Having),
+            ("inner".to_owned(), Keyword::Inner),
+            ("join".to_owned(), Keyword::Join),
+            ("on".to_owned(), Keyword::On),
         ].into_iter()
     );
 
@@ -515,6 +534,7 @@ impl<'a> Parser<'a> {
         let mut filter = None;
         let mut group_by = None;
         let mut having = None;
+        let mut join = None;
 
         if self.current() != &Token::End {
             loop {
@@ -522,6 +542,9 @@ impl<'a> Parser<'a> {
                     Token::Keyword(Keyword::Where) => {
                         self.next()?;
                         filter = Some(self.parse_expression_internal()?);
+                    }
+                    Token::Keyword(Keyword::Inner) => {
+                        join = Some(self.parse_inner_join()?);
                     }
                     Token::Keyword(Keyword::Group) => {
                         self.next()?;
@@ -539,7 +562,7 @@ impl<'a> Parser<'a> {
                         }
 
                         group_by = Some(group_by_keys);
-                    },
+                    }
                     Token::Keyword(Keyword::Having) => {
                         self.next()?;
                         having = Some(self.parse_expression_internal()?);
@@ -563,7 +586,55 @@ impl<'a> Parser<'a> {
                 from: (table_name, filename),
                 filter,
                 group_by,
-                having
+                having,
+                join
+            }
+        )
+    }
+
+    fn parse_inner_join(&mut self) -> ParserResult<ParseJoinClause> {
+        self.next()?;
+
+        self.expect_and_consume_token(
+            Token::Keyword(Keyword::Join),
+            ParserError::ExpectedKeyword(Keyword::Join)
+        )?;
+
+        let joiner_table = self.consume_identifier()?;
+        self.expect_and_consume_token(
+            Token::Colon,
+            ParserError::ExpectedColon
+        )?;
+
+        self.expect_and_consume_token(
+            Token::Colon,
+            ParserError::ExpectedColon
+        )?;
+        let joiner_filename = self.consume_string()?;
+
+        self.expect_and_consume_token(
+            Token::Keyword(Keyword::On),
+            ParserError::ExpectedKeyword(Keyword::On)
+        )?;
+
+        let left_table = self.consume_identifier()?;
+        self.expect_and_consume_operator(Operator::Single('.'))?;
+        let left_column = self.consume_identifier()?;
+
+        self.expect_and_consume_operator(Operator::Single('='))?;
+
+        let right_table = self.consume_identifier()?;
+        self.expect_and_consume_operator(Operator::Single('.'))?;
+        let right_column = self.consume_identifier()?;
+
+        Ok(
+            ParseJoinClause {
+                joiner_table,
+                joiner_filename,
+                left_table,
+                left_column,
+                right_table,
+                right_column
             }
         )
     }
@@ -940,6 +1011,12 @@ impl<'a> Parser<'a> {
 
     fn expect_and_consume_token(&mut self, token: Token, error: ParserError) -> ParserResult<()> {
         self.expect_token(token, error)?;
+        self.next()?;
+        Ok(())
+    }
+
+    fn expect_and_consume_operator(&mut self, operator: Operator) -> ParserResult<()> {
+        self.expect_token(Token::Operator(operator), ParserError::ExpectedSpecificOperator(operator))?;
         self.next()?;
         Ok(())
     }
@@ -1547,7 +1624,8 @@ fn test_parse_select1() {
             from: ("test".to_string(), None),
             filter: None,
             group_by: None,
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1578,7 +1656,8 @@ fn test_parse_select2() {
             from: ("test".to_string(), None),
             filter: None,
             group_by: None,
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1619,7 +1698,8 @@ fn test_parse_select_and_filter1() {
                 }
             ),
             group_by: None,
-            having: None
+            having: None,
+            join: None,
         },
         tree
     );
@@ -1662,7 +1742,8 @@ fn test_parse_select_and_filter2() {
                 }
             ),
             group_by: None,
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1706,7 +1787,8 @@ fn test_parse_select_and_filter3() {
                 }
             ),
             group_by: None,
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1740,7 +1822,8 @@ fn test_parse_with_filename() {
             from: ("test".to_string(), Some("test.log".to_owned())),
             filter: None,
             group_by: None,
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1784,7 +1867,8 @@ fn test_parse_select_group_by1() {
                 }
             ),
             group_by: Some(vec!["x".to_owned()]),
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1830,7 +1914,8 @@ fn test_parse_select_group_by2() {
                 }
             ),
             group_by: Some(vec!["x".to_owned(), "y".to_owned()]),
-            having: None
+            having: None,
+            join: None
         },
         tree
     );
@@ -1880,6 +1965,72 @@ fn test_parse_select_having() {
                     operator: Operator::Single('<'),
                     left: Box::new(ParseExpressionTree::ColumnAccess("y".to_owned())),
                     right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+                }
+            ),
+            join: None,
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_inner_join1() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Keyword(Keyword::Where),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('>')),
+            Token::Int(4),
+            Token::Keyword(Keyword::Inner),
+            Token::Keyword(Keyword::Join),
+            Token::Identifier("table1".to_string()),
+            Token::Colon,
+            Token::Colon,
+            Token::String("file.log".to_string()),
+            Token::Keyword(Keyword::On),
+            Token::Identifier("table2".to_string()),
+            Token::Operator(Operator::Single('.')),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::Identifier("table1".to_string()),
+            Token::Operator(Operator::Single('.')),
+            Token::Identifier("y".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('>'),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+                }
+            ),
+            group_by: None,
+            having: None,
+            join: Some(
+                ParseJoinClause {
+                    joiner_table: "table1".to_string(),
+                    joiner_filename: "file.log".to_string(),
+                    left_table: "table2".to_string(),
+                    left_column: "x".to_string(),
+                    right_table: "table1".to_string(),
+                    right_column: "y".to_string()
                 }
             ),
         },
@@ -2337,7 +2488,8 @@ fn test_parse_str1() {
                 }
             ),
             group_by: Some(vec!["x".to_owned()]),
-            having: None
+            having: None,
+            join: None,
         },
         tree
     );
@@ -2362,7 +2514,8 @@ fn test_parse_str2() {
                 }
             ),
             group_by: Some(vec!["x".to_owned()]),
-            having: None
+            having: None,
+            join: None,
         },
         tree
     );
@@ -2464,7 +2617,8 @@ fn test_parse_str4() {
                 }
             ),
             group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()]),
-            having: None
+            having: None,
+            join: None,
         },
         tree
     );

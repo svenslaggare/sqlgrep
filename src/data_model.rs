@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use itertools::Itertools;
+
 use regex::{Regex, Captures};
 
 use serde_json::json;
@@ -7,6 +9,7 @@ use serde_json::json;
 use crate::model::{Value, Float};
 use crate::model::ValueType;
 
+#[derive(Debug)]
 pub struct Row {
     pub columns: Vec<Value>
 }
@@ -23,10 +26,12 @@ impl Row {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct TableDefinition {
     pub name: String,
     pub patterns: Vec<(String, Regex)>,
     pub columns: Vec<ColumnDefinition>,
+    pub fully_qualified_column_names: Vec<String>,
     any_json_columns: bool,
 }
 
@@ -46,11 +51,17 @@ impl TableDefinition {
             }
         }
 
+        let fully_qualified_column_names = columns
+            .iter()
+            .map(|column| format!("{}_{}", name, column.name))
+            .collect::<Vec<_>>();
+
         Some(
             TableDefinition {
                 name: name.to_owned(),
                 patterns: compiled_patterns,
                 columns,
+                fully_qualified_column_names,
                 any_json_columns
             }
         )
@@ -84,8 +95,16 @@ impl TableDefinition {
             columns
         }
     }
+
+    pub fn index_for(&self, name: &str) -> Option<usize> {
+        self.columns
+            .iter()
+            .find_position(|column| column.name == name)
+            .map(|(index, _)| index)
+    }
 }
 
+#[derive(Debug, Clone)]
 pub struct ColumnDefinition {
     pub parsing: ColumnParsing,
     pub name: String,
@@ -262,6 +281,7 @@ impl JsonAccess {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ColumnOptions {
     pub nullable: bool,
     pub trim: bool,

@@ -336,11 +336,21 @@ impl ExpressionTree {
     }
 }
 
+#[derive(PartialEq, Debug, Hash)]
+pub struct JoinClause {
+    pub joiner_column: String,
+    pub joined_table: String,
+    pub joined_filename: String,
+    pub joined_column: String,
+}
+
+#[derive(Debug)]
 pub struct SelectStatement {
     pub projections: Vec<(String, ExpressionTree)>,
     pub from: String,
     pub filename: Option<String>,
-    pub filter: Option<ExpressionTree>
+    pub filter: Option<ExpressionTree>,
+    pub join: Option<JoinClause>
 }
 
 impl SelectStatement {
@@ -349,14 +359,15 @@ impl SelectStatement {
     }
 }
 
-#[derive(Hash)]
+#[derive(Debug, Hash)]
 pub struct AggregateStatement {
     pub aggregates: Vec<(String, Aggregate)>,
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
     pub group_by: Option<Vec<String>>,
-    pub having: Option<ExpressionTree>
+    pub having: Option<ExpressionTree>,
+    pub join: Option<JoinClause>
 }
 
 pub struct CreateTableStatement {
@@ -365,6 +376,7 @@ pub struct CreateTableStatement {
     pub columns: Vec<(String, ValueType, String, usize)>
 }
 
+#[derive(Debug)]
 pub enum Statement {
     Select(SelectStatement),
     Aggregate(AggregateStatement),
@@ -414,6 +426,15 @@ impl Statement {
         match self {
             Statement::Multiple(statements) => Some(statements),
             _ => None
+        }
+    }
+
+    pub fn join_clause(&self) -> Option<&JoinClause> {
+        match self {
+            Statement::Select(select) => select.join.as_ref(),
+            Statement::Aggregate(aggregate) => aggregate.join.as_ref(),
+            Statement::CreateTable(_) => None,
+            Statement::Multiple(_) => None
         }
     }
 }

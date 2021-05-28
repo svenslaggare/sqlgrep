@@ -1,0 +1,3 @@
+hostname: test.se, min: 424
+hostname: test2.com, min: 1313
+hostname: test2.com, min: 1331

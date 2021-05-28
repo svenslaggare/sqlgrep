@@ -385,7 +385,8 @@ fn test_group_by_and_count() {
         filename: None,
         filter: None,
         group_by: Some(vec!["x".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -452,7 +453,8 @@ fn test_group_by_and_count2() {
         filename: None,
         filter: None,
         group_by: Some(vec!["x".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -501,7 +503,8 @@ fn test_group_by_and_count3() {
         filename: None,
         filter: None,
         group_by: Some(vec!["x".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -560,7 +563,8 @@ fn test_group_by_and_count_and_filter() {
             }
         ),
         group_by: Some(vec!["x".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -608,7 +612,8 @@ fn test_group_by_and_max() {
         filename: None,
         filter: None,
         group_by: Some(vec!["name".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     for i in 1..6 {
@@ -664,7 +669,8 @@ fn test_group_by_and_min() {
         filename: None,
         filter: None,
         group_by: Some(vec!["name".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     for i in 1..6 {
@@ -721,7 +727,8 @@ fn test_group_by_and_count_and_max() {
         filename: None,
         filter: None,
         group_by: Some(vec!["name".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     for i in 1..6 {
@@ -779,7 +786,8 @@ fn test_group_by_and_average() {
         filename: None,
         filter: None,
         group_by: Some(vec!["name".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     for i in 1..6 {
@@ -835,7 +843,8 @@ fn test_group_by_and_sum() {
         filename: None,
         filter: None,
         group_by: Some(vec!["name".to_string()]),
-        having: None
+        having: None,
+        join: None
     };
 
     for i in 1..6 {
@@ -890,7 +899,8 @@ fn test_count() {
         filename: None,
         filter: None,
         group_by: None,
-        having: None
+        having: None,
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -941,7 +951,8 @@ fn test_group_by_and_count_and_having1() {
                 left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("x".to_owned())))),
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
-        )
+        ),
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1005,7 +1016,8 @@ fn test_group_by_and_count_and_having2() {
                 left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("x".to_owned())))),
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
-        )
+        ),
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1069,7 +1081,8 @@ fn test_group_by_and_count_and_having3() {
                 left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count(None)))),
                 right: Box::new(ExpressionTree::Value(Value::Int(1)))
             }
-        )
+        ),
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1166,7 +1179,8 @@ fn test_group_by_and_count_and_having4() {
                     right: Box::new(ExpressionTree::Value(Value::Int(1000)))
                 })
             }
-        )
+        ),
+        join: None
     };
 
     let column_values = vec![Value::Int(1000)];

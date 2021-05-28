@@ -37,6 +37,11 @@ impl<'a> SelectExecutionEngine<'a>  {
                     column_names.push(column.name.clone());
                     result_columns.push(expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess(column.name.clone()))?);
                 }
+
+                // for name in row.keys() {
+                //     column_names.push(name.clone());
+                //     result_columns.push(expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess(name))?);
+                // }
             } else {
                 column_names = select_statement.projections.iter().map(|projection| projection.0.clone()).collect();
 
@@ -76,6 +81,7 @@ fn test_project1() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
+            join: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -117,6 +123,7 @@ fn test_project2() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
+            join: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -162,6 +169,7 @@ fn test_project3() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
+            join: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -205,6 +213,7 @@ fn test_project4() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
+            join: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -247,6 +256,7 @@ fn test_filter1() {
                     operator: CompareOperator::GreaterThan
                 }
             ),
+            join: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -282,6 +292,7 @@ fn test_filter2() {
                     operator: CompareOperator::GreaterThan
                 }
             ),
+            join: None
         },
         HashMapColumnProvider::new(columns)
     );

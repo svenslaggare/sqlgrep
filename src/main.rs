@@ -21,7 +21,6 @@ use std::fs::File;
 #[structopt(name="sqlgrep", about="sqlgrep")]
 struct CommandLineInput {
     #[structopt(name="input_filename", help="The input file")]
-    // input_file: Option<String>,
     input_file: Vec<String>,
     #[structopt(short, long("data-file"), help="The data definition file")]
     data_definition_file: Option<String>,

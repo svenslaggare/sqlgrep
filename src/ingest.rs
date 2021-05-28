@@ -3,11 +3,12 @@ use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::iter::FromIterator;
+use std::collections::HashMap;
 
 use crate::data_model::{ColumnDefinition, TableDefinition, Tables};
 use crate::execution::{ExecutionResult, ResultRow};
-use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
+use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine, JoinedTableData};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, JoinClause};
 use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct ExecutionStatistics {
@@ -84,13 +85,15 @@ impl<'a> FileIngester<'a> {
             config.result = false;
         }
 
+        let joined_table_data = self.get_joined_data(statement.join_clause());
+
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
                 if let Ok(line) = line {
                     self.statistics.total_lines += 1;
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
-                    let (result, _) = self.execution_engine.execute(&statement, line, &config);
+                    let (result, _) = self.execution_engine.execute(&statement, line, &config, joined_table_data.as_ref());
                     if let Some(result_row) = result? {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -111,7 +114,7 @@ impl<'a> FileIngester<'a> {
             config.result = true;
             config.update = false;
 
-            let (result, _) = self.execution_engine.execute(&statement, String::new(), &config);
+            let (result, _) = self.execution_engine.execute(&statement, String::new(), &config, joined_table_data.as_ref());
             if self.print_result {
                 if let Some(result_row) = result? {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -121,6 +124,47 @@ impl<'a> FileIngester<'a> {
         }
 
         Ok(())
+    }
+
+    fn get_joined_data(&mut self, join: Option<&JoinClause>) -> Option<JoinedTableData> {
+        if let Some(join) = join {
+            let join_statement = Statement::Select(SelectStatement {
+                projections: vec![("wildcard".to_owned(), ExpressionTree::Wildcard)],
+                from: join.joined_table.clone(),
+                filename: None,
+                filter: None,
+                join: None
+            });
+
+            let joined_table = self.execution_engine.get_table(&join.joined_table).unwrap().clone();
+            let join_on_column_index = joined_table.index_for(&join.joined_column).unwrap();
+            let mut joined_table_data = JoinedTableData::new(
+                joined_table,
+                join_on_column_index,
+                HashMap::new()
+            );
+
+            let config = ExecutionConfig::default();
+
+            for line in BufReader::new(File::open(&join.joined_filename).unwrap()).lines() {
+                let line = line.unwrap();
+                let (result, _) = self.execution_engine.execute(&join_statement, line.clone(), &config, None);
+
+                if let Ok(Some(result)) = result {
+                    for row in result.data {
+                        let join_on_value = row.columns[join_on_column_index].clone();
+                        joined_table_data.rows
+                            .entry(join_on_value.clone())
+                            .or_insert_with(|| Vec::new())
+                            .push(row);
+                    }
+                }
+            }
+
+            Some(joined_table_data)
+        } else {
+            None
+        }
     }
 }
 
@@ -177,7 +221,7 @@ impl<'a> FollowFileIngester<'a> {
             let mut input_line = String::new();
             std::mem::swap(&mut input_line, &mut line);
 
-            let (result, refresh) = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default());
+            let (result, refresh) = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default(), None);
             if let Some(result_row) = result? {
                 if refresh {
                     print!("\x1B[2J\x1B[1;1H");
@@ -288,7 +332,8 @@ fn test_file_ingest1() {
             left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
-        })
+        }),
+        join: None
     }));
 
     if let Err(err) = result {
@@ -341,7 +386,8 @@ fn test_file_ingest2() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         group_by: Some(vec!["hour".to_owned()]),
-        having: None
+        having: None,
+        join: None
     }));
 
     if let Err(err) = result {
@@ -393,7 +439,8 @@ fn test_file_ingest3() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         group_by: None,
-        having: None
+        having: None,
+        join: None
     }));
 
     if let Err(err) = result {
@@ -442,7 +489,8 @@ fn test_file_ingest4() {
         filename: None,
         filter: None,
         group_by: Some(vec!["hostname".to_owned()]),
-        having: None
+        having: None,
+        join: None
     }));
 
     if let Err(err) = result {
@@ -496,7 +544,8 @@ fn test_file_ingest5() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         group_by: Some(vec!["hostname".to_owned(), "hour".to_owned()]),
-        having: None
+        having: None,
+        join: None
     }));
 
     if let Err(err) = result {
@@ -557,7 +606,8 @@ fn test_file_ingest6() {
                     right: Box::new(ExpressionTree::Value(Value::Int(30)))
                 })
             }
-        )
+        ),
+        join: None
     }));
 
     if let Err(err) = result {

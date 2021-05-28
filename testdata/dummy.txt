@@ -1,0 +1,13 @@
+CREATE TABLE dummy1(
+    line = 'hostname: (.*), min: (\\d+)',
+
+    line[1] => hostname TEXT,
+    line[2] => min INT
+);
+
+CREATE TABLE dummy2(
+    line = 'hostname: (.*), max: (\\d+)',
+
+    line[1] => hostname TEXT,
+    line[2] => max INT
+);

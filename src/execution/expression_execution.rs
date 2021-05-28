@@ -304,6 +304,10 @@ impl ColumnProvider for TestColumnProvider {
     fn get(&self, name: &str) -> Option<&Value> {
         self.columns.get(name)
     }
+
+    fn keys(&self) -> Vec<String> {
+        self.columns.keys().cloned().collect()
+    }
 }
 
 #[test]

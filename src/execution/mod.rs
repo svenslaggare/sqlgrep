@@ -11,6 +11,7 @@ use crate::model::Value;
 
 pub trait ColumnProvider {
     fn get(&self, name: &str) -> Option<&Value>;
+    fn keys(&self) -> Vec<String>;
 }
 
 pub struct HashMapColumnProvider<'a> {
@@ -29,6 +30,10 @@ impl<'a> ColumnProvider for HashMapColumnProvider<'a> {
     fn get(&self, name: &str) -> Option<&Value> {
         self.columns.get(name).map(|x| *x)
     }
+
+    fn keys(&self) -> Vec<String> {
+        self.columns.keys().map(|key| (*key).to_owned()).collect::<Vec<_>>()
+    }
 }
 
 pub struct HashMapOwnedKeyColumnProvider<'a> {
@@ -46,6 +51,10 @@ impl<'a> HashMapOwnedKeyColumnProvider<'a> {
 impl<'a> ColumnProvider for HashMapOwnedKeyColumnProvider<'a> {
     fn get(&self, name: &str) -> Option<&Value> {
         self.columns.get(name).map(|x| *x)
+    }
+
+    fn keys(&self) -> Vec<String> {
+        self.columns.keys().map(|key| key.clone()).collect::<Vec<_>>()
     }
 }
 
@@ -89,6 +98,7 @@ impl std::fmt::Display for ExecutionError {
 
 pub type ExecutionResult<T> = Result<T, ExecutionError>;
 
+#[derive(Debug)]
 pub struct ResultRow {
     pub data: Vec<Row>,
     pub columns: Vec<String>
