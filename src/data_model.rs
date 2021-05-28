@@ -53,7 +53,7 @@ impl TableDefinition {
 
         let fully_qualified_column_names = columns
             .iter()
-            .map(|column| format!("{}_{}", name, column.name))
+            .map(|column| format!("{}.{}", name, column.name))
             .collect::<Vec<_>>();
 
         Some(

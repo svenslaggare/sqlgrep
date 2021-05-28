@@ -102,6 +102,7 @@ pub enum ParserError {
     ExpectedRightArrow,
     ExpectedSemiColon,
     ExpectedNull,
+    ExpectedColumnAccess,
     NotDefinedBinaryOperator(Operator),
     NotDefinedUnaryOperator(Operator),
     NotDefinedType(String),
@@ -138,6 +139,7 @@ impl std::fmt::Display for ParserError {
             ParserError::ExpectedRightArrow => { write!(f, "Expected '=>'") }
             ParserError::ExpectedSemiColon => { write!(f, "Expected ';'") }
             ParserError::ExpectedNull => { write!(f, "Expected NULL") }
+            ParserError::ExpectedColumnAccess => { write!(f, "Expected column access") }
             ParserError::NotDefinedBinaryOperator(operator) => { write!(f, "'{}' is not a valid binary operator", operator) }
             ParserError::NotDefinedUnaryOperator(operator) => { write!(f, "'{}' is not a valid unary operator", operator) }
             ParserError::NotDefinedType(value_type) => { write!(f, "'{}' is not a valid type", value_type) }
@@ -401,6 +403,7 @@ impl BinaryOperators {
     pub fn new() -> BinaryOperators {
         let mut operators = HashMap::new();
 
+        operators.insert(Operator::Single('.'), BinaryOperator::new(6));
         operators.insert(Operator::Single('^'), BinaryOperator::new(5));
         operators.insert(Operator::Single('*'), BinaryOperator::new(5));
         operators.insert(Operator::Single('/'), BinaryOperator::new(5));
@@ -854,6 +857,16 @@ impl<'a> Parser<'a> {
             }
 
             match op {
+                Token::Operator(Operator::Single('.')) => {
+                    match (lhs, rhs) {
+                        (ParseExpressionTree::ColumnAccess(left), ParseExpressionTree::ColumnAccess(right)) => {
+                            lhs = ParseExpressionTree::ColumnAccess(format!("{}.{}", left, right));
+                        }
+                        _ => {
+                            return Err(ParserError::ExpectedColumnAccess);
+                        }
+                    }
+                }
                 Token::Operator(op) => {
                     lhs = ParseExpressionTree::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) };
                 }
@@ -1595,6 +1608,29 @@ fn test_parse_expression8() {
             left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
             right: Box::new(ParseExpressionTree::Value(Value::Null))
         },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_expression9() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Identifier("a".to_string()),
+            Token::Operator(Operator::Single('.')),
+            Token::Identifier("b".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::ColumnAccess("a.b".to_owned()),
         tree
     );
 }
