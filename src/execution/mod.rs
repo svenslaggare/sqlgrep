@@ -65,7 +65,8 @@ pub enum ExecutionError {
     ColumnNotFound(String),
     GroupKeyNotAvailable(Option<String>),
     ExpectedNumericValue,
-    NotSupportedOperation
+    NotSupportedOperation,
+    JoinNotSupported
 }
 
 impl From<EvaluationError> for ExecutionError {
@@ -92,6 +93,7 @@ impl std::fmt::Display for ExecutionError {
             }
             ExecutionError::ExpectedNumericValue => { write!(f, "Expected a numeric value") }
             ExecutionError::NotSupportedOperation => { write!(f, "Not a supported operation") }
+            ExecutionError::JoinNotSupported => { write!(f, "Join clause not supported") }
         }
     }
 }

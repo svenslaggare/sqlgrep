@@ -862,9 +862,7 @@ impl<'a> Parser<'a> {
                         (ParseExpressionTree::ColumnAccess(left), ParseExpressionTree::ColumnAccess(right)) => {
                             lhs = ParseExpressionTree::ColumnAccess(format!("{}.{}", left, right));
                         }
-                        _ => {
-                            return Err(ParserError::ExpectedColumnAccess);
-                        }
+                        _ => { return Err(ParserError::ExpectedColumnAccess); }
                     }
                 }
                 Token::Operator(op) => {

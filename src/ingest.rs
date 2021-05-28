@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 use std::collections::HashMap;
 
 use crate::data_model::{ColumnDefinition, TableDefinition, Tables};
-use crate::execution::{ExecutionResult, ResultRow};
+use crate::execution::{ExecutionResult, ResultRow, ExecutionError};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine, JoinedTableData};
 use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, JoinClause};
 use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
@@ -202,6 +202,10 @@ impl<'a> FollowFileIngester<'a> {
     pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
         let mut reader = self.reader.take().unwrap();
         let mut line = String::new();
+
+        if statement.join_clause().is_some() {
+            return Err(ExecutionError::JoinNotSupported);
+        }
 
         loop {
             if let Err(_) = reader.read_line(&mut line) {
