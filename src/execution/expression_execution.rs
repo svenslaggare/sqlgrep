@@ -285,13 +285,15 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 }
 
 struct TestColumnProvider {
-    columns: HashMap<String, Value>
+    columns: HashMap<String, Value>,
+    keys: Vec<String>
 }
 
 impl TestColumnProvider {
     fn new() -> TestColumnProvider {
         TestColumnProvider {
-            columns: HashMap::new()
+            columns: HashMap::new(),
+            keys: Vec::new()
         }
     }
 
@@ -305,8 +307,12 @@ impl ColumnProvider for TestColumnProvider {
         self.columns.get(name)
     }
 
-    fn keys(&self) -> Vec<String> {
-        self.columns.keys().cloned().collect()
+    fn add_key(&mut self, key: &str) {
+        self.keys.push(key.to_owned());
+    }
+
+    fn keys(&self) -> &Vec<String> {
+        &self.keys
     }
 }
 

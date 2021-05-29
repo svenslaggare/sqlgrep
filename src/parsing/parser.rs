@@ -119,7 +119,7 @@ impl std::fmt::Display for ParserError {
             ParserError::FloatConvertError => { write!(f, "Failed to parse float") }
             ParserError::AlreadyHasDot => { write!(f, "The number already has a dot") }
             ParserError::ExpectedKeyword(keyword) => { write!(f, "Expected {} keyword", keyword) }
-            ParserError::ExpectedAnyKeyword(keywords) => { write!(f, "Expected {} keywords", keywords.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(" or ")) }
+            ParserError::ExpectedAnyKeyword(keywords) => { write!(f, "Expected {} keyword", keywords.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(" or ")) }
             ParserError::ExpectedLeftParentheses => { write!(f, "Expected '('") }
             ParserError::ExpectedRightParentheses => { write!(f, "Expected ')'") }
             ParserError::ExpectedLeftSquareParentheses => { write!(f, "Expected '['") }

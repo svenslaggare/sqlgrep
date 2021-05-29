@@ -5,24 +5,44 @@ pub mod execution_engine;
 
 use std::collections::HashMap;
 
-use crate::data_model::Row;
+use crate::data_model::{Row, TableDefinition};
 use crate::execution::expression_execution::EvaluationError;
 use crate::model::Value;
 
 pub trait ColumnProvider {
     fn get(&self, name: &str) -> Option<&Value>;
-    fn keys(&self) -> Vec<String>;
+    fn add_key(&mut self, key: &str);
+    fn keys(&self) -> &Vec<String>;
+
+    fn add_keys_for_table(&mut self, table: &TableDefinition) {
+        for column in &table.columns {
+            self.add_key(&column.name);
+        }
+    }
 }
 
 pub struct HashMapColumnProvider<'a> {
-    columns: HashMap<&'a str, &'a Value>
+    columns: HashMap<&'a str, &'a Value>,
+    keys: Vec<String>
 }
 
 impl<'a> HashMapColumnProvider<'a> {
     pub fn new(columns: HashMap<&'a str, &'a Value>) -> HashMapColumnProvider<'a> {
         HashMapColumnProvider {
-            columns
+            columns,
+            keys: Vec::new()
         }
+    }
+
+    pub fn with_table_keys(columns: HashMap<&'a str, &'a Value>,
+                           table: &TableDefinition) -> HashMapColumnProvider<'a> {
+        let mut provider = HashMapColumnProvider {
+            columns,
+            keys: Vec::new()
+        };
+
+        provider.add_keys_for_table(table);
+        provider
     }
 }
 
@@ -31,19 +51,25 @@ impl<'a> ColumnProvider for HashMapColumnProvider<'a> {
         self.columns.get(name).map(|x| *x)
     }
 
-    fn keys(&self) -> Vec<String> {
-        self.columns.keys().map(|key| (*key).to_owned()).collect::<Vec<_>>()
+    fn add_key(&mut self, key: &str) {
+        self.keys.push(key.to_owned());
+    }
+
+    fn keys(&self) -> &Vec<String> {
+        &self.keys
     }
 }
 
 pub struct HashMapOwnedKeyColumnProvider<'a> {
-    columns: HashMap<String, &'a Value>
+    columns: HashMap<String, &'a Value>,
+    keys: Vec<String>
 }
 
 impl<'a> HashMapOwnedKeyColumnProvider<'a> {
     pub fn new(columns: HashMap<String, &'a Value>) -> HashMapOwnedKeyColumnProvider<'a> {
         HashMapOwnedKeyColumnProvider {
-            columns
+            columns,
+            keys: Vec::new()
         }
     }
 }
@@ -53,8 +79,12 @@ impl<'a> ColumnProvider for HashMapOwnedKeyColumnProvider<'a> {
         self.columns.get(name).map(|x| *x)
     }
 
-    fn keys(&self) -> Vec<String> {
-        self.columns.keys().map(|key| key.clone()).collect::<Vec<_>>()
+    fn add_key(&mut self, key: &str) {
+        self.keys.push(key.to_owned());
+    }
+
+    fn keys(&self) -> &Vec<String> {
+        &self.keys
     }
 }
 

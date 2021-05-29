@@ -5,14 +5,14 @@ use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapC
 use crate::execution::expression_execution::ExpressionExecutionEngine;
 use crate::model::{ArithmeticOperator, CompareOperator, ExpressionTree, SelectStatement, Value, ValueType};
 
-pub struct SelectExecutionEngine<'a>{
-    tables: &'a Tables
+pub struct SelectExecutionEngine {
+
 }
 
-impl<'a> SelectExecutionEngine<'a>  {
-    pub fn new(tables: &'a Tables) -> SelectExecutionEngine<'a> {
+impl SelectExecutionEngine  {
+    pub fn new() -> SelectExecutionEngine {
         SelectExecutionEngine {
-            tables
+
         }
     }
 
@@ -30,18 +30,10 @@ impl<'a> SelectExecutionEngine<'a>  {
             let mut result_columns = Vec::new();
 
             if select_statement.is_wildcard_projection() {
-                let table_definition = self.tables.get(&select_statement.from)
-                    .ok_or_else(|| ExecutionError::TableNotFound(select_statement.from.clone()))?;
-
-                for column in &table_definition.columns {
-                    column_names.push(column.name.clone());
-                    result_columns.push(expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess(column.name.clone()))?);
+                for name in row.keys() {
+                    column_names.push(name.clone());
+                    result_columns.push(expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess(name.clone()))?);
                 }
-
-                // for name in row.keys() {
-                //     column_names.push(name.clone());
-                //     result_columns.push(expression_execution_engine.evaluate(&ExpressionTree::ColumnAccess(name))?);
-                // }
             } else {
                 column_names = select_statement.projections.iter().map(|projection| projection.0.clone()).collect();
 
@@ -66,7 +58,7 @@ impl<'a> SelectExecutionEngine<'a>  {
 fn test_project1() {
     let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
     let tables = Tables::with_tables(vec![table_definition]);
-    let select_execution_engine = SelectExecutionEngine::new(&tables);
+    let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
         Value::Int(1337)
@@ -99,7 +91,7 @@ fn test_project1() {
 fn test_project2() {
     let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
     let tables = Tables::with_tables(vec![table_definition]);
-    let select_execution_engine = SelectExecutionEngine::new(&tables);
+    let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
         Value::Int(1000)
@@ -141,7 +133,7 @@ fn test_project2() {
 fn test_project3() {
     let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
     let tables = Tables::with_tables(vec![table_definition]);
-    let select_execution_engine = SelectExecutionEngine::new(&tables);
+    let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
         Value::Int(1000)
@@ -196,7 +188,7 @@ fn test_project4() {
     ).unwrap();
 
     let tables = Tables::with_tables(vec![table_definition]);
-    let select_execution_engine = SelectExecutionEngine::new(&tables);
+    let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
         Value::Int(1000),
@@ -215,7 +207,7 @@ fn test_project4() {
             filter: None,
             join: None
         },
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::with_table_keys(columns, tables.get("test").unwrap())
     );
 
     assert!(result.is_ok());
@@ -235,7 +227,7 @@ fn test_project4() {
 fn test_filter1() {
     let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
     let tables = Tables::with_tables(vec![table_definition]);
-    let select_execution_engine = SelectExecutionEngine::new(&tables);
+    let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
         Value::Int(1337)
@@ -271,7 +263,7 @@ fn test_filter1() {
 fn test_filter2() {
     let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
     let tables = Tables::with_tables(vec![table_definition]);
-    let select_execution_engine = SelectExecutionEngine::new(&tables);
+    let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
         Value::Int(1337)

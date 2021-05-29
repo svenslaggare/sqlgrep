@@ -6,7 +6,7 @@ use std::fs::File;
 use fnv::FnvHasher;
 
 use crate::data_model::{Row, TableDefinition, Tables};
-use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow, ColumnProvider};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::select_execution::SelectExecutionEngine;
 use crate::model::{AggregateStatement, SelectStatement, Statement, Value, JoinClause, ExpressionTree};
@@ -74,7 +74,7 @@ impl<'a> ExecutionEngine<'a> {
                           line: String,
                           joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
         let table_definition = self.get_table(&select_statement.from)?;
-        let select_execution_engine = SelectExecutionEngine::new(&self.tables);
+        let select_execution_engine = SelectExecutionEngine::new();
         let row = table_definition.extract(&line);
 
         if row.any_result() {
@@ -86,17 +86,18 @@ impl<'a> ExecutionEngine<'a> {
                 if let Some(joined_rows) = joined_table_data.rows.get(joiner_on_value) {
                     let mut result_row = None;
                     for joined_row in joined_rows {
-                        let mut columns_mapping = self.create_columns_mapping(&table_definition, &row, &line_value);
+                        let mut columns_mapping = self.create_columns_mapping(table_definition, &row, &line_value);
 
                         for (index, value) in joined_row.columns.iter().enumerate() {
                             columns_mapping.insert(&joined_table_data.table.fully_qualified_column_names[index], value);
                         }
 
-                        let result = select_execution_engine.execute(
-                            select_statement,
-                            HashMapColumnProvider::new(columns_mapping)
-                        )?;
+                        let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
+                        for column in &joined_table_data.table.fully_qualified_column_names {
+                            column_provider.add_key(column);
+                        }
 
+                        let result = select_execution_engine.execute(select_statement, column_provider)?;
                         if let Some(result) = result {
                             match &mut result_row {
                                 None => {
@@ -116,7 +117,10 @@ impl<'a> ExecutionEngine<'a> {
             } else {
                 select_execution_engine.execute(
                     select_statement,
-                    HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
+                    HashMapColumnProvider::with_table_keys(
+                        self.create_columns_mapping(&table_definition, &row, &line_value),
+                        table_definition
+                    )
                 )
             }
         } else {
@@ -151,7 +155,7 @@ impl<'a> ExecutionEngine<'a> {
 
                         let result = self.aggregate_execution_engine.execute(
                             aggregate_statement,
-                            HashMapColumnProvider::new(columns_mapping)
+                            HashMapColumnProvider::with_table_keys(columns_mapping, table_definition)
                         )?;
 
                         if let Some(result) = result {
@@ -173,7 +177,10 @@ impl<'a> ExecutionEngine<'a> {
             } else {
                 self.aggregate_execution_engine.execute(
                     aggregate_statement,
-                    HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
+                    HashMapColumnProvider::with_table_keys(
+                        self.create_columns_mapping(&table_definition, &row, &line_value),
+                        table_definition
+                    )
                 )
             }
         } else {
@@ -208,7 +215,7 @@ impl<'a> ExecutionEngine<'a> {
 
                         self.aggregate_execution_engine.execute_update(
                             aggregate_statement,
-                            HashMapColumnProvider::new(columns_mapping)
+                            HashMapColumnProvider::with_table_keys(columns_mapping, table_definition)
                         )?;
                     }
                 } else {
@@ -217,7 +224,10 @@ impl<'a> ExecutionEngine<'a> {
             } else {
                 self.aggregate_execution_engine.execute_update(
                     aggregate_statement,
-                    HashMapColumnProvider::new(self.create_columns_mapping(&table_definition, &row, &line_value))
+                    HashMapColumnProvider::with_table_keys(
+                        self.create_columns_mapping(&table_definition, &row, &line_value),
+                        table_definition
+                    )
                 )?;
             }
 
@@ -310,7 +320,7 @@ pub struct JoinedTableData{
 
 impl JoinedTableData {
     pub fn new(table: TableDefinition,
-               join_on_column_index: usize,) -> JoinedTableData {
+               join_on_column_index: usize) -> JoinedTableData {
         JoinedTableData {
             table,
             join_on_column_index,
