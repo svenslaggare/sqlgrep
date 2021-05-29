@@ -268,11 +268,10 @@ impl<'a> ExecutionEngine<'a> {
 
                 if let Ok(Some(result)) = result {
                     for row in result.data {
-                        let join_on_value = row.columns[join_on_column_index].clone();
-                        joined_table_data.rows
-                            .entry(join_on_value.clone())
-                            .or_insert_with(|| Vec::new())
-                            .push(row);
+                        joined_table_data.add_row(
+                            row.columns[join_on_column_index].clone(),
+                            row
+                        );
                     }
                 }
             }
@@ -326,6 +325,13 @@ impl JoinedTableData {
             join_on_column_index,
             rows: HashMap::new()
         }
+    }
+
+    pub fn add_row(&mut self, join_on_value: Value, row: Row) {
+        self.rows
+            .entry(join_on_value)
+            .or_insert_with(|| Vec::new())
+            .push(row);
     }
 
     pub fn get_joined_row(&self,
