@@ -52,6 +52,7 @@ Supported features:
 * Group by
 * Aggregates
 * Having
+* Inner, outer joins. The joined table is loaded completely in memory.
 
 Supported aggregates:
 * Count

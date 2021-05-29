@@ -26,6 +26,7 @@ pub enum Keyword {
     IsNot,
     Having,
     Inner,
+    Outer,
     Join,
     On,
 }
@@ -198,7 +199,8 @@ pub struct ParseJoinClause {
     pub left_table: String,
     pub left_column: String,
     pub right_table: String,
-    pub right_column: String
+    pub right_column: String,
+    pub is_outer: bool
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -238,6 +240,7 @@ lazy_static! {
             ("is".to_owned(), Keyword::Is),
             ("having".to_owned(), Keyword::Having),
             ("inner".to_owned(), Keyword::Inner),
+            ("outer".to_owned(), Keyword::Outer),
             ("join".to_owned(), Keyword::Join),
             ("on".to_owned(), Keyword::On),
         ].into_iter()
@@ -547,7 +550,10 @@ impl<'a> Parser<'a> {
                         filter = Some(self.parse_expression_internal()?);
                     }
                     Token::Keyword(Keyword::Inner) => {
-                        join = Some(self.parse_inner_join()?);
+                        join = Some(self.parse_join(false)?);
+                    }
+                    Token::Keyword(Keyword::Outer) => {
+                        join = Some(self.parse_join(true)?);
                     }
                     Token::Keyword(Keyword::Group) => {
                         self.next()?;
@@ -595,7 +601,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_inner_join(&mut self) -> ParserResult<ParseJoinClause> {
+    fn parse_join(&mut self, is_outer: bool) -> ParserResult<ParseJoinClause> {
         self.next()?;
 
         self.expect_and_consume_token(
@@ -637,7 +643,8 @@ impl<'a> Parser<'a> {
                 left_table,
                 left_column,
                 right_table,
-                right_column
+                right_column,
+                is_outer
             }
         )
     }
@@ -2064,7 +2071,74 @@ fn test_parse_inner_join1() {
                     left_table: "table2".to_string(),
                     left_column: "x".to_string(),
                     right_table: "table1".to_string(),
-                    right_column: "y".to_string()
+                    right_column: "y".to_string(),
+                    is_outer: false
+                }
+            ),
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_outer_join1() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Keyword(Keyword::Where),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('>')),
+            Token::Int(4),
+            Token::Keyword(Keyword::Outer),
+            Token::Keyword(Keyword::Join),
+            Token::Identifier("table1".to_string()),
+            Token::Colon,
+            Token::Colon,
+            Token::String("file.log".to_string()),
+            Token::Keyword(Keyword::On),
+            Token::Identifier("table2".to_string()),
+            Token::Operator(Operator::Single('.')),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::Identifier("table1".to_string()),
+            Token::Operator(Operator::Single('.')),
+            Token::Identifier("y".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::Select {
+            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('>'),
+                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+                }
+            ),
+            group_by: None,
+            having: None,
+            join: Some(
+                ParseJoinClause {
+                    joiner_table: "table1".to_string(),
+                    joiner_filename: "file.log".to_string(),
+                    left_table: "table2".to_string(),
+                    left_column: "x".to_string(),
+                    right_table: "table1".to_string(),
+                    right_column: "y".to_string(),
+                    is_outer: true
                 }
             ),
         },

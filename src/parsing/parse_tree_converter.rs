@@ -162,7 +162,8 @@ fn transform_join(from: &(String, Option<String>), join: Option<ParseJoinClause>
                             joined_table: join.joiner_table,
                             joined_filename: join.joiner_filename,
                             joined_column: join.right_column,
-                            joiner_column: join.left_column
+                            joiner_column: join.left_column,
+                            is_outer: join.is_outer
                         }
                     )
                 )
@@ -177,7 +178,8 @@ fn transform_join(from: &(String, Option<String>), join: Option<ParseJoinClause>
                             joined_table: join.joiner_table,
                             joined_filename: join.joiner_filename,
                             joined_column: join.left_column,
-                            joiner_column: join.right_column
+                            joiner_column: join.right_column,
+                            is_outer: join.is_outer
                         }
                     )
                 )
@@ -693,7 +695,8 @@ fn test_select_inner_join1() {
             left_table: "test".to_string(),
             left_column: "x".to_string(),
             right_table: "other".to_string(),
-            right_column: "y".to_string()
+            right_column: "y".to_string(),
+            is_outer: false
         }),
     };
 
@@ -717,7 +720,8 @@ fn test_select_inner_join1() {
             joined_table: "other".to_string(),
             joined_filename: "other.log".to_string(),
             joined_column: "y".to_string(),
-            joiner_column: "x".to_string()
+            joiner_column: "x".to_string(),
+            is_outer: false
         }),
         statement.join
     );
@@ -737,7 +741,8 @@ fn test_select_inner_join2() {
             right_table: "test".to_string(),
             right_column: "x".to_string(),
             left_table: "other".to_string(),
-            left_column: "y".to_string()
+            left_column: "y".to_string(),
+            is_outer: false
         }),
     };
 
@@ -761,7 +766,8 @@ fn test_select_inner_join2() {
             joined_table: "other".to_string(),
             joined_filename: "other.log".to_string(),
             joined_column: "y".to_string(),
-            joiner_column: "x".to_string()
+            joiner_column: "x".to_string(),
+            is_outer: false
         }),
         statement.join
     );

@@ -81,9 +81,10 @@ impl<'a> ExecutionEngine<'a> {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = joined_table_data {
+                let join_clause = select_statement.join.as_ref().unwrap();
                 if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
                                                                             &row,
-                                                                            &select_statement.join.as_ref().unwrap().joiner_column)? {
+                                                                            &join_clause.joiner_column)? {
                     let mut result_row = None;
                     for joined_row in joined_rows {
                         let mut columns_mapping = self.create_columns_mapping(table_definition, &row, &line_value);
@@ -112,7 +113,23 @@ impl<'a> ExecutionEngine<'a> {
 
                     Ok(result_row)
                 } else {
-                    return Ok(None);
+                    if join_clause.is_outer {
+                        let null_value = Value::Null;
+                        let mut columns_mapping = self.create_columns_mapping(table_definition, &row, &line_value);
+
+                        for column in &joined_table_data.fully_qualified_column_names {
+                            columns_mapping.insert(column, &null_value);
+                        }
+
+                        let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
+                        for column in &joined_table_data.fully_qualified_column_names {
+                            column_provider.add_key(column);
+                        }
+
+                        select_execution_engine.execute(select_statement, column_provider)
+                    } else {
+                        return Ok(None);
+                    }
                 }
             } else {
                 select_execution_engine.execute(

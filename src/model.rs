@@ -342,6 +342,7 @@ pub struct JoinClause {
     pub joined_table: String,
     pub joined_filename: String,
     pub joined_column: String,
+    pub is_outer: bool
 }
 
 #[derive(Debug)]
