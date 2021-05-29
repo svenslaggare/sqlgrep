@@ -1,5 +1,5 @@
 use std::hash::{Hasher, Hash};
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeSet};
 
 use regex::Regex;
 
@@ -7,6 +7,7 @@ use fnv::FnvHasher;
 
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate};
 use crate::execution::ColumnProvider;
+use std::iter::FromIterator;
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
@@ -111,6 +112,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         )
                     },
                     |_, _| None,
+                    |_, _| None,
                     |_, _| None
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
@@ -138,6 +140,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         }
                     },
                     |_| None,
+                    |_| None,
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
             ExpressionTree::And { left, right } => {
@@ -163,6 +166,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |x, y| Some(x.max(y)),
                             |x, y| Some(x.max(y)),
                             |_, _| None,
+                            |_, _| None,
                             |_, _| None
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
@@ -176,6 +180,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |x, y| Some(x.min(y)),
                             |x, y| Some(x.min(y)),
                             |_, _| None,
+                            |_, _| None,
                             |_, _| None
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
@@ -187,6 +192,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |x| Some(x.abs()),
                             |x| Some(x.abs()),
                             |_| None,
+                            |_| None,
                             |_| None
                         ).ok_or(EvaluationError::UndefinedOperation)
                     }
@@ -197,6 +203,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             || Some(Value::Null),
                             |_| None,
                             |x| Some(x.sqrt()),
+                            |_| None,
                             |_| None,
                             |_| None
                         ).ok_or(EvaluationError::UndefinedOperation)
@@ -216,6 +223,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                                 }
                             },
                             |x, y| Some(x.powf(y)),
+                            |_, _| None,
                             |_, _| None,
                             |_, _| None
                         ).ok_or(EvaluationError::UndefinedOperation)
@@ -257,6 +265,17 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             _ => Err(EvaluationError::UndefinedOperation)
                         }
                     }
+                    Function::ArrayUnique if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        match arg {
+                            Value::Array(element, mut values) => {
+                                unique_values(&mut values);
+                                Ok(Value::Array(element, values))
+                            },
+                            _ => Err(EvaluationError::UndefinedOperation)
+                        }
+                    }
                     _ => Err(EvaluationError::UndefinedFunction)
                 }
             }
@@ -282,6 +301,11 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
             }
         }
     }
+}
+
+pub fn unique_values(values: &mut Vec<Value>) {
+    let unique_values = std::mem::take(values);
+    *values = Vec::from_iter(BTreeSet::from_iter(unique_values.into_iter()).into_iter());
 }
 
 struct TestColumnProvider {

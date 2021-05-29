@@ -60,6 +60,7 @@ Supported aggregates:
 * Max
 * Sum
 * Avg
+* Array_agg (and own variant: array_agg_unique)
 
 Supported functions:
 * least

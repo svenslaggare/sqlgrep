@@ -95,13 +95,15 @@ impl<'a> ColumnProvider for HashMapOwnedKeyColumnProvider<'a> {
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError {
     Expression(EvaluationError),
+    InternalError,
     TableNotFound(String),
     ColumnNotFound(String),
     GroupKeyNotAvailable(Option<String>),
     ExpectedNumericValue,
     NotSupportedOperation,
     JoinNotSupported,
-    FailOpenFile(String)
+    FailOpenFile(String),
+    CannotCreateArrayOfNullType
 }
 
 impl From<EvaluationError> for ExecutionError {
@@ -114,6 +116,7 @@ impl std::fmt::Display for ExecutionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExecutionError::Expression(expression) => { write!(f, "{}", expression) }
+            ExecutionError::InternalError => { write!(f, "Internal error") }
             ExecutionError::TableNotFound(name) => { write!(f, "Table '{}' not found", name) }
             ExecutionError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name) }
             ExecutionError::GroupKeyNotAvailable(name) => {
@@ -130,6 +133,7 @@ impl std::fmt::Display for ExecutionError {
             ExecutionError::NotSupportedOperation => { write!(f, "Not a supported operation") }
             ExecutionError::JoinNotSupported => { write!(f, "Join clause not supported") },
             ExecutionError::FailOpenFile(err) => { write!(f, "Failed open file due to: {}", err) },
+            ExecutionError::CannotCreateArrayOfNullType => { write!(f, "Cannot create array of null type") },
         }
     }
 }

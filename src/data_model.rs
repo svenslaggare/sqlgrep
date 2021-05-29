@@ -79,7 +79,8 @@ impl TableDefinition {
                     |_| {},
                     |_| {},
                     |_| {},
-                    |x| *x = x.trim().to_owned()
+                    |x| *x = x.trim().to_owned(),
+                    |_| {}
                 )
             }
 
@@ -212,12 +213,7 @@ impl ColumnParsing {
                             .map(|value| column.column_type.parse(value).unwrap_or(Value::Null))
                             .unwrap_or(Value::Null)
                     } else {
-                        match column.column_type {
-                            ValueType::Int => value.as_i64().map(|value| Value::Int(value)),
-                            ValueType::Float => value.as_f64().map(|value| Value::Float(Float(value))),
-                            ValueType::Bool => value.as_bool().map(|value| Value::Bool(value)),
-                            ValueType::String => value.as_str().map(|value| Value::String(value.to_owned()))
-                        }.unwrap_or(Value::Null)
+                        column.column_type.convert_json(value)
                     }
                 } else {
                     Value::Null

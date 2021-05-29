@@ -5,7 +5,7 @@ use fnv::FnvHasher;
 
 use crate::data_model::Row;
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, HashMapOwnedKeyColumnProvider, ResultRow};
-use crate::execution::expression_execution::ExpressionExecutionEngine;
+use crate::execution::expression_execution::{ExpressionExecutionEngine, unique_values};
 use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTree, Value, ValueType};
 use crate::parsing::parser::Token::Operator;
 
@@ -101,8 +101,9 @@ impl AggregateExecutionEngine {
                     };
 
                     if valid {
-                        self.get_group(group_key.clone(), aggregate_index, Value::Int(0)).modify(
+                        self.get_group(group_key.clone(), aggregate_index, || Ok(Value::Int(0)))?.modify(
                             |group_value| { *group_value += 1; },
+                            |_| {},
                             |_| {},
                             |_| {},
                             |_| {}
@@ -111,22 +112,24 @@ impl AggregateExecutionEngine {
                 }
                 Aggregate::Min(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(group_key.clone(), aggregate_index, column_value.clone());
+                    let group_value = self.get_group(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
                     group_value.modify_same_type(
                         &column_value,
                         |x, y| { *x = (*x).min(y) },
                         |x, y| { *x = (*x).min(y) },
+                        |_, _| {},
                         |_, _| {},
                         |_, _| {}
                     );
                 }
                 Aggregate::Max(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(group_key.clone(), aggregate_index, column_value.clone());
+                    let group_value = self.get_group(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
                     group_value.modify_same_type(
                         &column_value,
                         |x, y| { *x = (*x).max(y) },
                         |x, y| { *x = (*x).max(y) },
+                        |_, _| {},
                         |_, _| {},
                         |_, _| {}
                     );
@@ -135,11 +138,12 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let average_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type);
+                    let average_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type)?;
                     average_entry.0.modify_same_type(
                         &column_value,
                         |x, y| { *x += y },
                         |x, y| { *x += y },
+                        |_, _| {},
                         |_, _| {},
                         |_, _| {}
                     );
@@ -150,29 +154,50 @@ impl AggregateExecutionEngine {
                         |x| Some(x / average_entry.1),
                         |x| Some(x / average_entry.1 as f64),
                         |_| None,
+                        |_| None,
                         |_| None
                     );
 
                     if let Some(average) = average {
-                        *self.get_group(group_key.clone(), aggregate_index, average.clone()) = average.clone();
+                        *self.get_group(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
                     }
                 }
                 Aggregate::Sum(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let sum_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type);
+                    let sum_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type)?;
                     sum_entry.0.modify_same_type(
                         &column_value,
                         |x, y| { *x += y },
                         |x, y| { *x += y },
+                        |_, _| {},
                         |_, _| {},
                         |_, _| {}
                     );
                     sum_entry.1 += 1;
 
                     let sum = sum_entry.0.clone();
-                    *self.get_group(group_key.clone(), aggregate_index, sum.clone()) = sum.clone();
+                    *self.get_group(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                }
+                Aggregate::CollectArray(ref expression, _) => {
+                    let column_value = expression_execution_engine.evaluate(expression)?;
+                    let group_value = self.get_group(
+                        group_key.clone(),
+                        aggregate_index,
+                        || {
+                            let element_type = column_value.value_type().ok_or(ExecutionError::CannotCreateArrayOfNullType)?;
+                            Ok(ValueType::Array(Box::new(element_type)).default_value())
+                        }
+                    )?;
+
+                    group_value.modify(
+                        |_| {},
+                        |_| {},
+                        |_| {},
+                        |_| {},
+                        |array| { array.push(column_value.clone()) }
+                    );
                 }
             }
 
@@ -208,30 +233,34 @@ impl AggregateExecutionEngine {
         Ok(())
     }
 
-    fn get_group(&mut self, group_key: GroupKey, aggregate_index: usize, default_value: Value) -> &mut Value {
+    fn get_group<F: Fn() -> ExecutionResult<Value>>(&mut self, group_key: GroupKey, aggregate_index: usize, default_value_fn: F) -> ExecutionResult<&mut Value> {
         AggregateExecutionEngine::get_generic_group(
             &mut self.groups,
             group_key,
             aggregate_index,
-            default_value
+            default_value_fn
         )
     }
 
-    fn get_summary_group(&mut self, group_key: GroupKey, aggregate_index: usize, value_type: ValueType) -> &mut (Value, i64) {
-        let default_value = value_type.default_value();
+    fn get_summary_group(&mut self, group_key: GroupKey, aggregate_index: usize, value_type: ValueType) -> ExecutionResult<&mut (Value, i64)> {
         AggregateExecutionEngine::get_generic_group(
             &mut self.summary_statistics,
             group_key,
             aggregate_index,
-            (default_value, 0)
+            || Ok((value_type.default_value(), 0))
         )
     }
 
-    fn get_generic_group<T>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
-                            group_key: GroupKey,
-                            aggregate_index: usize,
-                            default_value: T) -> &mut T {
-        groups.entry(group_key).or_insert_with(|| HashMap::new()).entry(aggregate_index).or_insert(default_value)
+    fn get_generic_group<T, F: Fn() -> ExecutionResult<T>>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
+                                                           group_key: GroupKey,
+                                                           aggregate_index: usize,
+                                                           default_value_fn: F) -> ExecutionResult<&mut T> {
+        let group_map = groups.entry(group_key).or_insert_with(|| HashMap::new());
+        if !group_map.contains_key(&aggregate_index) {
+            group_map.insert(aggregate_index, default_value_fn()?);
+        }
+
+        group_map.get_mut(&aggregate_index).ok_or(ExecutionError::InternalError)
     }
 
     pub fn execute_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
@@ -259,6 +288,26 @@ impl AggregateExecutionEngine {
                     for subgroups in self.groups.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_column.push(group_value.clone());
+                        }
+                    }
+                }
+                Aggregate::CollectArray(_, unique) => {
+                    for subgroups in self.groups.values() {
+                        if let Some(group_value) = subgroups.get(&aggregate_index) {
+                            if unique {
+                                let mut group_value = group_value.clone();
+                                group_value.modify(
+                                    |_| {},
+                                    |_| {},
+                                    |_| {},
+                                    |_| {},
+                                    |array| { unique_values(array); }
+                                );
+
+                                result_column.push(group_value);
+                            } else {
+                                result_column.push(group_value.clone());
+                            }
                         }
                     }
                 }
@@ -1246,4 +1295,78 @@ fn test_group_by_and_count_and_having4() {
     assert_eq!(1, result.data.len());
     assert_eq!(Value::Int(1000), result.data[0].columns[0]);
     assert_eq!(Value::Int(6), result.data[0].columns[1]);
+}
+
+#[test]
+fn test_group_by_array_agg1() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
+            ("ys".to_owned(), Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()), false))
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: Some(vec!["x".to_string()]),
+        having: None,
+        join: None
+    };
+
+    // Add first group
+    for i in 0..5 {
+        let column_values = vec![Value::Int(1000), Value::Int(100 + i)];
+        let columns = create_test_columns(vec!["x", "y"], &column_values);
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    // Add second group
+    for i in 0..4 {
+        let column_values = vec![Value::Int(2000), Value::Int(300 + i)];
+        let columns = create_test_columns(vec!["x", "y"], &column_values);
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![Value::Int(2000), Value::Int(300 + 4)];
+    let columns = create_test_columns(vec!["x", "y"], &column_values);
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(columns.clone())
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+    assert!(result.is_some());
+
+    println!("{:?}", result);
+
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::Int(1000), result.data[0].columns[0]);
+    assert_eq!(
+        Value::Array(ValueType::Int, vec![Value::Int(100), Value::Int(101), Value::Int(102), Value::Int(103), Value::Int(104)]),
+        result.data[0].columns[1]
+    );
+
+    assert_eq!(Value::Int(2000), result.data[1].columns[0]);
+    assert_eq!(
+        Value::Array(ValueType::Int, vec![Value::Int(300), Value::Int(301), Value::Int(302), Value::Int(303), Value::Int(304)]),
+        result.data[1].columns[1]
+    );
 }

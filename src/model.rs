@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
 use crate::data_model::TableDefinition;
+use itertools::Itertools;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Float(pub f64);
@@ -47,7 +48,8 @@ pub enum Value {
     Int(i64),
     Float(Float),
     Bool(bool),
-    String(String)
+    String(String),
+    Array(ValueType, Vec<Value>)
 }
 
 impl Value {
@@ -82,7 +84,8 @@ impl Value {
             Value::Int(_) => Some(ValueType::Int),
             Value::Float(_) => Some(ValueType::Float),
             Value::Bool(_) => Some(ValueType::Bool),
-            Value::String(_) => Some(ValueType::String)
+            Value::String(_) => Some(ValueType::String),
+            Value::Array(element, _) => Some(ValueType::Array(Box::new(element.clone())))
         }
     }
 
@@ -91,8 +94,9 @@ impl Value {
         F2: Fn(i64, i64) -> Option<i64>,
         F3: Fn(f64, f64) -> Option<f64>,
         F4: Fn(bool, bool) -> Option<bool>,
-        F5: Fn(&str, &str) -> Option<String>
-    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5) -> Option<Value> {
+        F5: Fn(&str, &str) -> Option<String>,
+        F6: Fn(&Vec<Value>, &Vec<Value>) -> Option<Vec<Value>>,
+    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6) -> Option<Value> {
         match (self, other) {
             (Value::Null, _) => null_f(),
             (_, Value::Null) => null_f(),
@@ -100,6 +104,7 @@ impl Value {
             (Value::Float(x), Value::Float(y)) => float_f(x.0, y.0).map(|x| Value::Float(Float(x))),
             (Value::Bool(x), Value::Bool(y)) => bool_f(*x, *y).map(|x| Value::Bool(x)),
             (Value::String(x), Value::String(y)) => string_f(x, y).map(|x| Value::String(x)),
+            (Value::Array(element, x), Value::Array(_, y)) => array_f(x, y).map(|x| Value::Array(element.clone(), x)),
             _ => None
         }
     }
@@ -110,13 +115,15 @@ impl Value {
         F3: Fn(f64) -> Option<f64>,
         F4: Fn(bool) -> Option<bool>,
         F5: Fn(&str) -> Option<String>,
-    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5) -> Option<Value> {
+        F6: Fn(&Vec<Value>) -> Option<Vec<Value>>,
+    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6) -> Option<Value> {
         match self {
             Value::Null => null_f(),
             Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
             Value::Float(x) => float_f(x.0).map(|x| Value::Float(Float(x))),
             Value::Bool(x) => bool_f(*x).map(|x| Value::Bool(x)),
             Value::String(x) => string_f(x).map(|x| Value::String(x)),
+            Value::Array(element, x) => array_f(x).map(|x| Value::Array(element.clone(), x)),
         }
     }
 
@@ -124,14 +131,16 @@ impl Value {
         F1: Fn(&mut i64),
         F2: Fn(&mut f64),
         F3: Fn(&mut bool),
-        F4: Fn(&mut String)
-    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) {
+        F4: Fn(&mut String),
+        F5: Fn(&mut Vec<Value>),
+    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5) {
         match self {
             Value::Null => {},
             Value::Int(x) => int_f(x),
             Value::Float(x) => float_f(&mut x.0),
             Value::Bool(x) => bool_f(x),
-            Value::String(x) => string_f(x)
+            Value::String(x) => string_f(x),
+            Value::Array(_, x) => array_f(x)
         }
     }
 
@@ -139,13 +148,15 @@ impl Value {
         F1: Fn(&mut i64, i64),
         F2: Fn(&mut f64, f64),
         F3: Fn(&mut bool, bool),
-        F4: Fn(&mut String, &str)
-    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4) {
+        F4: Fn(&mut String, &str),
+        F5: Fn(&mut Vec<Value>, &Vec<Value>)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5) {
         match (self, value) {
             (Value::Int(x), Value::Int(y)) => int_f(x, *y),
             (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
             (Value::Bool(x), Value::Bool(y)) => bool_f(x, *y),
             (Value::String(x), Value::String(y)) => string_f(x, y),
+            (Value::Array(_, x), Value::Array(_, y)) => array_f(x, y),
             _ => {}
         }
     }
@@ -156,7 +167,8 @@ impl Value {
             Value::Int(value) => serde_json::Value::Number(serde_json::Number::from(*value)),
             Value::Float(Float(value)) => serde_json::Value::Number(serde_json::Number::from_f64(*value).unwrap()),
             Value::Bool(value) => serde_json::Value::Bool(*value),
-            Value::String(value) => serde_json::Value::String(value.clone())
+            Value::String(value) => serde_json::Value::String(value.clone()),
+            Value::Array(_, value) => serde_json::Value::Array(value.iter().map(|x| x.json_value()).collect())
         }
     }
 }
@@ -168,17 +180,19 @@ impl std::fmt::Display for Value {
             Value::Int(x) => write!(f, "{}", x),
             Value::Float(x) => write!(f, "{:.2}", x.0),
             Value::Bool(x) => write!(f, "{}", x),
-            Value::String(x) => write!(f, "{}", x)
+            Value::String(x) => write!(f, "{}", x),
+            Value::Array(_, x) => write!(f, "{{{}}}", x.iter().map(|x| format!("{}", x)).join(", "))
         }
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd, Clone, Hash)]
+#[derive(Debug, PartialEq, PartialOrd, Clone, Hash, Eq, Ord)]
 pub enum ValueType {
     Int,
     Float,
     Bool,
-    String
+    String,
+    Array(Box<ValueType>)
 }
 
 impl ValueType {
@@ -187,11 +201,17 @@ impl ValueType {
             ValueType::Int => i64::from_str(value_str).map(|x| Value::Int(x)).ok(),
             ValueType::Float => f64::from_str(value_str).map(|x| Value::Float(Float(x))).ok(),
             ValueType::Bool => bool::from_str(value_str).map(|x| Value::Bool(x)).ok(),
-            ValueType::String => Some(Value::String(value_str.to_owned()))
+            ValueType::String => Some(Value::String(value_str.to_owned())),
+            ValueType::Array(_) => None
         }
     }
 
     pub fn from_str(text: &str) -> Option<ValueType> {
+        if let Some(array_end) = text.rfind("[]") {
+            let element_text = &text[0..array_end];
+            return Some(ValueType::Array(Box::new(ValueType::from_str(element_text)?)));
+        }
+
         match text {
             "int" => Some(ValueType::Int),
             "real" => Some(ValueType::Float),
@@ -201,12 +221,32 @@ impl ValueType {
         }
     }
 
+    pub fn convert_json(&self, value: &serde_json::Value) -> Value {
+        match self {
+            ValueType::Int => value.as_i64().map(|value| Value::Int(value)),
+            ValueType::Float => value.as_f64().map(|value| Value::Float(Float(value))),
+            ValueType::Bool => value.as_bool().map(|value| Value::Bool(value)),
+            ValueType::String => value.as_str().map(|value| Value::String(value.to_owned())),
+            ValueType::Array(element) => {
+                value
+                    .as_array()
+                    .map(|value|
+                        Value::Array(
+                            *element.clone(),
+                            value.iter().map(|x| element.convert_json(x)).collect()
+                        )
+                    )
+            }
+        }.unwrap_or(Value::Null)
+    }
+
     pub fn default_value(&self) -> Value {
         match self {
             ValueType::Int => Value::Int(0),
             ValueType::Float => Value::Float(Float(0.0)),
             ValueType::Bool => Value::Bool(false),
-            ValueType::String => Value::String(String::new())
+            ValueType::String => Value::String(String::new()),
+            ValueType::Array(element) => Value::Array(*element.clone(), Vec::new())
         }
     }
 }
@@ -245,7 +285,8 @@ pub enum Function {
     StringLength,
     StringToUpper,
     StringToLower,
-    RegexMatches
+    RegexMatches,
+    ArrayUnique
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -255,7 +296,8 @@ pub enum Aggregate {
     Min(ExpressionTree),
     Max(ExpressionTree),
     Average(ExpressionTree),
-    Sum(ExpressionTree)
+    Sum(ExpressionTree),
+    CollectArray(ExpressionTree, bool)
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -325,6 +367,9 @@ impl ExpressionTree {
                         expression.visit(f)?;
                     }
                     Aggregate::Sum(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::CollectArray(expression, _) => {
                         expression.visit(f)?;
                     }
                 }
@@ -438,4 +483,11 @@ impl Statement {
             Statement::Multiple(_) => None
         }
     }
+}
+
+#[test]
+fn test_parse_type1() {
+    assert_eq!(Some(ValueType::Float), ValueType::from_str("real"));
+    assert_eq!(Some(ValueType::Array(Box::new(ValueType::Float))), ValueType::from_str("real[]"));
+    assert_eq!(Some(ValueType::Array(Box::new(ValueType::Array(Box::new(ValueType::Float))))), ValueType::from_str("real[][]"));
 }

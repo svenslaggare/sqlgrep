@@ -238,7 +238,9 @@ lazy_static! {
             "min".to_owned(),
             "max".to_owned(),
             "avg".to_owned(),
-            "sum".to_owned()
+            "sum".to_owned(),
+            "array_agg".to_owned(),
+            "array_agg_unique".to_owned()
          ].into_iter()
     );
 
@@ -252,7 +254,8 @@ lazy_static! {
             ("length".to_owned(), Function::StringLength),
             ("upper".to_owned(), Function::StringToUpper),
             ("lower".to_owned(), Function::StringToLower),
-            ("regexp_matches".to_owned(), Function::RegexMatches)
+            ("regexp_matches".to_owned(), Function::RegexMatches),
+            ("array_unique".to_owned(), Function::ArrayUnique)
         ].into_iter()
     );
 }
@@ -410,6 +413,8 @@ fn transform_call_aggregate(name: &str,
                 "min" => Aggregate::Min(expression),
                 "avg" => Aggregate::Average(expression),
                 "sum" => Aggregate::Sum(expression),
+                "array_agg" => Aggregate::CollectArray(expression, false),
+                "array_agg_unique" => Aggregate::CollectArray(expression, true),
                 _ => { panic!("should not happen") }
             };
 
