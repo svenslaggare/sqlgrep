@@ -85,7 +85,7 @@ impl<'a> FileIngester<'a> {
             config.result = false;
         }
 
-        let joined_table_data = self.get_joined_data(statement.join_clause());
+        let joined_table_data = self.execution_engine.get_joined_data(statement.join_clause())?;
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
@@ -124,47 +124,6 @@ impl<'a> FileIngester<'a> {
         }
 
         Ok(())
-    }
-
-    fn get_joined_data(&mut self, join: Option<&JoinClause>) -> Option<JoinedTableData> {
-        if let Some(join) = join {
-            let join_statement = Statement::Select(SelectStatement {
-                projections: vec![("wildcard".to_owned(), ExpressionTree::Wildcard)],
-                from: join.joined_table.clone(),
-                filename: None,
-                filter: None,
-                join: None
-            });
-
-            let joined_table = self.execution_engine.get_table(&join.joined_table).unwrap().clone();
-            let join_on_column_index = joined_table.index_for(&join.joined_column).unwrap();
-            let mut joined_table_data = JoinedTableData::new(
-                joined_table,
-                join_on_column_index,
-                HashMap::new()
-            );
-
-            let config = ExecutionConfig::default();
-
-            for line in BufReader::new(File::open(&join.joined_filename).unwrap()).lines() {
-                let line = line.unwrap();
-                let (result, _) = self.execution_engine.execute(&join_statement, line.clone(), &config, None);
-
-                if let Ok(Some(result)) = result {
-                    for row in result.data {
-                        let join_on_value = row.columns[join_on_column_index].clone();
-                        joined_table_data.rows
-                            .entry(join_on_value.clone())
-                            .or_insert_with(|| Vec::new())
-                            .push(row);
-                    }
-                }
-            }
-
-            Some(joined_table_data)
-        } else {
-            None
-        }
     }
 }
 

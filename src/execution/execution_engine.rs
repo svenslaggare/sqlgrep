@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::io::{BufReader, BufRead};
+use std::fs::File;
 
 use fnv::FnvHasher;
 
@@ -7,7 +9,7 @@ use crate::data_model::{Row, TableDefinition, Tables};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::select_execution::SelectExecutionEngine;
-use crate::model::{AggregateStatement, SelectStatement, Statement, Value};
+use crate::model::{AggregateStatement, SelectStatement, Statement, Value, JoinClause, ExpressionTree};
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -227,6 +229,52 @@ impl<'a> ExecutionEngine<'a> {
 
     pub fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         self.aggregate_execution_engine.execute_result(aggregate_statement)
+    }
+
+    pub fn get_joined_data(&mut self, join: Option<&JoinClause>) -> ExecutionResult<Option<JoinedTableData>> {
+        if let Some(join) = join {
+            let join_statement = Statement::Select(SelectStatement {
+                projections: vec![("wildcard".to_owned(), ExpressionTree::Wildcard)],
+                from: join.joined_table.clone(),
+                filename: None,
+                filter: None,
+                join: None
+            });
+
+            let joined_table = self.get_table(&join.joined_table)?.clone();
+            let join_on_column_index = joined_table.index_for(&join.joined_column)
+                .ok_or(ExecutionError::ColumnNotFound(join.joiner_column.clone()))?;
+
+            let mut joined_table_data = JoinedTableData::new(
+                joined_table,
+                join_on_column_index,
+                HashMap::new()
+            );
+
+            let config = ExecutionConfig::default();
+
+            let joined_file = File::open(&join.joined_filename)
+                .map_err(|err| ExecutionError::FailOpenFile(format!("{}", err)))?;
+
+            for line in BufReader::new(joined_file).lines() {
+                let line = line.unwrap();
+                let (result, _) = self.execute(&join_statement, line.clone(), &config, None);
+
+                if let Ok(Some(result)) = result {
+                    for row in result.data {
+                        let join_on_value = row.columns[join_on_column_index].clone();
+                        joined_table_data.rows
+                            .entry(join_on_value.clone())
+                            .or_insert_with(|| Vec::new())
+                            .push(row);
+                    }
+                }
+            }
+
+            Ok(Some(joined_table_data))
+        } else {
+            Ok(None)
+        }
     }
 
     fn create_columns_mapping(&self, table_definition: &'a TableDefinition, row: &'a Row, line: &'a Value) -> HashMap<&'a str, &'a Value> {

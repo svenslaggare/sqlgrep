@@ -66,7 +66,8 @@ pub enum ExecutionError {
     GroupKeyNotAvailable(Option<String>),
     ExpectedNumericValue,
     NotSupportedOperation,
-    JoinNotSupported
+    JoinNotSupported,
+    FailOpenFile(String)
 }
 
 impl From<EvaluationError> for ExecutionError {
@@ -93,7 +94,8 @@ impl std::fmt::Display for ExecutionError {
             }
             ExecutionError::ExpectedNumericValue => { write!(f, "Expected a numeric value") }
             ExecutionError::NotSupportedOperation => { write!(f, "Not a supported operation") }
-            ExecutionError::JoinNotSupported => { write!(f, "Join clause not supported") }
+            ExecutionError::JoinNotSupported => { write!(f, "Join clause not supported") },
+            ExecutionError::FailOpenFile(err) => { write!(f, "Failed open file due to: {}", err) },
         }
     }
 }
