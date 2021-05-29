@@ -275,16 +275,18 @@ impl<'a> ExecutionEngine<'a> {
                 .map_err(|err| ExecutionError::FailOpenFile(format!("{}", err)))?;
 
             for line in BufReader::new(joined_file).lines() {
-                let line = line.unwrap();
-                let (result, _) = self.execute(&join_statement, line.clone(), &config, None);
-
-                if let Ok(Some(result)) = result {
-                    for row in result.data {
-                        joined_table_data.add_row(
-                            row.columns[join_on_column_index].clone(),
-                            row
-                        );
+                if let Ok(line) = line {
+                    let (result, _) = self.execute(&join_statement, line.clone(), &config, None);
+                    if let Some(result) = result? {
+                        for row in result.data {
+                            joined_table_data.add_row(
+                                row.columns[join_on_column_index].clone(),
+                                row
+                            );
+                        }
                     }
+                } else {
+                    break;
                 }
             }
 
