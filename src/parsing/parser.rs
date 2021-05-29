@@ -246,7 +246,7 @@ lazy_static! {
         ].into_iter()
     );
 
-    static ref TWO_CHAR_OPERATORS: HashSet<char> = HashSet::from_iter(vec!['<', '>', '!', '='].into_iter());
+    static ref TWO_CHAR_OPERATORS: HashSet<char> = HashSet::from_iter(vec!['<', '>', '!', '=', '-'].into_iter());
 }
 
 pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
@@ -255,7 +255,21 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
 
     let mut current_str: Option<String> = None;
     let mut is_escaped = false;
+    let mut is_comment = false;
     while let Some(current) = char_iterator.next() {
+        if let Some(Token::Operator(Operator::Dual('-', '-'))) = tokens.last() {
+            is_comment = true;
+            tokens.remove(tokens.len() - 1);
+        }
+
+        if is_comment {
+            if current == '\n' {
+                is_comment = false;
+            }
+
+            continue;
+        }
+
         if current == '\\' && !is_escaped {
             is_escaped = true;
             continue;
@@ -1271,6 +1285,23 @@ fn test_tokenize12() {
             Token::Identifier("x".to_owned()),
             Token::Keyword(Keyword::IsNot),
             Token::Null,
+            Token::End
+        ],
+        tokens.unwrap()
+    );
+}
+
+#[test]
+fn test_tokenize13() {
+    let tokens = tokenize("x IS NOT NULL--this is a comment\ny + x");
+    assert_eq!(
+        vec![
+            Token::Identifier("x".to_owned()),
+            Token::Keyword(Keyword::IsNot),
+            Token::Null,
+            Token::Identifier("y".to_owned()),
+            Token::Operator(Operator::Single('+')),
+            Token::Identifier("x".to_owned()),
             Token::End
         ],
         tokens.unwrap()
