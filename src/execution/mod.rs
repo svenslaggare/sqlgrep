@@ -11,6 +11,10 @@ use crate::model::Value;
 
 pub trait ColumnProvider {
     fn get(&self, name: &str) -> Option<&Value>;
+    fn exist(&self, name: &str) -> bool {
+        self.get(name).is_some()
+    }
+    
     fn add_key(&mut self, key: &str);
     fn keys(&self) -> &Vec<String>;
 

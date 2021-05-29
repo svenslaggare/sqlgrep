@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::io::{BufReader, BufRead};
 use std::fs::File;
@@ -10,6 +10,7 @@ use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, R
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::select_execution::SelectExecutionEngine;
 use crate::model::{AggregateStatement, SelectStatement, Statement, Value, JoinClause, ExpressionTree};
+use std::iter::FromIterator;
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -87,16 +88,13 @@ impl<'a> ExecutionEngine<'a> {
                                                                             &join_clause.joiner_column)? {
                     let mut result_row = None;
                     for joined_row in joined_rows {
-                        let mut columns_mapping = self.create_columns_mapping(table_definition, &row, &line_value);
-
-                        for (index, value) in joined_row.columns.iter().enumerate() {
-                            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
-                        }
-
-                        let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
-                        for column in &joined_table_data.fully_qualified_column_names {
-                            column_provider.add_key(column);
-                        }
+                        let column_provider = self.create_joined_column_mapping(
+                            table_definition,
+                            &row,
+                            &line_value,
+                            &joined_table_data,
+                            joined_row
+                        );
 
                         let result = select_execution_engine.execute(select_statement, column_provider)?;
                         if let Some(result) = result {
@@ -114,17 +112,14 @@ impl<'a> ExecutionEngine<'a> {
                     Ok(result_row)
                 } else {
                     if join_clause.is_outer {
-                        let null_value = Value::Null;
-                        let mut columns_mapping = self.create_columns_mapping(table_definition, &row, &line_value);
-
-                        for column in &joined_table_data.fully_qualified_column_names {
-                            columns_mapping.insert(column, &null_value);
-                        }
-
-                        let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
-                        for column in &joined_table_data.fully_qualified_column_names {
-                            column_provider.add_key(column);
-                        }
+                        let null_row = Row::new(vec![Value::Null; joined_table_data.fully_qualified_column_names.len()]);
+                        let column_provider = self.create_joined_column_mapping(
+                            table_definition,
+                            &row,
+                            &line_value,
+                            &joined_table_data,
+                            &null_row
+                        );
 
                         select_execution_engine.execute(select_statement, column_provider)
                     } else {
@@ -164,17 +159,15 @@ impl<'a> ExecutionEngine<'a> {
                                                                             &aggregate_statement.join.as_ref().unwrap().joiner_column)? {
                     let mut result_row = None;
                     for joined_row in joined_rows {
-                        let mut columns_mapping = self.create_columns_mapping(&table_definition, &row, &line_value);
+                        let column_provider = self.create_joined_column_mapping(
+                            table_definition,
+                            &row,
+                            &line_value,
+                            &joined_table_data,
+                            joined_row
+                        );
 
-                        for (index, value) in joined_row.columns.iter().enumerate() {
-                            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
-                        }
-
-                        let result = self.aggregate_execution_engine.execute(
-                            aggregate_statement,
-                            HashMapColumnProvider::with_table_keys(columns_mapping, table_definition)
-                        )?;
-
+                        let result = self.aggregate_execution_engine.execute(aggregate_statement, column_provider)?;
                         if let Some(result) = result {
                             match &mut result_row {
                                 None => {
@@ -224,15 +217,17 @@ impl<'a> ExecutionEngine<'a> {
                                                                             &row,
                                                                             &aggregate_statement.join.as_ref().unwrap().joiner_column)? {
                     for joined_row in joined_rows {
-                        let mut columns_mapping = self.create_columns_mapping(&table_definition, &row, &line_value);
-
-                        for (index, value) in joined_row.columns.iter().enumerate() {
-                            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
-                        }
+                        let column_provider = self.create_joined_column_mapping(
+                            table_definition,
+                            &row,
+                            &line_value,
+                            &joined_table_data,
+                            joined_row
+                        );
 
                         self.aggregate_execution_engine.execute_update(
                             aggregate_statement,
-                            HashMapColumnProvider::with_table_keys(columns_mapping, table_definition)
+                            column_provider
                         )?;
                     }
                 } else {
@@ -299,7 +294,40 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    fn create_columns_mapping(&self, table_definition: &'a TableDefinition, row: &'a Row, line: &'a Value) -> HashMap<&'a str, &'a Value> {
+    fn create_joined_column_mapping(&self,
+                                    table_definition: &'a TableDefinition,
+                                    row: &'a Row,
+                                    line_value: &'a Value,
+                                    joined_table_data: &'a JoinedTableData,
+                                    joined_row: &'a Row) -> HashMapColumnProvider<'a> {
+        let mut columns_mapping = self.create_columns_mapping(table_definition, row, line_value);
+
+        for (index, value) in joined_row.columns.iter().enumerate() {
+            let name = &joined_table_data.column_names[index];
+            if !columns_mapping.contains_key(name.as_str()) {
+                columns_mapping.insert(name, value);
+            }
+
+            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
+        }
+
+        let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
+        let keys = HashSet::<String>::from_iter(column_provider.keys.iter().cloned());
+        for (column_index, column_name) in joined_table_data.column_names.iter().enumerate() {
+            if keys.contains(column_name) {
+                column_provider.add_key(&joined_table_data.fully_qualified_column_names[column_index]);
+            } else {
+                column_provider.add_key(column_name);
+            }
+        }
+
+        column_provider
+    }
+
+    fn create_columns_mapping(&self,
+                              table_definition: &'a TableDefinition,
+                              row: &'a Row,
+                              line: &'a Value) -> HashMap<&'a str, &'a Value> {
         let mut columns_mapping = HashMap::new();
         for (column_index, column) in table_definition.columns.iter().enumerate() {
             columns_mapping.insert(column.name.as_str(), &row.columns[column_index]);
@@ -330,6 +358,7 @@ impl<'a> ExecutionEngine<'a> {
 }
 
 pub struct JoinedTableData{
+    pub column_names: Vec<String>,
     pub fully_qualified_column_names: Vec<String>,
     pub join_on_column_index: usize,
     pub rows: HashMap<Value, Vec<Row>>
@@ -339,6 +368,7 @@ impl JoinedTableData {
     pub fn new(table: &TableDefinition,
                join_on_column_index: usize) -> JoinedTableData {
         JoinedTableData {
+            column_names: table.columns.iter().map(|column| column.name.clone()).collect(),
             fully_qualified_column_names: table.fully_qualified_column_names.clone(),
             join_on_column_index,
             rows: HashMap::new()
