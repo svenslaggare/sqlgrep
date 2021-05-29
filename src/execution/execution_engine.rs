@@ -245,11 +245,7 @@ impl<'a> ExecutionEngine<'a> {
             let join_on_column_index = joined_table.index_for(&join.joined_column)
                 .ok_or(ExecutionError::ColumnNotFound(join.joiner_column.clone()))?;
 
-            let mut joined_table_data = JoinedTableData::new(
-                joined_table,
-                join_on_column_index,
-                HashMap::new()
-            );
+            let mut joined_table_data = JoinedTableData::new(joined_table, join_on_column_index);
 
             let config = ExecutionConfig::default();
 
@@ -314,12 +310,11 @@ pub struct JoinedTableData{
 
 impl JoinedTableData {
     pub fn new(table: TableDefinition,
-               join_on_column_index: usize,
-               rows: HashMap<Value, Vec<Row>>) -> JoinedTableData {
+               join_on_column_index: usize,) -> JoinedTableData {
         JoinedTableData {
             table,
-            rows,
-            join_on_column_index
+            join_on_column_index,
+            rows: HashMap::new()
         }
     }
 }
