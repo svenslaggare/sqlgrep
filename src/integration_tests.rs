@@ -204,3 +204,22 @@ fn test_join1() {
     ingester.process(query).unwrap();
     assert_eq!(2, ingester.statistics.total_result_rows);
 }
+
+#[test]
+fn test_join2() {
+    let tables = create_tables("testdata/dummy.txt");
+
+    let query_tree = parser::parse_str("SELECT hostname, min, dummy2.max FROM dummy1 INNER JOIN dummy2::'testdata/dummy2_data.txt' ON dummy1.hostname=dummy2.hostname").unwrap();
+    let query = parse_tree_converter::transform_statement(query_tree).unwrap();
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/dummy1_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    ingester.process(query).unwrap();
+    assert_eq!(3, ingester.statistics.total_result_rows);
+}

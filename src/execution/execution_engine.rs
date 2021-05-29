@@ -81,19 +81,19 @@ impl<'a> ExecutionEngine<'a> {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = joined_table_data {
-                let joiner_on_column_index = table_definition.index_for(&select_statement.join.as_ref().unwrap().joiner_column).unwrap();
-                let joiner_on_value = &row.columns[joiner_on_column_index];
-                if let Some(joined_rows) = joined_table_data.rows.get(joiner_on_value) {
+                if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
+                                                                            &row,
+                                                                            &select_statement.join.as_ref().unwrap().joiner_column)? {
                     let mut result_row = None;
                     for joined_row in joined_rows {
                         let mut columns_mapping = self.create_columns_mapping(table_definition, &row, &line_value);
 
                         for (index, value) in joined_row.columns.iter().enumerate() {
-                            columns_mapping.insert(&joined_table_data.table.fully_qualified_column_names[index], value);
+                            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
                         }
 
                         let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
-                        for column in &joined_table_data.table.fully_qualified_column_names {
+                        for column in &joined_table_data.fully_qualified_column_names {
                             column_provider.add_key(column);
                         }
 
@@ -142,15 +142,15 @@ impl<'a> ExecutionEngine<'a> {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = joined_table_data {
-                let joiner_on_column_index = table_definition.index_for(&aggregate_statement.join.as_ref().unwrap().joiner_column).unwrap();
-                let joiner_on_value = &row.columns[joiner_on_column_index];
-                if let Some(joined_rows) = joined_table_data.rows.get(joiner_on_value) {
+                if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
+                                                                            &row,
+                                                                            &aggregate_statement.join.as_ref().unwrap().joiner_column)? {
                     let mut result_row = None;
                     for joined_row in joined_rows {
                         let mut columns_mapping = self.create_columns_mapping(&table_definition, &row, &line_value);
 
                         for (index, value) in joined_row.columns.iter().enumerate() {
-                            columns_mapping.insert(&joined_table_data.table.fully_qualified_column_names[index], value);
+                            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
                         }
 
                         let result = self.aggregate_execution_engine.execute(
@@ -203,14 +203,14 @@ impl<'a> ExecutionEngine<'a> {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = joined_table_data {
-                let joiner_on_column_index = table_definition.index_for(&aggregate_statement.join.as_ref().unwrap().joiner_column).unwrap();
-                let joiner_on_value = &row.columns[joiner_on_column_index];
-                if let Some(joined_rows) = joined_table_data.rows.get(joiner_on_value) {
+                if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
+                                                                            &row,
+                                                                            &aggregate_statement.join.as_ref().unwrap().joiner_column)? {
                     for joined_row in joined_rows {
                         let mut columns_mapping = self.create_columns_mapping(&table_definition, &row, &line_value);
 
                         for (index, value) in joined_row.columns.iter().enumerate() {
-                            columns_mapping.insert(&joined_table_data.table.fully_qualified_column_names[index], value);
+                            columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
                         }
 
                         self.aggregate_execution_engine.execute_update(
@@ -255,7 +255,7 @@ impl<'a> ExecutionEngine<'a> {
             let join_on_column_index = joined_table.index_for(&join.joined_column)
                 .ok_or(ExecutionError::ColumnNotFound(join.joiner_column.clone()))?;
 
-            let mut joined_table_data = JoinedTableData::new(joined_table, join_on_column_index);
+            let mut joined_table_data = JoinedTableData::new(&joined_table, join_on_column_index);
 
             let config = ExecutionConfig::default();
 
@@ -313,18 +313,28 @@ impl<'a> ExecutionEngine<'a> {
 }
 
 pub struct JoinedTableData{
-    pub table: TableDefinition,
+    pub fully_qualified_column_names: Vec<String>,
     pub join_on_column_index: usize,
     pub rows: HashMap<Value, Vec<Row>>
 }
 
 impl JoinedTableData {
-    pub fn new(table: TableDefinition,
+    pub fn new(table: &TableDefinition,
                join_on_column_index: usize) -> JoinedTableData {
         JoinedTableData {
-            table,
+            fully_qualified_column_names: table.fully_qualified_column_names.clone(),
             join_on_column_index,
             rows: HashMap::new()
         }
+    }
+
+    pub fn get_joined_row(&self,
+                          joiner_table: &TableDefinition,
+                          joined_row: &Row,
+                          joiner_column: &str) -> ExecutionResult<Option<&Vec<Row>>> {
+        let joiner_on_column_index = joiner_table.index_for(joiner_column)
+            .ok_or_else(|| ExecutionError::ColumnNotFound(joiner_column.to_owned()))?;
+        let joiner_on_value = &joined_row.columns[joiner_on_column_index];
+        Ok(self.rows.get(joiner_on_value))
     }
 }
