@@ -303,6 +303,7 @@ impl<'a> ExecutionEngine<'a> {
         let mut columns_mapping = HashMap::new();
         for (column_index, column) in table_definition.columns.iter().enumerate() {
             columns_mapping.insert(column.name.as_str(), &row.columns[column_index]);
+            columns_mapping.insert(&table_definition.fully_qualified_column_names[column_index], &row.columns[column_index]);
         }
 
         columns_mapping.insert("input", line);
