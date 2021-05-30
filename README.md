@@ -55,12 +55,12 @@ Supported features:
 * Inner, outer joins. The joined table is loaded completely in memory.
 
 Supported aggregates:
-* Count
-* Min
-* Max
-* Sum
-* Avg
-* array_agg (and own variant: Array_agg_unique)
+* `count`
+* `min`
+* `max`
+* `sum`
+* `avg`
+* `array_agg` (and own variant: `array_agg_unique`)
 
 Supported functions:
 * `least(INT|REAL, INT|REAL) => INT|REAL`
