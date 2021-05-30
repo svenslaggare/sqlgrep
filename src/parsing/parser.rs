@@ -806,8 +806,7 @@ impl<'a> Parser<'a> {
 
     fn parse_define_column(&mut self, parsing: ColumnParsing) -> ParserResult<ParseColumnDefinition> {
         let column_name = self.consume_identifier()?;
-        let column_type = self.consume_identifier()?;
-        let column_type = ValueType::from_str(&column_type.to_lowercase()).ok_or(ParserError::NotDefinedType(column_type))?;
+        let column_type = self.parse_type()?;
 
         let mut nullable = None;
         let mut trim = None;
@@ -848,6 +847,17 @@ impl<'a> Parser<'a> {
                 convert
             }
         )
+    }
+
+    fn parse_type(&mut self) -> ParserResult<ValueType> {
+        let mut type_value = self.consume_identifier()?;
+        while self.current() == &Token::LeftSquareParentheses {
+            self.next()?;
+            self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightParentheses);
+            type_value += "[]";
+        }
+
+        ValueType::from_str(&type_value.to_lowercase()).ok_or(ParserError::NotDefinedType(type_value))
     }
 
     pub fn parse_expression(&mut self) -> ParserResult<ParseExpressionTree> {
@@ -2758,6 +2768,41 @@ fn test_parse_str4() {
             group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()]),
             having: None,
             join: None,
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_str5() {
+    let tree = parse_str(r"
+    CREATE TABLE test(
+        line = 'testing (.*) (.*)',
+
+        line[1] => ip TEXT,
+        line[2] => hostname TEXT[]
+    );").unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![
+                ("line".to_owned(), "testing (.*) (.*)".to_owned())
+            ],
+            columns: vec![
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    1,
+                    "ip".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    2,
+                    "hostname".to_string(),
+                    ValueType::Array(Box::new(ValueType::String))
+                )
+            ]
         },
         tree
     );

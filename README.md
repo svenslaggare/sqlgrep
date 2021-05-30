@@ -99,6 +99,7 @@ Multiple tables can be defined in the same file.
 * `INT`: 64-bits integer type.
 * `REAL`: 64-bits float type.
 * `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
+* `<element type>[]`: Array types such as `real[]`.
 
 ### Modifiers
 Placed after the column type and add additional constraints/transforms.

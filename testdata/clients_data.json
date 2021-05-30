@@ -1,9 +1,9 @@
-{"timestamp": 1609789423312, "message": "Client started.", "metadata": {"device_id": "167", "ip_address": "169.254.21.182", "mac_address": "10:41:11:98:03:35", "device_type": "screen", "version": "308"}}
-{"timestamp": 1609789423325, "message": "Starting App", "metadata": {"device_id": "167", "ip_address": "169.254.21.182", "mac_address": "10:41:11:98:03:35", "device_type": "screen", "version": "308"}}
+{"timestamp": 1609789423312, "message": "Client started.", "metadata": {"device_id": "167", "ip_address": "169.254.21.182", "mac_address": "10:41:11:98:03:35", "device_type": "screen", "version": "308"}, "events": ["started", "stopped"]}
+{"timestamp": 1609789423325, "message": "Starting App", "metadata": {"device_id": "167", "ip_address": "169.254.21.182", "mac_address": "10:41:11:98:03:35", "device_type": "screen", "version": "308"}, "events": ["started"]}
 {"timestamp": 1609789423337, "message": "App started with ID: 903", "metadata": {"device_id": "167", "ip_address": "169.254.21.182", "mac_address": "10:41:11:98:03:35", "device_type": "screen", "version": "308"}}
 {"timestamp": 1609789426611, "message": "Client started.", "metadata": {"device_id": "172", "ip_address": "169.254.20.7", "mac_address": "10:41:11:98:0b:66", "device_type": "screen", "version": "308"}}
 {"timestamp": 1609789426626, "message": "Starting App", "metadata": {"device_id": "172", "ip_address": "169.254.20.7", "mac_address": "10:41:11:98:0b:66", "device_type": "screen", "version": "308"}}
-{"timestamp": 1609789426639, "message": "App started with ID: 895", "metadata": {"device_id": "172", "ip_address": "169.254.20.7", "mac_address": "10:41:11:98:0b:66", "device_type": "screen", "version": "308"}}
+{"timestamp": 1609789426639, "message": "App started with ID: 895", "metadata": {"device_id": "172", "ip_address": "169.254.20.7", "mac_address": "10:41:11:98:0b:66", "device_type": "screen", "version": "308"}, "events": []}
 {"timestamp": 1609789427595, "message": "Client started.", "metadata": {"device_id": "168", "ip_address": "169.254.21.236", "mac_address": "10:41:11:98:09:d5", "device_type": "screen", "version": "308"}}
 {"timestamp": 1609789427610, "message": "Starting App", "metadata": {"device_id": "168", "ip_address": "169.254.21.236", "mac_address": "10:41:11:98:09:d5", "device_type": "screen", "version": "308"}}
 {"timestamp": 1609789427623, "message": "App started with ID: 891", "metadata": {"device_id": "168", "ip_address": "169.254.21.236", "mac_address": "10:41:11:98:09:d5", "device_type": "screen", "version": "308"}}

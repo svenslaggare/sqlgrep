@@ -1,5 +1,6 @@
 CREATE TABLE clients(
     { .timestamp } => timestamp INT,
     { .metadata.device_id } => device_id INT CONVERT,
-    { .metadata.mac_address } => mac_address TEXT
+    { .metadata.mac_address } => mac_address TEXT,
+    { .events } => events TEXT[]
 );

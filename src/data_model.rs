@@ -722,3 +722,39 @@ fn test_table_json3() {
     let result = table_definition.extract(r#"{ "test2": { "test3": "4711" } }"#);
     assert_eq!(Value::Int(4711), result.columns[0]);
 }
+
+#[test]
+fn test_table_json4() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![],
+        vec![
+            ColumnDefinition::with_parsing(
+                ColumnParsing::Json(JsonAccess::Field { name: "test1".to_owned(), inner: None }),
+                "x",
+                ValueType::Array(Box::new(ValueType::Int))
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract(r#"{ "test1": [1, 2, 3] }"#);
+    assert_eq!(Value::Array(ValueType::Int, vec![Value::Int(1), Value::Int(2), Value::Int(3)]), result.columns[0]);
+}
+
+#[test]
+fn test_table_json5() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![],
+        vec![
+            ColumnDefinition::with_parsing(
+                ColumnParsing::Json(JsonAccess::Field { name: "test1".to_owned(), inner: None }),
+                "x",
+                ValueType::Array(Box::new(ValueType::Bool))
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract(r#"{ "test1": [1, 2, 3] }"#);
+    assert_eq!(Value::Array(ValueType::Bool, vec![Value::Null, Value::Null, Value::Null]), result.columns[0]);
+}
