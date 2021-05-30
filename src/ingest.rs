@@ -37,14 +37,21 @@ impl ExecutionStatistics {
     }
 }
 
+#[derive(Clone, PartialEq)]
+pub enum OutputFormat {
+    Text,
+    Json,
+    CSV(String)
+}
+
 pub struct DisplayOptions {
-    pub json_output: bool
+    pub output_format: OutputFormat
 }
 
 impl Default for DisplayOptions {
     fn default() -> Self {
         DisplayOptions {
-            json_output: false
+            output_format: OutputFormat::Text
         }
     }
 }
@@ -97,7 +104,7 @@ impl<'a> FileIngester<'a> {
                     if let Some(result_row) = result? {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
-                            OutputPrinter::new(self.single_result, self.display_options.json_output).print(&result_row)
+                            OutputPrinter::new(self.single_result, self.display_options.output_format.clone()).print(&result_row)
                         }
                     }
                 } else {
@@ -118,7 +125,7 @@ impl<'a> FileIngester<'a> {
             if self.print_result {
                 if let Some(result_row) = result? {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
-                    OutputPrinter::new(true, self.display_options.json_output).print(&result_row)
+                    OutputPrinter::new(true, self.display_options.output_format.clone()).print(&result_row)
                 }
             }
         }
@@ -190,7 +197,7 @@ impl<'a> FollowFileIngester<'a> {
                     print!("\x1B[2J\x1B[1;1H");
                 }
 
-                OutputPrinter::new(refresh, self.display_options.json_output).print(&result_row)
+                OutputPrinter::new(refresh, self.display_options.output_format.clone()).print(&result_row)
             }
 
             if !self.running.load(Ordering::SeqCst) {
@@ -204,40 +211,52 @@ impl<'a> FollowFileIngester<'a> {
 
 struct OutputPrinter {
     single_result: bool,
-    json_output: bool
+    format: OutputFormat
 }
 
 impl OutputPrinter {
-    pub fn new(single_result: bool, json_output: bool) -> OutputPrinter {
+    pub fn new(single_result: bool, format: OutputFormat) -> OutputPrinter {
         OutputPrinter {
             single_result,
-            json_output
+            format
         }
     }
 
     pub fn print(&self, result_row: &ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
-            if row.columns.len() == 1 && result_row.columns[0] == "input" && !self.json_output {
+            if row.columns.len() == 1 && result_row.columns[0] == "input" && self.format == OutputFormat::Text {
                 println!("{}", row.columns[0]);
             } else {
-                if self.json_output {
-                    let columns = serde_json::Map::from_iter(
-                        result_row.columns
+                match &self.format {
+                    OutputFormat::Text => {
+                        let columns = result_row.columns
                             .iter()
                             .enumerate()
-                            .map(|(projection_index, projection_name)| (projection_name.to_owned(), row.columns[projection_index].json_value()))
-                    );
+                            .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
+                            .collect::<Vec<_>>();
 
-                    println!("{}", serde_json::to_string(&columns).unwrap());
-                } else {
-                    let columns = result_row.columns
-                        .iter()
-                        .enumerate()
-                        .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
-                        .collect::<Vec<_>>();
+                        println!("{}", columns.join(", "));
+                    }
+                    OutputFormat::Json => {
+                        let columns = serde_json::Map::from_iter(
+                            result_row.columns
+                                .iter()
+                                .enumerate()
+                                .map(|(projection_index, projection_name)| (projection_name.to_owned(), row.columns[projection_index].json_value()))
+                        );
 
-                    println!("{}", columns.join(", "));
+                        println!("{}", serde_json::to_string(&columns).unwrap());
+                    }
+                    OutputFormat::CSV(delimiter) => {
+                        let columns = result_row.columns
+                            .iter()
+                            .enumerate()
+                            .map(|(projection_index, projection_name)| format!("{}", row.columns[projection_index]))
+                            .collect::<Vec<_>>();
+
+                        println!("{}", columns.join(&delimiter));
+                    }
                 }
             }
         }

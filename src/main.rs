@@ -11,7 +11,7 @@ use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
 
 use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
-use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions};
+use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFormat};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 use sqlgrep::parsing::parse_tree_converter;
 use sqlgrep::parsing;
@@ -34,8 +34,8 @@ struct CommandLineInput {
     show_run_stats: bool,
     #[structopt(long, help="The input data is given on stdin")]
     stdin: bool,
-    #[structopt(long, help="The output data is in JSON format")]
-    json_output: bool
+    #[structopt(long, help="The output format. Supported values: text, json, csv.", default_value="text")]
+    format: String
 }
 
 struct ReadLinePrompt {
@@ -175,7 +175,12 @@ fn execute(command_line_input: &CommandLineInput,
             };
 
             let mut display_options: DisplayOptions = Default::default();
-            display_options.json_output = command_line_input.json_output;
+            match command_line_input.format.as_str() {
+                "text" => { display_options.output_format = OutputFormat::Text; },
+                "json" => { display_options.output_format = OutputFormat::Json; },
+                "csv" => { display_options.output_format = OutputFormat::CSV(";".to_owned()); }
+                format => { panic!("Unsupported output format '{}'.", format) }
+            }
 
             let result = if command_line_input.follow {
                 let ingester = FollowFileIngester::new(
