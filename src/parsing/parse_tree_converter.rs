@@ -255,7 +255,8 @@ lazy_static! {
             ("upper".to_owned(), Function::StringToUpper),
             ("lower".to_owned(), Function::StringToLower),
             ("regexp_matches".to_owned(), Function::RegexMatches),
-            ("array_unique".to_owned(), Function::ArrayUnique)
+            ("array_unique".to_owned(), Function::ArrayUnique),
+            ("array_length".to_owned(), Function::ArrayLength)
         ].into_iter()
     );
 }

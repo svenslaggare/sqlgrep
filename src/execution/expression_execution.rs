@@ -16,7 +16,7 @@ pub enum EvaluationError {
     GroupKeyNotFound,
     GroupValueNotFound,
     UndefinedOperation,
-    UndefinedFunction,
+    UndefinedFunction(Function),
     InvalidRegex(String),
     ExpectedArray(Option<ValueType>),
     ExpectedArrayIndexingToBeInt(Option<ValueType>)
@@ -29,7 +29,7 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
             EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
             EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
-            EvaluationError::UndefinedFunction => { write!(f, "Undefined function") },
+            EvaluationError::UndefinedFunction(function) => { write!(f, "Undefined function {:?}", function) },
             EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
             EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
             EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
@@ -173,7 +173,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None
-                        ).ok_or(EvaluationError::UndefinedOperation)
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
                     }
                     Function::Least if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
@@ -187,7 +187,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None
-                        ).ok_or(EvaluationError::UndefinedOperation)
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
                     }
                     Function::Abs if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
@@ -199,7 +199,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None,
                             |_| None,
                             |_| None
-                        ).ok_or(EvaluationError::UndefinedOperation)
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
                     }
                     Function::Sqrt if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
@@ -211,7 +211,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None,
                             |_| None,
                             |_| None
-                        ).ok_or(EvaluationError::UndefinedOperation)
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
                     }
                     Function::Pow if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
@@ -231,14 +231,14 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None
-                        ).ok_or(EvaluationError::UndefinedOperation)
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
                     }
                     Function::StringLength if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
 
                         match arg {
                             Value::String(str) => Ok(Value::Int(str.chars().count() as i64)),
-                            _ => Err(EvaluationError::UndefinedOperation)
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
                         }
                     }
                     Function::StringToUpper if arguments.len() == 1 => {
@@ -246,7 +246,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 
                         match arg {
                             Value::String(str) => Ok(Value::String(str.to_uppercase())),
-                            _ => Err(EvaluationError::UndefinedOperation)
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
                         }
                     }
                     Function::StringToLower if arguments.len() == 1 => {
@@ -254,7 +254,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 
                         match arg {
                             Value::String(str) => Ok(Value::String(str.to_lowercase())),
-                            _ => Err(EvaluationError::UndefinedOperation)
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
                         }
                     }
                     Function::RegexMatches if arguments.len() == 2 => {
@@ -267,7 +267,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                                 Ok(Value::Bool(pattern.is_match(&value)))
                             },
                             (Value::Null, Value::String(_)) => Ok(Value::Bool(false)),
-                            _ => Err(EvaluationError::UndefinedOperation)
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
                         }
                     }
                     Function::ArrayUnique if arguments.len() == 1 => {
@@ -278,10 +278,20 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                                 unique_values(&mut values);
                                 Ok(Value::Array(element, values))
                             },
-                            _ => Err(EvaluationError::UndefinedOperation)
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
                         }
                     }
-                    _ => Err(EvaluationError::UndefinedFunction)
+                    Function::ArrayLength if arguments.len() == 1 => {
+                        let arg = executed_arguments.remove(0);
+
+                        match arg {
+                            Value::Array(_, values) => {
+                                Ok(Value::Int(values.len() as i64))
+                            },
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                        }
+                    }
+                    _ => Err(EvaluationError::UndefinedFunction(function.clone()))
                 }
             }
             ExpressionTree::ArrayElementAccess { array, index } => {

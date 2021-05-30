@@ -60,15 +60,20 @@ Supported aggregates:
 * Max
 * Sum
 * Avg
-* Array_agg (and own variant: array_agg_unique)
+* array_agg (and own variant: Array_agg_unique)
 
 Supported functions:
-* least
-* greatest
-* abs
-* sqrt
-* pow
-* regex_matches
+* `least(INT|REAL, INT|REAL) => INT|REAL`
+* `greatest(INT|REAL, INT|REAL) => INT|REAL`
+* `abs(INT|REAL) => INT|REAL`
+* `sqrt(REAL) => REAL`
+* `pow(REAL, REAL) => REAL`
+* `regex_matches(TEXT, TEXT) => BOOLEAN`
+* `length(TEXT) => INT`
+* `upper(TEXT) => TEXT`
+* `lower(TEXT) => TEXT`
+* `array_unique(ARRAY) => ARRAY`
+* `array_length(ARRAY) => INT`
 
 ## Special features
 The input filename can either be specified with the CLI or as an additional argument to the `FROM` statement as following:

@@ -305,7 +305,8 @@ pub enum Function {
     StringToUpper,
     StringToLower,
     RegexMatches,
-    ArrayUnique
+    ArrayUnique,
+    ArrayLength
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
