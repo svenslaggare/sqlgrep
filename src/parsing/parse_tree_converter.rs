@@ -263,7 +263,7 @@ lazy_static! {
 fn any_aggregates(projections: &Vec<(Option<String>, ParseExpressionTree)>) -> bool {
     projections.iter().any(|(_, projection)| {
         match projection {
-            ParseExpressionTree::Call(name, _) if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => true,
+            ParseExpressionTree::Call { name, arguments: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => true,
             _ => false
         }
     })
@@ -350,7 +350,7 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
 
             Ok(ExpressionTree::Or { left, right })
         }
-        ParseExpressionTree::Call(name, arguments) => {
+        ParseExpressionTree::Call { name, arguments } => {
             if state.allow_aggregates {
                 match transform_call_aggregate(&name, arguments.clone(), 0) {
                     Ok((_, aggregate)) => {
@@ -376,13 +376,18 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
                 ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
             }).ok_or(ConvertParseTreeError::UndefinedFunction)
         }
+        ParseExpressionTree::ArrayElementAccess { array, index } => {
+            let array = Box::new(transform_expression(*array, state)?);
+            let index = Box::new(transform_expression(*index, state)?);
+            Ok(ExpressionTree::ArrayElementAccess { array, index })
+        }
     }
 }
 
 fn transform_aggregate(tree: ParseExpressionTree, index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
     match tree {
         ParseExpressionTree::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name))),
-        ParseExpressionTree::Call(name, arguments) => transform_call_aggregate(&name, arguments, index),
+        ParseExpressionTree::Call { name, arguments } => transform_call_aggregate(&name, arguments, index),
         _ => { return Err(ConvertParseTreeError::UndefinedAggregate); }
     }
 }
@@ -649,13 +654,13 @@ fn test_select_statement7() {
         projections: vec![
             (
                 None,
-                ParseExpressionTree::Call(
-                    "GREATEST".to_owned(),
-                    vec![
+                ParseExpressionTree::Call {
+                    name: "GREATEST".to_owned(),
+                    arguments: vec![
                         ParseExpressionTree::ColumnAccess("x".to_owned()),
                         ParseExpressionTree::ColumnAccess("y".to_owned())
                     ]
-                )
+                }
             )
         ],
         from: ("test".to_string(), None),
@@ -783,7 +788,7 @@ fn test_aggregate_statement1() {
     let tree = ParseOperationTree::Select {
         projections: vec![
             (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
-            (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+            (None, ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -817,7 +822,7 @@ fn test_aggregate_statement2() {
     let tree = ParseOperationTree::Select {
         projections: vec![
             (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
-            (None, ParseExpressionTree::Call("SUM".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+            (None, ParseExpressionTree::Call { name: "SUM".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -851,7 +856,7 @@ fn test_aggregate_statement3() {
     let tree = ParseOperationTree::Select {
         projections: vec![
             (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
-            (None, ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
+            (None, ParseExpressionTree::Call { name: "COUNT".to_owned(), arguments: vec![] } ),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -883,7 +888,7 @@ fn test_aggregate_statement3() {
 fn test_aggregate_statement4() {
     let tree = ParseOperationTree::Select {
         projections: vec![
-            (None, ParseExpressionTree::Call("COUNT".to_owned(), vec![])),
+            (None, ParseExpressionTree::Call { name: "COUNT".to_owned(), arguments: vec![] } ),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -909,7 +914,7 @@ fn test_aggregate_statement4() {
 fn test_aggregate_statement5() {
     let tree = ParseOperationTree::Select {
         projections: vec![
-            (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+            (None, ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -935,7 +940,7 @@ fn test_aggregate_statement5() {
 fn test_aggregate_statement6() {
     let tree = ParseOperationTree::Select {
         projections: vec![
-            (None, ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+            (None, ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -949,7 +954,7 @@ fn test_aggregate_statement6() {
                 }),
                 right: Box::new(ParseExpressionTree::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::Call("MAX".to_owned(), vec![ParseExpressionTree::ColumnAccess("x".to_owned())])),
+                    left: Box::new(ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
                     right: Box::new(ParseExpressionTree::Value(Value::Int(2000))),
                 })
             }

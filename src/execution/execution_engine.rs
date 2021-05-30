@@ -2,15 +2,15 @@ use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::io::{BufReader, BufRead};
 use std::fs::File;
+use std::iter::FromIterator;
 
 use fnv::FnvHasher;
 
-use crate::data_model::{Row, TableDefinition, Tables};
+use crate::data_model::{Row, TableDefinition, Tables, ColumnDefinition, ColumnParsing, JsonAccess};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow, ColumnProvider};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::select_execution::SelectExecutionEngine;
-use crate::model::{AggregateStatement, SelectStatement, Statement, Value, JoinClause, ExpressionTree};
-use std::iter::FromIterator;
+use crate::model::{AggregateStatement, SelectStatement, Statement, Value, JoinClause, ExpressionTree, CompareOperator, ValueType};
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -393,4 +393,71 @@ impl JoinedTableData {
         let joiner_on_value = &joined_row.columns[joiner_on_column_index];
         Ok(self.rows.get(joiner_on_value))
     }
+}
+
+#[test]
+fn test_json_array1() {
+    let mut tables = Tables::new();
+    tables.add_table(
+        "clients",
+        TableDefinition::new(
+            "clients",
+            vec![],
+            vec![
+                ColumnDefinition::with_parsing(
+                    ColumnParsing::Json(JsonAccess::Field { name: "timestamp".to_owned(), inner: None }),
+                    "timestamp",
+                    ValueType::Int
+                ),
+                ColumnDefinition::with_parsing(
+                    ColumnParsing::Json(JsonAccess::Field { name: "events".to_owned(), inner: None }),
+                    "events",
+                    ValueType::Array(Box::new(ValueType::String))
+                )
+            ],
+        ).unwrap()
+    );
+
+    let mut execution_engine = ExecutionEngine::new(&tables);
+    let statement = Statement::Select(SelectStatement {
+        projections: vec![
+            ("timestamp".to_owned(), ExpressionTree::ColumnAccess("timestamp".to_owned())),
+            ("event".to_owned(), ExpressionTree::ArrayElementAccess {
+                array: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
+                index: Box::new(ExpressionTree::Value(Value::Int(1)))
+            })
+        ],
+        from: "clients".to_string(),
+        filename: None,
+        filter: Some(ExpressionTree::IsNot {
+            left: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
+            right: Box::new(ExpressionTree::Value(Value::Null))
+        }),
+        join: None
+    });
+
+    let mut result_rows = Vec::new();
+    for line in BufReader::new(File::open("testdata/clients_data.json").unwrap()).lines() {
+        let (result, _) = execution_engine.execute(
+            &statement,
+            line.unwrap(),
+            &ExecutionConfig::default(),
+            None
+        );
+
+        if let Some(result) = result.unwrap() {
+            result_rows.extend(result.data);
+        }
+    }
+
+    assert_eq!(3, result_rows.len());
+
+    assert_eq!(Value::Int(1609789423312), result_rows[0].columns[0]);
+    assert_eq!(Value::String("started".to_owned()), result_rows[0].columns[1]);
+
+    assert_eq!(Value::Int(1609789423325), result_rows[1].columns[0]);
+    assert_eq!(Value::String("stopped".to_owned()), result_rows[1].columns[1]);
+
+    assert_eq!(Value::Int(1609789426639), result_rows[2].columns[0]);
+    assert_eq!(Value::Null, result_rows[2].columns[1]);
 }

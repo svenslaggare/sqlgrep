@@ -1,13 +1,14 @@
 use std::hash::{Hasher, Hash};
 use std::collections::{HashMap, BTreeSet};
+use std::iter::FromIterator;
 
 use regex::Regex;
 
 use fnv::FnvHasher;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate};
-use crate::execution::ColumnProvider;
-use std::iter::FromIterator;
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string};
+use crate::execution::{ColumnProvider};
+
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
@@ -16,7 +17,9 @@ pub enum EvaluationError {
     GroupValueNotFound,
     UndefinedOperation,
     UndefinedFunction,
-    InvalidRegex(String)
+    InvalidRegex(String),
+    ExpectedArray(Option<ValueType>),
+    ExpectedArrayIndexingToBeInt(Option<ValueType>)
 }
 
 impl std::fmt::Display for EvaluationError {
@@ -28,6 +31,8 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
             EvaluationError::UndefinedFunction => { write!(f, "Undefined function") },
             EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
+            EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
+            EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
         }
     }
 }
@@ -277,6 +282,23 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         }
                     }
                     _ => Err(EvaluationError::UndefinedFunction)
+                }
+            }
+            ExpressionTree::ArrayElementAccess { array, index } => {
+                let array = self.evaluate(array)?;
+                match array {
+                    Value::Array(_, values) => {
+                        let index = self.evaluate(index)?;
+                        match index {
+                            Value::Int(value) => {
+                                Ok(values.get((value - 1) as usize).cloned().unwrap_or(Value::Null))
+                            }
+                            _ => {
+                                Err(EvaluationError::ExpectedArrayIndexingToBeInt(index.value_type()))
+                            }
+                        }
+                    }
+                    _ => { Err(EvaluationError::ExpectedArray(array.value_type())) }
                 }
             }
             ExpressionTree::Aggregate(id, aggregate) => {
@@ -621,6 +643,36 @@ fn test_regex1() {
                 ExpressionTree::Value(Value::String("HELLO me NAME".to_owned())),
                 ExpressionTree::Value(Value::String("(my)|(MY)".to_owned()))
             ]
+        })
+    );
+}
+
+#[test]
+fn test_array_access1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Int(20)),
+        expression_execution_engine.evaluate(&ExpressionTree::ArrayElementAccess {
+            array: Box::new(ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(10), Value::Int(20), Value::Int(30), Value::Int(40)]))),
+            index: Box::new(ExpressionTree::Value(Value::Int(2)))
+        })
+    );
+}
+
+#[test]
+fn test_array_access2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Null),
+        expression_execution_engine.evaluate(&ExpressionTree::ArrayElementAccess {
+            array: Box::new(ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(10), Value::Int(20), Value::Int(30), Value::Int(40)]))),
+            index: Box::new(ExpressionTree::Value(Value::Int(24)))
         })
     );
 }

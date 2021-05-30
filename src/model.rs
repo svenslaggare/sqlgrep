@@ -1,11 +1,11 @@
 use std::str::FromStr;
-use std::fmt::Formatter;
 
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
-use crate::data_model::TableDefinition;
 use itertools::Itertools;
+
+use crate::data_model::TableDefinition;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Float(pub f64);
@@ -31,7 +31,7 @@ impl Hash for Float {
 }
 
 impl std::fmt::Display for Float {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
@@ -174,7 +174,7 @@ impl Value {
 }
 
 impl std::fmt::Display for Value {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Null => write!(f, "NULL"),
             Value::Int(x) => write!(f, "{}", x),
@@ -251,6 +251,25 @@ impl ValueType {
     }
 }
 
+impl std::fmt::Display for ValueType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueType::Int => write!(f, "int"),
+            ValueType::Float => write!(f, "real"),
+            ValueType::Bool => write!(f, "boolean"),
+            ValueType::String => write!(f, "text"),
+            ValueType::Array(element) => write!(f, "{}[]", element)
+        }
+    }
+}
+
+pub fn value_type_to_string(value: &Option<ValueType>) -> String {
+    match value {
+        Some(value) => value.to_string(),
+        None => "NULL".to_owned()
+    }
+}
+
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum CompareOperator {
     Equal,
@@ -313,6 +332,7 @@ pub enum ExpressionTree {
     Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
     Function { function: Function, arguments: Vec<ExpressionTree> },
+    ArrayElementAccess { array: Box<ExpressionTree>, index: Box<ExpressionTree> },
     Aggregate(usize, Box<Aggregate>)
 }
 
@@ -353,6 +373,10 @@ impl ExpressionTree {
                 for arg in arguments {
                     arg.visit(f)?;
                 }
+            }
+            ExpressionTree::ArrayElementAccess { array, index } => {
+                array.visit(f)?;
+                index.visit(f)?;
             }
             ExpressionTree::Aggregate(_, aggregate) => {
                 match aggregate.as_ref() {
