@@ -97,16 +97,7 @@ impl<'a> ExecutionEngine<'a> {
                         );
 
                         let result = select_execution_engine.execute(select_statement, column_provider)?;
-                        if let Some(result) = result {
-                            match &mut result_row {
-                                None => {
-                                    result_row = Some(result);
-                                }
-                                Some(result_row) => {
-                                    result_row.data.extend(result.data);
-                                }
-                            }
-                        }
+                        extend_option_result_row(&mut result_row, result);
                     }
 
                     Ok(result_row)
@@ -168,16 +159,7 @@ impl<'a> ExecutionEngine<'a> {
                         );
 
                         let result = self.aggregate_execution_engine.execute(aggregate_statement, column_provider)?;
-                        if let Some(result) = result {
-                            match &mut result_row {
-                                None => {
-                                    result_row = Some(result);
-                                }
-                                Some(result_row) => {
-                                    result_row.data.extend(result.data);
-                                }
-                            }
-                        }
+                        extend_option_result_row(&mut result_row, result);
                     }
 
                     Ok(result_row)
@@ -392,6 +374,19 @@ impl JoinedTableData {
             .ok_or_else(|| ExecutionError::ColumnNotFound(joiner_column.to_owned()))?;
         let joiner_on_value = &joined_row.columns[joiner_on_column_index];
         Ok(self.rows.get(joiner_on_value))
+    }
+}
+
+fn extend_option_result_row(result_row: &mut Option<ResultRow>, result: Option<ResultRow>) {
+    if let Some(result) = result {
+        match result_row {
+            None => {
+                *result_row = Some(result);
+            }
+            Some(result_row) => {
+                result_row.data.extend(result.data);
+            }
+        }
     }
 }
 
