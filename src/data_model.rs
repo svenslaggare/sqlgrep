@@ -119,10 +119,10 @@ impl ColumnDefinition {
                       name: &str,
                       column_type: ValueType) -> ColumnDefinition {
         ColumnDefinition {
-            parsing: ColumnParsing::Regex {
+            parsing: ColumnParsing::Regex(RegexPattern {
                 pattern_name: pattern_name.to_owned(),
                 group_index,
-            },
+            }),
             name: name.to_owned(),
             column_type,
             options: ColumnOptions::new()
@@ -181,28 +181,48 @@ impl<'a> ParsingInput<'a> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct RegexPattern {
+    pub pattern_name: String,
+    pub group_index: usize
+}
+
+impl RegexPattern {
+    pub fn new(pattern_name: String, group_index: usize) -> RegexPattern {
+        RegexPattern {
+            pattern_name,
+            group_index
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum ColumnParsing {
-    Regex { pattern_name: String, group_index: usize },
+    Regex(RegexPattern),
+    MultiRegex(Vec<RegexPattern>),
     Json(JsonAccess)
 }
 
 impl ColumnParsing {
     pub fn extract(&self, column: &ColumnDefinition, parsing_input: &ParsingInput) -> Value {
         match self {
-            ColumnParsing::Regex { pattern_name, group_index } => {
-                if let Some(capture_result) = parsing_input.regex_results.get(&pattern_name) {
-                    let group_result = capture_result.get(*group_index);
-                    if column.column_type == ValueType::Bool {
-                        Value::Bool(group_result.is_some())
-                    } else {
-                        if let Some(group) = group_result {
-                            Value::from_option(column.column_type.parse(group.as_str()))
+            ColumnParsing::Regex(pattern) => {
+                ColumnParsing::extract_using_regex(&column.column_type, parsing_input, pattern)
+            }
+            ColumnParsing::MultiRegex(patterns) => {
+                match &column.column_type {
+                    ValueType::Array(element) => {
+                        let mut values = Vec::new();
+                        for pattern in patterns {
+                            values.push(ColumnParsing::extract_using_regex(element, parsing_input, pattern));
+                        }
+
+                        if values.iter().any(|v| v.is_not_null()) {
+                            Value::Array(*element.clone(), values)
                         } else {
                             Value::Null
                         }
                     }
-                } else {
-                    Value::Null
+                    _ => Value::Null
                 }
             }
             ColumnParsing::Json(access) => {
@@ -219,6 +239,27 @@ impl ColumnParsing {
                     Value::Null
                 }
             }
+        }
+    }
+
+    fn extract_using_regex(column_type: &ValueType,
+                           parsing_input: &ParsingInput,
+                           pattern: &RegexPattern) -> Value {
+        let pattern_name = &pattern.pattern_name;
+        let group_index = &pattern.group_index;
+        if let Some(capture_result) = parsing_input.regex_results.get(&pattern_name) {
+            let group_result = capture_result.get(*group_index);
+            if column_type == &ValueType::Bool {
+                Value::Bool(group_result.is_some())
+            } else {
+                if let Some(group) = group_result {
+                    Value::from_option(column_type.parse(group.as_str()))
+                } else {
+                    Value::Null
+                }
+            }
+        } else {
+            Value::Null
         }
     }
 }
@@ -424,12 +465,94 @@ fn test_table_extract6() {
         "test",
         vec![("line", "([0-9 ]+)")],
         vec![
-            ColumnDefinition::with_options(ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 }, "x", ValueType::String, ColumnOptions::new().trim())
+            ColumnDefinition::with_options(
+                ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }),
+                "x", ValueType::String,
+                ColumnOptions::new().trim()
+            )
         ]
     ).unwrap();
 
     let result = table_definition.extract("A: 4711    ");
     assert_eq!(Value::String("4711".to_owned()), result.columns[0]);
+}
+
+#[test]
+fn test_table_extract_array1() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9]+), ([0-9]+), ([0-9]+)")],
+        vec![
+            ColumnDefinition::with_options(
+                ColumnParsing::MultiRegex(vec![
+                    RegexPattern::new("line".to_owned(), 1),
+                    RegexPattern::new("line".to_owned(), 2),
+                    RegexPattern::new("line".to_owned(), 3)
+                ]),
+                "x",
+                ValueType::Array(Box::new(ValueType::Int)),
+                ColumnOptions::new()
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 13, 47, 11");
+    assert_eq!(
+        Value::Array(ValueType::Int, vec![Value::Int(13), Value::Int(47), Value::Int(11)]),
+        result.columns[0]
+    );
+}
+
+#[test]
+fn test_table_extract_array2() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9]+), ([0-9]+), ([0-9]+)")],
+        vec![
+            ColumnDefinition::with_options(
+                ColumnParsing::MultiRegex(vec![
+                    RegexPattern::new("line".to_owned(), 1),
+                    RegexPattern::new("line".to_owned(), 2),
+                    RegexPattern::new("line".to_owned(), 3)
+                ]),
+                "x",
+                ValueType::Array(Box::new(ValueType::Int)),
+                ColumnOptions::new()
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: haha");
+    assert_eq!(
+        Value::Null,
+        result.columns[0]
+    );
+}
+
+#[test]
+fn test_table_extract_array3() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9]+), ([0-9]+), ([0-9]+)")],
+        vec![
+            ColumnDefinition::with_options(
+                ColumnParsing::MultiRegex(vec![
+                    RegexPattern::new("line".to_owned(), 1),
+                    RegexPattern::new("line".to_owned(), 2),
+                    RegexPattern::new("line".to_owned(), 3)
+                ]),
+                "x",
+                ValueType::Array(Box::new(ValueType::Int)),
+                ColumnOptions::new()
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("A: 13, B, 47");
+    assert_eq!(
+        Value::Null,
+        result.columns[0]
+    );
 }
 
 #[test]
@@ -499,7 +622,7 @@ fn test_table_extract_multiple4() {
         ],
         vec![
             ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::with_options(ColumnParsing::Regex { pattern_name: "line2".to_string(), group_index: 1 }, "y", ValueType::String, ColumnOptions::new().not_null())
+            ColumnDefinition::with_options(ColumnParsing::Regex(RegexPattern { pattern_name: "line2".to_string(), group_index: 1 }), "y", ValueType::String, ColumnOptions::new().not_null())
         ]
     ).unwrap();
 
@@ -518,7 +641,7 @@ fn test_table_extract_multiple5() {
         ],
         vec![
             ColumnDefinition::with_regex("line1", 1, "x", ValueType::Int),
-            ColumnDefinition::with_options(ColumnParsing::Regex { pattern_name: "line2".to_string(), group_index: 1 }, "y", ValueType::String, ColumnOptions::new().not_null())
+            ColumnDefinition::with_options(ColumnParsing::Regex(RegexPattern { pattern_name: "line2".to_string(), group_index: 1 }), "y", ValueType::String, ColumnOptions::new().not_null())
         ]
     ).unwrap();
 

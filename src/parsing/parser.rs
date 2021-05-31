@@ -7,7 +7,7 @@ use std::fmt::Formatter;
 use lazy_static::lazy_static;
 
 use crate::model::{Value, ValueType, Float};
-use crate::data_model::{JsonAccess, ColumnParsing};
+use crate::data_model::{JsonAccess, ColumnParsing, RegexPattern};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -183,7 +183,7 @@ impl ParseColumnDefinition {
                name: String,
                column_type: ValueType) -> ParseColumnDefinition {
         ParseColumnDefinition {
-            parsing: ColumnParsing::Regex { pattern_name, group_index: pattern_index },
+            parsing: ColumnParsing::Regex(RegexPattern { pattern_name, group_index: pattern_index }),
             name,
             column_type,
             nullable: None,
@@ -721,12 +721,48 @@ impl<'a> Parser<'a> {
                                 ParserError::ExpectedRightSquareParentheses
                             )?;
 
+                            let mut patterns = vec![
+                                RegexPattern { pattern_name, group_index }
+                            ];
+
+                            if self.current() == &Token::Comma {
+                                loop {
+                                    self.next()?;
+                                    let pattern_name = self.consume_identifier()?;
+
+                                    self.expect_and_consume_token(
+                                        Token::LeftSquareParentheses,
+                                        ParserError::ExpectedLeftSquareParentheses
+                                    )?;
+
+                                    let group_index = self.consume_int()? as usize;
+
+                                    self.expect_and_consume_token(
+                                        Token::RightSquareParentheses,
+                                        ParserError::ExpectedRightSquareParentheses
+                                    )?;
+
+                                    patterns.push(RegexPattern::new(pattern_name, group_index));
+                                    match self.current() {
+                                        Token::RightArrow => { break; },
+                                        Token::Comma => {},
+                                        _ => {
+                                            return Err(ParserError::ExpectedRightArrow);
+                                        }
+                                    }
+                                }
+                            }
+
                             self.expect_and_consume_token(
                                 Token::RightArrow,
                                 ParserError::ExpectedRightArrow
                             )?;
 
-                            columns.push(self.parse_define_column(ColumnParsing::Regex { pattern_name, group_index })?);
+                            if patterns.len() == 1 {
+                                columns.push(self.parse_define_column(ColumnParsing::Regex(patterns.remove(0)))?);
+                            } else {
+                                columns.push(self.parse_define_column(ColumnParsing::MultiRegex(patterns))?);
+                            }
                         }
                         _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
                     }
@@ -743,7 +779,7 @@ impl<'a> Parser<'a> {
                     let pattern_name = format!("_pattern{}", patterns.len());
                     patterns.push((pattern_name.clone(), pattern.clone()));
 
-                    columns.push(self.parse_define_column(ColumnParsing::Regex { pattern_name, group_index: 1 })?);
+                    columns.push(self.parse_define_column(ColumnParsing::Regex(RegexPattern { pattern_name, group_index: 1 }))?);
                 }
                 Token::LeftCurlyParentheses => {
                     self.next()?;
@@ -854,7 +890,7 @@ impl<'a> Parser<'a> {
         let mut type_value = self.consume_identifier()?;
         while self.current() == &Token::LeftSquareParentheses {
             self.next()?;
-            self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightParentheses);
+            self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightParentheses)?;
             type_value += "[]";
         }
 
@@ -914,7 +950,7 @@ impl<'a> Parser<'a> {
                 }
                 Token::LeftSquareParentheses => {
                     lhs = ParseExpressionTree::ArrayElementAccess { array: Box::new(lhs), index: Box::new(rhs) };
-                    self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightSquareParentheses);
+                    self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightSquareParentheses)?;
                 }
                 _ => { return Err(ParserError::ExpectedOperator); }
             }
@@ -2560,7 +2596,7 @@ fn test_parse_create_table5() {
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
             columns: vec![ParseColumnDefinition {
-                parsing: ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 },
+                parsing: ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }),
                 name: "x".to_string(),
                 column_type: ValueType::Int,
                 nullable: Some(false),
@@ -2613,13 +2649,81 @@ fn test_parse_create_table6() {
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
             columns: vec![ParseColumnDefinition {
-                parsing: ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 },
+                parsing: ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }),
                 name: "x".to_owned(),
                 column_type: ValueType::String,
                 nullable: None,
                 trim: Some(true),
                 convert: None
             }]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_create_table7() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::String("A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::Comma,
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(2),
+            Token::RightSquareParentheses,
+            Token::Comma,
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(3),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT[]".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned())],
+            columns: vec![
+                ParseColumnDefinition {
+                    parsing: ColumnParsing::MultiRegex(vec![
+                        RegexPattern::new("line".to_owned(), 1),
+                        RegexPattern::new("line".to_owned(), 2),
+                        RegexPattern::new("line".to_owned(), 3)
+                    ]),
+                    name: "x".to_string(),
+                    column_type: ValueType::Array(Box::new(ValueType::Int)),
+                    nullable: None,
+                    trim: None,
+                    convert: None
+                }
+            ]
         },
         tree
     );

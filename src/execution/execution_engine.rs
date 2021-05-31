@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 
 use fnv::FnvHasher;
 
-use crate::data_model::{Row, TableDefinition, Tables, ColumnDefinition, ColumnParsing, JsonAccess};
+use crate::data_model::{Row, TableDefinition, Tables, ColumnDefinition, ColumnParsing, JsonAccess, RegexPattern};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow, ColumnProvider};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::select_execution::SelectExecutionEngine;
@@ -388,6 +388,83 @@ fn extend_option_result_row(result_row: &mut Option<ResultRow>, result: Option<R
             }
         }
     }
+}
+
+#[test]
+fn test_regex_array1() {
+    let mut tables = Tables::new();
+    tables.add_table(
+        "connections",
+        TableDefinition::new(
+            "connections",
+            vec![
+                ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ],
+            vec![
+                ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+                ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+                ColumnDefinition::with_parsing(
+                    ColumnParsing::MultiRegex(vec![
+                        RegexPattern { pattern_name: "line".to_string(), group_index: 9 },
+                        RegexPattern { pattern_name: "line".to_string(), group_index: 4 },
+                        RegexPattern { pattern_name: "line".to_string(), group_index: 5 },
+                        RegexPattern { pattern_name: "line".to_string(), group_index: 6 },
+                        RegexPattern { pattern_name: "line".to_string(), group_index: 7 },
+                        RegexPattern { pattern_name: "line".to_string(), group_index: 8 },
+                    ]),
+                    "datetime",
+                    ValueType::Array(Box::new(ValueType::String))
+                )
+            ],
+        ).unwrap()
+    );
+
+    let mut execution_engine = ExecutionEngine::new(&tables);
+    let statement = Statement::Select(SelectStatement {
+        projections: vec![
+            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+            ("datetime".to_owned(), ExpressionTree::ColumnAccess("datetime".to_owned())),
+        ],
+        from: "connections".to_string(),
+        filename: None,
+        filter: Some(ExpressionTree::Compare {
+            operator: CompareOperator::Equal,
+            left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
+            right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
+        }),
+        join: None
+    });
+
+    let mut result_rows = Vec::new();
+    for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
+        let (result, _) = execution_engine.execute(
+            &statement,
+            line.unwrap(),
+            &ExecutionConfig::default(),
+            None
+        );
+
+        if let Some(result) = result.unwrap() {
+            result_rows.extend(result.data);
+        }
+    }
+
+    assert_eq!(22, result_rows.len());
+
+    assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[0].columns[0]);
+    assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[0].columns[1]);
+    assert_eq!(
+        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("17".to_owned()), Value::String("20".to_owned()), Value::String("55".to_owned()), Value::String("06".to_owned())]),
+        result_rows[0].columns[2]
+    );
+
+    assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[21].columns[0]);
+    assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[21].columns[1]);
+    assert_eq!(
+        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("18".to_owned()), Value::String("02".to_owned()), Value::String("08".to_owned()), Value::String("12".to_owned())]),
+        result_rows[21].columns[2]
+    );
 }
 
 #[test]

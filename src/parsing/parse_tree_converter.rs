@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 
 use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition, ParseJoinClause};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function, JoinClause};
-use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing};
+use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing, RegexPattern};
 
 #[derive(Debug)]
 pub enum ConvertParseTreeError {
@@ -1025,5 +1025,5 @@ fn test_create_table_statement1() {
     assert_eq!(1, table_definition.columns.len());
     assert_eq!("x", table_definition.columns[0].name);
     assert_eq!(ValueType::Int, table_definition.columns[0].column_type);
-    assert_eq!(ColumnParsing::Regex { pattern_name: "line".to_string(), group_index: 1 }, table_definition.columns[0].parsing);
+    assert_eq!(ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }), table_definition.columns[0].parsing);
 }

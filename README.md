@@ -92,6 +92,9 @@ CREATE TABLE <name>(
     Inline regex. Will be bound to the first group
     '<regex patern>' => <column name> <column type>
     
+    Array pattern. Will create array of fixed sized based on the given patterns.
+    <pattern name>[<group index>], <pattern name>[<group index>], ... => <column name> <element type>[],
+    
     Json pattern. Will access the given attribute.
     { .field1.field2 } => <column name> <column type>,
     { .field1[<array index>] } => <column name> <column type>,
