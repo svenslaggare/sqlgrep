@@ -1,9 +1,11 @@
+pub mod tokenizer;
+pub mod operator;
 pub mod parser;
 pub mod parse_tree_converter;
 
 use crate::model::Statement;
-use crate::parsing::parser::ParserError;
 use crate::parsing::parse_tree_converter::ConvertParseTreeError;
+use crate::parsing::tokenizer::ParserError;
 
 #[derive(Debug)]
 pub enum CommonParserError {

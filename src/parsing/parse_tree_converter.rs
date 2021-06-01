@@ -5,9 +5,10 @@ use std::iter::FromIterator;
 
 use lazy_static::lazy_static;
 
-use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, Operator, ParseColumnDefinition, ParseJoinClause};
+use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, ParseColumnDefinition, ParseJoinClause};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function, JoinClause};
 use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing, RegexPattern};
+use crate::parsing::operator::Operator;
 
 #[derive(Debug)]
 pub enum ConvertParseTreeError {

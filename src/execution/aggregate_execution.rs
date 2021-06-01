@@ -7,7 +7,6 @@ use crate::data_model::Row;
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, HashMapOwnedKeyColumnProvider, ResultRow};
 use crate::execution::expression_execution::{ExpressionExecutionEngine, unique_values};
 use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTree, Value, ValueType};
-use crate::parsing::parser::Token::Operator;
 
 type GroupKey = Vec<Value>;
 type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
