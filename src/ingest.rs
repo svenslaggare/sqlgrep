@@ -211,18 +211,20 @@ impl<'a> FollowFileIngester<'a> {
 
 struct OutputPrinter {
     single_result: bool,
-    format: OutputFormat
+    format: OutputFormat,
+    first_line: bool
 }
 
 impl OutputPrinter {
     pub fn new(single_result: bool, format: OutputFormat) -> OutputPrinter {
         OutputPrinter {
             single_result,
-            format
+            format,
+            first_line: true
         }
     }
 
-    pub fn print(&self, result_row: &ResultRow) {
+    pub fn print(&mut self, result_row: &ResultRow) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
             if row.columns.len() == 1 && result_row.columns[0] == "input" && self.format == OutputFormat::Text {
@@ -249,6 +251,16 @@ impl OutputPrinter {
                         println!("{}", serde_json::to_string(&columns).unwrap());
                     }
                     OutputFormat::CSV(delimiter) => {
+                        if self.first_line {
+                            let column_names = result_row.columns
+                                .iter()
+                                .enumerate()
+                                .map(|(projection_index, projection_name)| format!("{}", projection_name))
+                                .collect::<Vec<_>>();
+
+                            println!("{}", column_names.join(&delimiter));
+                        }
+
                         let columns = result_row.columns
                             .iter()
                             .enumerate()
@@ -259,6 +271,10 @@ impl OutputPrinter {
                     }
                 }
             }
+        }
+
+        if !result_row.data.is_empty() {
+            self.first_line = false;
         }
 
         if multiple_rows && !self.single_result {
