@@ -98,7 +98,7 @@ CREATE TABLE <name>(
     Array pattern. Will create array of fixed sized based on the given patterns.
     <pattern name>[<group index>], <pattern name>[<group index>], ... => <column name> <element type>[],
     
-    Timestamp pattern. Will create a timestamp.
+    Timestamp pattern. Will create a timestamp. Year, month, day, hour, minute, second. Each part is optional.
     <pattern name>[<group index>], <pattern name>[<group index>], ... => <column name> TIMESTAMP,
     
     Json pattern. Will access the given attribute.

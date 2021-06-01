@@ -5,6 +5,19 @@ use crate::data_model::{JsonAccess, ColumnParsing, RegexPattern};
 use crate::parsing::tokenizer::{ParserError, Token, Keyword, tokenize};
 use crate::parsing::operator::{BinaryOperators, UnaryOperators, Operator};
 
+pub fn parse_str(text: &str) -> ParserResult<ParseOperationTree> {
+    let tokens = tokenize(text)?;
+
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    Parser::new(
+        &binary_operators,
+        &unary_operators,
+        tokens
+    ).parse()
+}
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum ParseExpressionTree {
     Value(Value),
@@ -775,19 +788,6 @@ impl<'a> Parser<'a> {
 
         Ok(&self.tokens[self.index as usize])
     }
-}
-
-pub fn parse_str(text: &str) -> ParserResult<ParseOperationTree> {
-    let tokens = tokenize(text)?;
-
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokens
-    ).parse()
 }
 
 #[test]
