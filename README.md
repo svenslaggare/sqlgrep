@@ -52,7 +52,9 @@ Supported features:
 * Group by
 * Aggregates
 * Having
-* Inner, outer joins. The joined table is loaded completely in memory.
+* Inner & outer joins. The joined table is loaded completely in memory.
+* Extract(x FROM y) for timestamps.
+
 
 Supported aggregates:
 * `count`
