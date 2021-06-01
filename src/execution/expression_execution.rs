@@ -6,9 +6,12 @@ use regex::Regex;
 
 use fnv::FnvHasher;
 
+use chrono::{Local, Datelike, Timelike};
+
+use itertools::Itertools;
+
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float};
 use crate::execution::{ColumnProvider};
-use chrono::{Local, Datelike, Timelike};
 
 
 #[derive(Debug, PartialEq)]
@@ -17,7 +20,7 @@ pub enum EvaluationError {
     GroupKeyNotFound,
     GroupValueNotFound,
     UndefinedOperation,
-    UndefinedFunction(Function),
+    UndefinedFunction(Function, Vec<Option<ValueType>>),
     InvalidRegex(String),
     ExpectedArray(Option<ValueType>),
     ExpectedArrayIndexingToBeInt(Option<ValueType>)
@@ -30,7 +33,14 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
             EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
             EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
-            EvaluationError::UndefinedFunction(function) => { write!(f, "Undefined function {:?}", function) },
+            EvaluationError::UndefinedFunction(function, arguments) => {
+                write!(
+                    f,
+                    "Undefined function {:?}({})",
+                    function,
+                    arguments.iter().map(|arg| arg.as_ref().map(|x| x.to_string()).unwrap_or("NULL".to_owned())).join(", ")
+                )
+            },
             EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
             EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
             EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
@@ -162,6 +172,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 for argument in arguments {
                     executed_arguments.push(self.evaluate(argument)?);
                 }
+                let executed_arguments_types = executed_arguments.iter().map(|arg| arg.value_type()).collect::<Vec<_>>();
 
                 match function {
                     Function::Greatest if arguments.len() == 2 => {
@@ -177,7 +188,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
-                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Least if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
@@ -192,7 +203,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
-                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Abs if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
@@ -205,7 +216,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None,
                             |_| None,
                             |_| None,
-                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Sqrt if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
@@ -218,7 +229,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None,
                             |_| None,
                             |_| None,
-                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Pow if arguments.len() == 2 => {
                         let arg0 = executed_arguments.remove(0);
@@ -239,14 +250,14 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
-                        ).ok_or(EvaluationError::UndefinedFunction(function.clone()))
+                        ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::StringLength if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
 
                         match arg {
                             Value::String(str) => Ok(Value::Int(str.chars().count() as i64)),
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::StringToUpper if arguments.len() == 1 => {
@@ -254,7 +265,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 
                         match arg {
                             Value::String(str) => Ok(Value::String(str.to_uppercase())),
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::StringToLower if arguments.len() == 1 => {
@@ -262,7 +273,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
 
                         match arg {
                             Value::String(str) => Ok(Value::String(str.to_lowercase())),
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::RegexMatches if arguments.len() == 2 => {
@@ -275,7 +286,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                                 Ok(Value::Bool(pattern.is_match(&value)))
                             },
                             (Value::Null, Value::String(_)) => Ok(Value::Bool(false)),
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::ArrayUnique if arguments.len() == 1 => {
@@ -286,7 +297,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                                 unique_values(&mut values);
                                 Ok(Value::Array(element, values))
                             },
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::ArrayLength if arguments.len() == 1 => {
@@ -296,14 +307,14 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             Value::Array(_, values) => {
                                 Ok(Value::Int(values.len() as i64))
                             },
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampNow  if arguments.len() == 0 => {
                         if executed_arguments.is_empty() {
                             Ok(Value::Timestamp(Local::now()))
                         } else {
-                            Err(EvaluationError::UndefinedFunction(function.clone()))
+                            Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractEpoch if arguments.len() == 1 => {
@@ -313,46 +324,46 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             Value::Timestamp(timestamp) => {
                                 Ok(Value::Float(Float(timestamp.timestamp_millis() as f64 / 1000.0)))
                             },
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractYear if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.year() as i64)) }
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractMonth if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.month() as i64)) }
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractDay if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.day() as i64)) }
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractHour if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.hour() as i64)) }
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractMinute if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.minute() as i64)) }
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractSecond if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.second() as i64)) }
-                            _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
-                    _ => Err(EvaluationError::UndefinedFunction(function.clone()))
+                    _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                 }
             }
             ExpressionTree::ArrayElementAccess { array, index } => {
