@@ -187,6 +187,25 @@ fn test_ftpd6() {
 }
 
 #[test]
+fn test_ftpd7() {
+    let tables = create_tables("testdata/ftpd_timestamp.txt");
+
+    let query_tree = parser::parse_str("SELECT ip, hostname, timestamp, EXTRACT(EPOCH FROM timestamp) FROM connections WHERE hostname IS NOT NULL").unwrap();
+    let query = parse_tree_converter::transform_statement(query_tree).unwrap();
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    ingester.process(query).unwrap();
+    assert_eq!(200, ingester.statistics.total_result_rows);
+}
+
+#[test]
 fn test_client1() {
     let tables = create_tables("testdata/clients.txt");
 

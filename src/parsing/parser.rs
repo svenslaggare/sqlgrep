@@ -29,6 +29,7 @@ pub enum Keyword {
     Outer,
     Join,
     On,
+    Extract
 }
 
 impl std::fmt::Display for Keyword {
@@ -244,6 +245,7 @@ lazy_static! {
             ("outer".to_owned(), Keyword::Outer),
             ("join".to_owned(), Keyword::Join),
             ("on".to_owned(), Keyword::On),
+            ("extract".to_owned(), Keyword::Extract),
         ].into_iter()
     );
 
@@ -1012,6 +1014,9 @@ impl<'a> Parser<'a> {
 
                 expression
             }
+            Token::Keyword(Keyword::Extract) => {
+                self.parse_extract_expression()
+            }
             _ => Err(ParserError::ExpectedExpression)
         }
     }
@@ -1077,6 +1082,23 @@ impl<'a> Parser<'a> {
             }
             _ => Err(ParserError::Unknown)
         }
+    }
+
+    fn parse_extract_expression(&mut self) -> ParserResult<ParseExpressionTree> {
+        self.next()?;
+
+        self.expect_and_consume_token(Token::LeftParentheses, ParserError::ExpectedLeftParentheses)?;
+
+        let identifier = self.consume_identifier()?;
+        self.expect_and_consume_token(Token::Keyword(Keyword::From), ParserError::ExpectedKeyword(Keyword::From))?;
+        let from_expression = self.parse_expression_internal()?;
+
+        self.expect_and_consume_token(Token::RightParentheses, ParserError::ExpectedRightParentheses)?;
+
+        Ok(ParseExpressionTree::Call {
+            name: format!("timestamp_extract_{}", identifier.to_lowercase()),
+            arguments: vec![from_expression]
+        })
     }
 
     fn consume_identifier(&mut self) -> ParserResult<String> {
@@ -1779,6 +1801,35 @@ fn test_parse_expression11() {
                 left: Box::new(ParseExpressionTree::Value(Value::Int(11))),
                 right: Box::new(ParseExpressionTree::ColumnAccess("a".to_owned()))
             })
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_expression12() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Extract),
+            Token::LeftParentheses,
+            Token::Identifier("EPOCH".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("timestamp".to_string()),
+            Token::RightParentheses,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParseExpressionTree::Call {
+            name: "timestamp_extract_epoch".to_string(),
+            arguments: vec![ParseExpressionTree::ColumnAccess("timestamp".to_owned())]
         },
         tree
     );

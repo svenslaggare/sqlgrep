@@ -106,7 +106,8 @@ impl AggregateExecutionEngine {
                             |_| {},
                             |_| {},
                             |_| {},
-                            |_| {}
+                            |_| {},
+                            |_| {},
                         );
                     }
                 }
@@ -119,7 +120,8 @@ impl AggregateExecutionEngine {
                         |x, y| { *x = (*x).min(y) },
                         |_, _| {},
                         |_, _| {},
-                        |_, _| {}
+                        |_, _| {},
+                        |_, _| {},
                     );
                 }
                 Aggregate::Max(ref expression) => {
@@ -131,7 +133,8 @@ impl AggregateExecutionEngine {
                         |x, y| { *x = (*x).max(y) },
                         |_, _| {},
                         |_, _| {},
-                        |_, _| {}
+                        |_, _| {},
+                        |_, _| {},
                     );
                 }
                 Aggregate::Average(ref expression) => {
@@ -145,7 +148,8 @@ impl AggregateExecutionEngine {
                         |x, y| { *x += y },
                         |_, _| {},
                         |_, _| {},
-                        |_, _| {}
+                        |_, _| {},
+                        |_, _| {},
                     );
                     average_entry.1 += 1;
 
@@ -155,7 +159,8 @@ impl AggregateExecutionEngine {
                         |x| Some(x / average_entry.1 as f64),
                         |_| None,
                         |_| None,
-                        |_| None
+                        |_| None,
+                        |_| None,
                     );
 
                     if let Some(average) = average {
@@ -173,7 +178,8 @@ impl AggregateExecutionEngine {
                         |x, y| { *x += y },
                         |_, _| {},
                         |_, _| {},
-                        |_, _| {}
+                        |_, _| {},
+                        |_, _| {},
                     );
                     sum_entry.1 += 1;
 
@@ -196,7 +202,8 @@ impl AggregateExecutionEngine {
                         |_| {},
                         |_| {},
                         |_| {},
-                        |array| { array.push(column_value.clone()) }
+                        |array| { array.push(column_value.clone()) },
+                        |_| {},
                     );
                 }
             }
@@ -301,7 +308,8 @@ impl AggregateExecutionEngine {
                                     |_| {},
                                     |_| {},
                                     |_| {},
-                                    |array| { unique_values(array); }
+                                    |array| { unique_values(array); },
+                                    |_| {},
                                 );
 
                                 result_column.push(group_value);

@@ -5,6 +5,8 @@ use std::hash::{Hash, Hasher};
 
 use itertools::Itertools;
 
+use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Local, TimeZone};
+
 use crate::data_model::TableDefinition;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -42,6 +44,8 @@ impl From<f64> for Float {
     }
 }
 
+pub type TimestampType = DateTime<Local>;
+
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Hash, Ord)]
 pub enum Value {
     Null,
@@ -49,7 +53,8 @@ pub enum Value {
     Float(Float),
     Bool(bool),
     String(String),
-    Array(ValueType, Vec<Value>)
+    Array(ValueType, Vec<Value>),
+    Timestamp(TimestampType)
 }
 
 impl Value {
@@ -85,7 +90,8 @@ impl Value {
             Value::Float(_) => Some(ValueType::Float),
             Value::Bool(_) => Some(ValueType::Bool),
             Value::String(_) => Some(ValueType::String),
-            Value::Array(element, _) => Some(ValueType::Array(Box::new(element.clone())))
+            Value::Array(element, _) => Some(ValueType::Array(Box::new(element.clone()))),
+            Value::Timestamp(_) => Some(ValueType::Timestamp)
         }
     }
 
@@ -96,7 +102,8 @@ impl Value {
         F4: Fn(bool, bool) -> Option<bool>,
         F5: Fn(&str, &str) -> Option<String>,
         F6: Fn(&Vec<Value>, &Vec<Value>) -> Option<Vec<Value>>,
-    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6) -> Option<Value> {
+        F7: Fn(TimestampType, TimestampType) -> Option<TimestampType>,
+    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6, timestamp_f: F7) -> Option<Value> {
         match (self, other) {
             (Value::Null, _) => null_f(),
             (_, Value::Null) => null_f(),
@@ -105,6 +112,7 @@ impl Value {
             (Value::Bool(x), Value::Bool(y)) => bool_f(*x, *y).map(|x| Value::Bool(x)),
             (Value::String(x), Value::String(y)) => string_f(x, y).map(|x| Value::String(x)),
             (Value::Array(element, x), Value::Array(_, y)) => array_f(x, y).map(|x| Value::Array(element.clone(), x)),
+            (Value::Timestamp(x), Value::Timestamp(y)) => timestamp_f(*x, *y).map(|x| Value::Timestamp(x)),
             _ => None
         }
     }
@@ -116,7 +124,8 @@ impl Value {
         F4: Fn(bool) -> Option<bool>,
         F5: Fn(&str) -> Option<String>,
         F6: Fn(&Vec<Value>) -> Option<Vec<Value>>,
-    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6) -> Option<Value> {
+        F7: Fn(TimestampType) -> Option<TimestampType>,
+    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6, timestamp_f: F7) -> Option<Value> {
         match self {
             Value::Null => null_f(),
             Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
@@ -124,6 +133,7 @@ impl Value {
             Value::Bool(x) => bool_f(*x).map(|x| Value::Bool(x)),
             Value::String(x) => string_f(x).map(|x| Value::String(x)),
             Value::Array(element, x) => array_f(x).map(|x| Value::Array(element.clone(), x)),
+            Value::Timestamp(x) => timestamp_f(*x).map(|x| Value::Timestamp(x)),
         }
     }
 
@@ -133,14 +143,16 @@ impl Value {
         F3: Fn(&mut bool),
         F4: Fn(&mut String),
         F5: Fn(&mut Vec<Value>),
-    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5) {
+        F6: Fn(&mut TimestampType),
+    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5, timestamp_f: F6) {
         match self {
             Value::Null => {},
             Value::Int(x) => int_f(x),
             Value::Float(x) => float_f(&mut x.0),
             Value::Bool(x) => bool_f(x),
             Value::String(x) => string_f(x),
-            Value::Array(_, x) => array_f(x)
+            Value::Array(_, x) => array_f(x),
+            Value::Timestamp(x) => timestamp_f(x),
         }
     }
 
@@ -149,14 +161,16 @@ impl Value {
         F2: Fn(&mut f64, f64),
         F3: Fn(&mut bool, bool),
         F4: Fn(&mut String, &str),
-        F5: Fn(&mut Vec<Value>, &Vec<Value>)
-    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5) {
+        F5: Fn(&mut Vec<Value>, &Vec<Value>),
+        F6: Fn(&mut TimestampType, TimestampType)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5, timestamp_f: F6) {
         match (self, value) {
             (Value::Int(x), Value::Int(y)) => int_f(x, *y),
             (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
             (Value::Bool(x), Value::Bool(y)) => bool_f(x, *y),
             (Value::String(x), Value::String(y)) => string_f(x, y),
             (Value::Array(_, x), Value::Array(_, y)) => array_f(x, y),
+            (Value::Timestamp(x), Value::Timestamp(y)) => timestamp_f(x, *y),
             _ => {}
         }
     }
@@ -168,7 +182,8 @@ impl Value {
             Value::Float(Float(value)) => serde_json::Value::Number(serde_json::Number::from_f64(*value).unwrap()),
             Value::Bool(value) => serde_json::Value::Bool(*value),
             Value::String(value) => serde_json::Value::String(value.clone()),
-            Value::Array(_, value) => serde_json::Value::Array(value.iter().map(|x| x.json_value()).collect())
+            Value::Array(_, value) => serde_json::Value::Array(value.iter().map(|x| x.json_value()).collect()),
+            Value::Timestamp(value) => serde_json::Value::String(value.to_string())
         }
     }
 }
@@ -181,7 +196,8 @@ impl std::fmt::Display for Value {
             Value::Float(x) => write!(f, "{:.2}", x.0),
             Value::Bool(x) => write!(f, "{}", x),
             Value::String(x) => write!(f, "{}", x),
-            Value::Array(_, x) => write!(f, "{{{}}}", x.iter().map(|x| format!("{}", x)).join(", "))
+            Value::Array(_, x) => write!(f, "{{{}}}", x.iter().map(|x| format!("{}", x)).join(", ")),
+            Value::Timestamp(x) => write!(f, "{}", x),
         }
     }
 }
@@ -192,7 +208,8 @@ pub enum ValueType {
     Float,
     Bool,
     String,
-    Array(Box<ValueType>)
+    Array(Box<ValueType>),
+    Timestamp
 }
 
 impl ValueType {
@@ -202,7 +219,12 @@ impl ValueType {
             ValueType::Float => f64::from_str(value_str).map(|x| Value::Float(Float(x))).ok(),
             ValueType::Bool => bool::from_str(value_str).map(|x| Value::Bool(x)).ok(),
             ValueType::String => Some(Value::String(value_str.to_owned())),
-            ValueType::Array(_) => None
+            ValueType::Array(_) => None,
+            ValueType::Timestamp => {
+                NaiveDateTime::parse_from_str(value_str, "%Y-%m-%d %H:%M:%S")
+                    .map(|x| Value::Timestamp(Local {}.from_local_datetime(&x).unwrap()))
+                    .ok()
+            }
         }
     }
 
@@ -217,6 +239,7 @@ impl ValueType {
             "real" => Some(ValueType::Float),
             "text" => Some(ValueType::String),
             "boolean" => Some(ValueType::Bool),
+            "timestamp" => Some(ValueType::Timestamp),
             _ => None
         }
     }
@@ -237,6 +260,7 @@ impl ValueType {
                         )
                     )
             }
+            ValueType::Timestamp => None,
         }.unwrap_or(Value::Null)
     }
 
@@ -246,7 +270,8 @@ impl ValueType {
             ValueType::Float => Value::Float(Float(0.0)),
             ValueType::Bool => Value::Bool(false),
             ValueType::String => Value::String(String::new()),
-            ValueType::Array(element) => Value::Array(*element.clone(), Vec::new())
+            ValueType::Array(element) => Value::Array(*element.clone(), Vec::new()),
+            ValueType::Timestamp => Value::Timestamp(create_timestamp(2000, 1, 1, 0, 0, 0).unwrap())
         }
     }
 }
@@ -258,7 +283,8 @@ impl std::fmt::Display for ValueType {
             ValueType::Float => write!(f, "real"),
             ValueType::Bool => write!(f, "boolean"),
             ValueType::String => write!(f, "text"),
-            ValueType::Array(element) => write!(f, "{}[]", element)
+            ValueType::Array(element) => write!(f, "{}[]", element),
+            ValueType::Timestamp => write!(f, "timestamp"),
         }
     }
 }
@@ -306,7 +332,15 @@ pub enum Function {
     StringToLower,
     RegexMatches,
     ArrayUnique,
-    ArrayLength
+    ArrayLength,
+    TimestampNow,
+    TimestampExtractEpoch,
+    TimestampExtractYear,
+    TimestampExtractMonth,
+    TimestampExtractDay,
+    TimestampExtractHour,
+    TimestampExtractSecond,
+    TimestampExtractMinute
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -508,6 +542,15 @@ impl Statement {
             Statement::Multiple(_) => None
         }
     }
+}
+
+pub fn create_timestamp(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Option<TimestampType> {
+    let timestamp = NaiveDateTime::new(
+        NaiveDate::from_ymd(year, month, day),
+        NaiveTime::from_hms(hour, minute, second)
+    );
+
+    Local {}.from_local_datetime(&timestamp).latest()
 }
 
 #[test]

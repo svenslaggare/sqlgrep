@@ -6,7 +6,7 @@ use regex::{Regex, Captures};
 
 use serde_json::json;
 
-use crate::model::{Value, Float};
+use crate::model::{Value, Float, create_timestamp};
 use crate::model::ValueType;
 
 #[derive(Debug)]
@@ -80,6 +80,7 @@ impl TableDefinition {
                     |_| {},
                     |_| {},
                     |x| *x = x.trim().to_owned(),
+                    |_| {},
                     |_| {}
                 )
             }
@@ -221,6 +222,58 @@ impl ColumnParsing {
                         } else {
                             Value::Null
                         }
+                    }
+                    ValueType::Timestamp => {
+                        let mut year = 0i32;
+                        let mut month = 1u32;
+                        let mut day = 1u32;
+                        let mut hour = 0u32;
+                        let mut minute = 0u32;
+                        let mut second = 0u32;
+
+                        for (index, pattern) in patterns.iter().enumerate() {
+                            let value = ColumnParsing::extract_using_regex(&ValueType::Int, parsing_input, pattern);
+
+                            if let Value::Int(value_i64) = value {
+                                match index {
+                                    0 => { year = value_i64 as i32 },
+                                    1 => { month = value_i64 as u32 },
+                                    2 => { day = value_i64 as u32  },
+                                    3 => { hour = value_i64 as u32  },
+                                    4 => { minute = value_i64 as u32  },
+                                    5 => { second = value_i64 as u32  }
+                                    _ => {}
+                                }
+                            } else {
+                                if index == 1 {
+                                    if let Value::String(value) = ColumnParsing::extract_using_regex(&ValueType::String, parsing_input, pattern) {
+                                        match value.to_lowercase().as_str() {
+                                            "jan" => { month = 1; },
+                                            "feb" => { month = 2; },
+                                            "mar" => { month = 3; },
+                                            "apr" => { month = 4; },
+                                            "may" => { month = 5; },
+                                            "jun" | "june" => { month = 6; },
+                                            "jul" | "july" => { month = 7; },
+                                            "aug" => { month = 8; },
+                                            "sep" | "sept" => { month = 9; },
+                                            "oct" => { month = 10; },
+                                            "nov" => { month = 11; }
+                                            "dec" => { month = 12; }
+                                            _ => { return Value::Null; }
+                                        }
+                                    }
+                                } else {
+                                    return Value::Null;
+                                }
+                            }
+                        }
+
+                        match create_timestamp(year, month, day, hour, minute, second) {
+                            Some(timestamp) => Value::Timestamp(timestamp),
+                            None => Value::Null
+                        }
+
                     }
                     _ => Value::Null
                 }
@@ -551,6 +604,64 @@ fn test_table_extract_array3() {
     let result = table_definition.extract("A: 13, B, 47");
     assert_eq!(
         Value::Null,
+        result.columns[0]
+    );
+}
+
+#[test]
+fn test_table_extract_timestamp1() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([0-9]+)-([0-9]+)-([0-9]+) ([0-9]+):([0-9]+):([0-9]+)")],
+        vec![
+            ColumnDefinition::with_options(
+                ColumnParsing::MultiRegex(vec![
+                    RegexPattern::new("line".to_owned(), 1),
+                    RegexPattern::new("line".to_owned(), 2),
+                    RegexPattern::new("line".to_owned(), 3),
+                    RegexPattern::new("line".to_owned(), 4),
+                    RegexPattern::new("line".to_owned(), 5),
+                    RegexPattern::new("line".to_owned(), 6),
+                ]),
+                "x",
+                ValueType::Timestamp,
+                ColumnOptions::new()
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("2021-06-01 16:55:11");
+    assert_eq!(
+        Value::Timestamp(create_timestamp(2021, 6, 1, 16, 55, 11).unwrap()),
+        result.columns[0]
+    );
+}
+
+#[test]
+fn test_table_extract_timestamp2() {
+    let table_definition = TableDefinition::new(
+        "test",
+        vec![("line", "([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")],
+        vec![
+            ColumnDefinition::with_options(
+                ColumnParsing::MultiRegex(vec![
+                    RegexPattern::new("line".to_owned(), 6),
+                    RegexPattern::new("line".to_owned(), 1),
+                    RegexPattern::new("line".to_owned(), 2),
+                    RegexPattern::new("line".to_owned(), 3),
+                    RegexPattern::new("line".to_owned(), 4),
+                    RegexPattern::new("line".to_owned(), 5),
+                ]),
+                "x",
+                ValueType::Timestamp,
+                ColumnOptions::new()
+            )
+        ]
+    ).unwrap();
+
+    let result = table_definition.extract("Jul 9 22:53:22 2005");
+    assert_eq!(
+        Value::Timestamp(create_timestamp(2005, 7, 9, 22, 53, 22).unwrap()),
         result.columns[0]
     );
 }

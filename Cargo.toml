@@ -17,6 +17,7 @@ rustyline-derive = "0.3.1"
 fnv = "1.0"
 itertools = "0.10.0"
 serde_json = { version = "1", features = ["preserve_order"] }
+chrono = "0.4.19"
 
 [dev-dependencies]
 criterion = "0.3"

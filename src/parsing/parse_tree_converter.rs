@@ -256,7 +256,15 @@ lazy_static! {
             ("lower".to_owned(), Function::StringToLower),
             ("regexp_matches".to_owned(), Function::RegexMatches),
             ("array_unique".to_owned(), Function::ArrayUnique),
-            ("array_length".to_owned(), Function::ArrayLength)
+            ("array_length".to_owned(), Function::ArrayLength),
+            ("now".to_owned(), Function::TimestampNow),
+            ("timestamp_extract_epoch".to_owned(), Function::TimestampExtractEpoch),
+            ("timestamp_extract_year".to_owned(), Function::TimestampExtractYear),
+            ("timestamp_extract_month".to_owned(), Function::TimestampExtractMonth),
+            ("timestamp_extract_day".to_owned(), Function::TimestampExtractDay),
+            ("timestamp_extract_hour".to_owned(), Function::TimestampExtractHour),
+            ("timestamp_extract_minute".to_owned(), Function::TimestampExtractMinute),
+            ("timestamp_extract_second".to_owned(), Function::TimestampExtractSecond)
         ].into_iter()
     );
 }

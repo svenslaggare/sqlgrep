@@ -74,6 +74,7 @@ Supported functions:
 * `lower(TEXT) => TEXT`
 * `array_unique(ARRAY) => ARRAY`
 * `array_length(ARRAY) => INT`
+* `now() => TIMESTAMP`
 
 ## Special features
 The input filename can either be specified with the CLI or as an additional argument to the `FROM` statement as following:
@@ -95,6 +96,9 @@ CREATE TABLE <name>(
     Array pattern. Will create array of fixed sized based on the given patterns.
     <pattern name>[<group index>], <pattern name>[<group index>], ... => <column name> <element type>[],
     
+    Timestamp pattern. Will create a timestamp.
+    <pattern name>[<group index>], <pattern name>[<group index>], ... => <column name> TIMESTAMP,
+    
     Json pattern. Will access the given attribute.
     { .field1.field2 } => <column name> <column type>,
     { .field1[<array index>] } => <column name> <column type>,
@@ -108,6 +112,7 @@ Multiple tables can be defined in the same file.
 * `REAL`: 64-bits float type.
 * `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
 * `<element type>[]`: Array types such as `real[]`.
+* `TIMESTAMP`: Timestamp type.
 
 ### Modifiers
 Placed after the column type and add additional constraints/transforms.

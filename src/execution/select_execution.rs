@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use crate::data_model::{ColumnDefinition, Row, TableDefinition, Tables};
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::expression_execution::ExpressionExecutionEngine;
 use crate::model::{ArithmeticOperator, CompareOperator, ExpressionTree, SelectStatement, Value, ValueType};
+use crate::data_model::{TableDefinition, Tables, Row, ColumnDefinition};
 
 pub struct SelectExecutionEngine {
 
@@ -56,8 +56,6 @@ impl SelectExecutionEngine  {
 
 #[test]
 fn test_project1() {
-    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
-    let tables = Tables::with_tables(vec![table_definition]);
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -89,8 +87,6 @@ fn test_project1() {
 
 #[test]
 fn test_project2() {
-    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
-    let tables = Tables::with_tables(vec![table_definition]);
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -131,8 +127,6 @@ fn test_project2() {
 
 #[test]
 fn test_project3() {
-    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
-    let tables = Tables::with_tables(vec![table_definition]);
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -225,8 +219,6 @@ fn test_project4() {
 
 #[test]
 fn test_filter1() {
-    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
-    let tables = Tables::with_tables(vec![table_definition]);
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -261,8 +253,6 @@ fn test_filter1() {
 
 #[test]
 fn test_filter2() {
-    let table_definition = TableDefinition::new("test", Vec::new(), Vec::new()).unwrap();
-    let tables = Tables::with_tables(vec![table_definition]);
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
