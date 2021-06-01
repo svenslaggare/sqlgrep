@@ -19,7 +19,7 @@ pub enum ConvertParseTreeError {
     UndefinedAggregate,
     UndefinedStatement,
     UndefinedExpression,
-    UndefinedFunction,
+    UndefinedFunction(String),
     InvalidPattern,
     HavingClauseNotPossible,
     InvalidOnJoin,
@@ -36,7 +36,7 @@ impl std::fmt::Display for ConvertParseTreeError {
             ConvertParseTreeError::UndefinedAggregate => { write!(f, "Undefined aggregate") }
             ConvertParseTreeError::UndefinedStatement => { write!(f, "Undefined statement") }
             ConvertParseTreeError::UndefinedExpression => { write!(f, "Undefined expression") }
-            ConvertParseTreeError::UndefinedFunction => { write!(f, "Undefined function") }
+            ConvertParseTreeError::UndefinedFunction(name) => { write!(f, "Undefined function: {}", name) }
             ConvertParseTreeError::InvalidPattern => { write!(f, "Undefined pattern") }
             ConvertParseTreeError::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") },
             ConvertParseTreeError::InvalidOnJoin => { write!(f, "Left or right join side does not exist") },
@@ -384,7 +384,7 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
 
             FUNCTIONS.get(&name.to_lowercase()).map(|function| {
                 ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
-            }).ok_or(ConvertParseTreeError::UndefinedFunction)
+            }).ok_or(ConvertParseTreeError::UndefinedFunction(name))
         }
         ParseExpressionTree::ArrayElementAccess { array, index } => {
             let array = Box::new(transform_expression(*array, state)?);
