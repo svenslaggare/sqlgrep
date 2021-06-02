@@ -126,11 +126,11 @@ pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<Re
     }
 }
 
-pub fn create_joined_column_mapping<'a>(table_definition: &'a TableDefinition,
-                                        row: &'a Row,
-                                        line_value: &'a Value,
-                                        joined_table_data: &'a JoinedTableData,
-                                        joined_row: &'a Row) -> HashMapColumnProvider<'a> {
+fn create_joined_column_mapping<'a>(table_definition: &'a TableDefinition,
+                                    row: &'a Row,
+                                    line_value: &'a Value,
+                                    joined_table_data: &'a JoinedTableData,
+                                    joined_row: &'a Row) -> HashMapColumnProvider<'a> {
     let mut columns_mapping = ExecutionEngine::create_columns_mapping(table_definition, row, line_value);
 
     for (index, value) in joined_row.columns.iter().enumerate() {
