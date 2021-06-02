@@ -84,35 +84,19 @@ impl<'a> ExecutionEngine<'a> {
 
             if let Some(joined_table_data) = joined_table_data {
                 let join_clause = select_statement.join.as_ref().unwrap();
-                let (result, joined) = execute_join(
-                    table_definition,
-                    &row,
-                    &line_value,
-                    join_clause,
-                    joined_table_data,
-                    |column_provider| {
-                        select_execution_engine.execute(select_statement, column_provider)
-                    }
-                )?;
-
-                if joined {
-                    Ok(result)
-                } else {
-                    if join_clause.is_outer {
-                        let null_row = Row::new(vec![Value::Null; joined_table_data.fully_qualified_column_names.len()]);
-                        let column_provider = create_joined_column_mapping(
-                            table_definition,
-                            &row,
-                            &line_value,
-                            &joined_table_data,
-                            &null_row
-                        );
-
-                        select_execution_engine.execute(select_statement, column_provider)
-                    } else {
-                        return Ok(None);
-                    }
-                }
+                Ok(
+                    execute_join(
+                        table_definition,
+                        &row,
+                        &line_value,
+                        join_clause,
+                        joined_table_data,
+                        true,
+                        |column_provider| {
+                            select_execution_engine.execute(select_statement, column_provider)
+                        }
+                    )?.0
+                )
             } else {
                 select_execution_engine.execute(
                     select_statement,
@@ -148,6 +132,7 @@ impl<'a> ExecutionEngine<'a> {
                         &line_value,
                         aggregate_statement.join.as_ref().unwrap(),
                         joined_table_data,
+                        false,
                         |column_provider| {
                             self.aggregate_execution_engine.execute(
                                 aggregate_statement,
@@ -191,6 +176,7 @@ impl<'a> ExecutionEngine<'a> {
                     &line_value,
                     aggregate_statement.join.as_ref().unwrap(),
                     joined_table_data,
+                    false,
                     |column_provider| {
                         let result = self.aggregate_execution_engine.execute_update(
                             aggregate_statement,

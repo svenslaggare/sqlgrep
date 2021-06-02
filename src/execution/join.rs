@@ -88,6 +88,7 @@ pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<Re
                                                                                            line_value: &Value,
                                                                                            join_clause: &JoinClause,
                                                                                            joined_table_data: &JoinedTableData,
+                                                                                           allow_outer: bool,
                                                                                            mut execute: F) -> ExecutionResult<(Option<ResultRow>, bool)> {
     if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
                                                                 &row,
@@ -108,7 +109,20 @@ pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<Re
 
         Ok((result_row, true))
     } else {
-        Ok((None, false))
+        if join_clause.is_outer && allow_outer {
+            let null_row = Row::new(vec![Value::Null; joined_table_data.fully_qualified_column_names.len()]);
+            let column_provider = create_joined_column_mapping(
+                table_definition,
+                row,
+                line_value,
+                joined_table_data,
+                &null_row
+            );
+
+            Ok((execute(column_provider)?, true))
+        } else {
+            Ok((None, false))
+        }
     }
 }
 
