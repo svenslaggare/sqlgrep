@@ -176,16 +176,12 @@ impl<'a> ExecutionEngine<'a> {
                     joined_table_data,
                     false,
                     |column_provider| {
-                        let result = self.aggregate_execution_engine.execute_update(
+                        self.aggregate_execution_engine.execute_update(
                             aggregate_statement,
                             column_provider
                         )?;
 
-                        if result {
-                            Ok(Some(ResultRow { data: Vec::new(), columns: Vec::new() }))
-                        } else {
-                            Ok(None)
-                        }
+                        Ok(None)
                     }
                 )?;
 
