@@ -1,6 +1,7 @@
 pub mod expression_execution;
 pub mod select_execution;
 pub mod aggregate_execution;
+pub mod join;
 pub mod execution_engine;
 
 use std::collections::HashMap;

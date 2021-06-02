@@ -1,0 +1,155 @@
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
+use std::io::{BufReader, BufRead};
+use std::fs::File;
+
+use crate::data_model::{Row, TableDefinition};
+use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::execution_engine::{ExecutionEngine, ExecutionConfig};
+use crate::model::{JoinClause, Value, SelectStatement, ExpressionTree, Statement};
+
+pub struct JoinedTableData {
+    pub column_names: Vec<String>,
+    pub fully_qualified_column_names: Vec<String>,
+    join_on_column_index: usize,
+    rows: HashMap<Value, Vec<Row>>
+}
+
+impl JoinedTableData {
+    pub fn new(table: &TableDefinition,
+               join_on_column_index: usize) -> JoinedTableData {
+        JoinedTableData {
+            column_names: table.columns.iter().map(|column| column.name.clone()).collect(),
+            fully_qualified_column_names: table.fully_qualified_column_names.clone(),
+            join_on_column_index,
+            rows: HashMap::new()
+        }
+    }
+
+    pub fn execute(execution_engine: &mut ExecutionEngine, join: &JoinClause) -> ExecutionResult<JoinedTableData> {
+        let join_statement = Statement::Select(SelectStatement {
+            projections: vec![("wildcard".to_owned(), ExpressionTree::Wildcard)],
+            from: join.joined_table.clone(),
+            filename: None,
+            filter: None,
+            join: None
+        });
+
+        let joined_table = execution_engine.get_table(&join.joined_table)?.clone();
+        let join_on_column_index = joined_table.index_for(&join.joined_column)
+            .ok_or(ExecutionError::ColumnNotFound(join.joiner_column.clone()))?;
+
+        let mut joined_table_data = JoinedTableData::new(&joined_table, join_on_column_index);
+
+        let config = ExecutionConfig::default();
+
+        let joined_file = File::open(&join.joined_filename)
+            .map_err(|err| ExecutionError::FailOpenFile(format!("{}", err)))?;
+
+        for line in BufReader::new(joined_file).lines() {
+            if let Ok(line) = line {
+                let (result, _) = execution_engine.execute(&join_statement, line.clone(), &config, None);
+                if let Some(result) = result? {
+                    for row in result.data {
+                        joined_table_data.add_row(
+                            row.columns[join_on_column_index].clone(),
+                            row
+                        );
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+
+        Ok(joined_table_data)
+    }
+
+    pub fn add_row(&mut self, join_on_value: Value, row: Row) {
+        self.rows
+            .entry(join_on_value)
+            .or_insert_with(|| Vec::new())
+            .push(row);
+    }
+
+    pub fn get_joined_row(&self,
+                          joiner_table: &TableDefinition,
+                          joined_row: &Row,
+                          joiner_column: &str) -> ExecutionResult<Option<&Vec<Row>>> {
+        let joiner_on_column_index = joiner_table.index_for(joiner_column)
+            .ok_or_else(|| ExecutionError::ColumnNotFound(joiner_column.to_owned()))?;
+        let joiner_on_value = &joined_row.columns[joiner_on_column_index];
+        Ok(self.rows.get(joiner_on_value))
+    }
+}
+
+pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<ResultRow>>>(table_definition: &TableDefinition,
+                                                                                           row: &Row,
+                                                                                           line_value: &Value,
+                                                                                           join_clause: &JoinClause,
+                                                                                           joined_table_data: &JoinedTableData,
+                                                                                           mut execute: F) -> ExecutionResult<(Option<ResultRow>, bool)> {
+    if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
+                                                                &row,
+                                                                &join_clause.joiner_column)? {
+        let mut result_row = None;
+        for joined_row in joined_rows {
+            let column_provider = create_joined_column_mapping(
+                table_definition,
+                row,
+                line_value,
+                joined_table_data,
+                joined_row
+            );
+
+            let result = execute(column_provider)?;
+            extend_option_result_row(&mut result_row, result);
+        }
+
+        Ok((result_row, true))
+    } else {
+        Ok((None, false))
+    }
+}
+
+pub fn create_joined_column_mapping<'a>(table_definition: &'a TableDefinition,
+                                        row: &'a Row,
+                                        line_value: &'a Value,
+                                        joined_table_data: &'a JoinedTableData,
+                                        joined_row: &'a Row) -> HashMapColumnProvider<'a> {
+    let mut columns_mapping = ExecutionEngine::create_columns_mapping(table_definition, row, line_value);
+
+    for (index, value) in joined_row.columns.iter().enumerate() {
+        let name = &joined_table_data.column_names[index];
+        if !columns_mapping.contains_key(name.as_str()) {
+            columns_mapping.insert(name, value);
+        }
+
+        columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
+    }
+
+    let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
+    let keys = HashSet::<String>::from_iter(column_provider.keys.iter().cloned());
+    for (column_index, column_name) in joined_table_data.column_names.iter().enumerate() {
+        if keys.contains(column_name) {
+            column_provider.add_key(&joined_table_data.fully_qualified_column_names[column_index]);
+        } else {
+            column_provider.add_key(column_name);
+        }
+    }
+
+    column_provider
+}
+
+fn extend_option_result_row(result_row: &mut Option<ResultRow>, result: Option<ResultRow>) {
+    if let Some(result) = result {
+        match result_row {
+            None => {
+                *result_row = Some(result);
+            }
+            Some(result_row) => {
+                result_row.data.extend(result.data);
+            }
+        }
+    }
+}

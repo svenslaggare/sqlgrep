@@ -1,14 +1,15 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
+use std::iter::FromIterator;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::iter::FromIterator;
-use std::collections::HashMap;
 
 use crate::data_model::{ColumnDefinition, TableDefinition, Tables};
-use crate::execution::{ExecutionResult, ResultRow, ExecutionError};
-use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine, JoinedTableData};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, JoinClause};
+use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
+use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
+use crate::execution::join::{JoinedTableData};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, JoinClause, Statement};
 use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct ExecutionStatistics {
@@ -92,7 +93,10 @@ impl<'a> FileIngester<'a> {
             config.result = false;
         }
 
-        let joined_table_data = self.execution_engine.get_joined_data(statement.join_clause())?;
+        let joined_table_data = match statement.join_clause() {
+            Some(join_clause) => Some(JoinedTableData::execute(&mut self.execution_engine, join_clause)?),
+            None => None,
+        };
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
