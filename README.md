@@ -77,6 +77,7 @@ Supported functions:
 * `array_unique(ARRAY) => ARRAY`
 * `array_length(ARRAY) => INT`
 * `now() => TIMESTAMP`
+* `make_timestamp(INT, INT, INT, INT, INT, INT) => TIMESTAMP`
 
 ## Special features
 The input filename can either be specified with the CLI or as an additional argument to the `FROM` statement as following:

@@ -334,6 +334,7 @@ pub enum Function {
     ArrayUnique,
     ArrayLength,
     TimestampNow,
+    MakeTimestamp,
     TimestampExtractEpoch,
     TimestampExtractYear,
     TimestampExtractMonth,

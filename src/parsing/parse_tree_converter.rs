@@ -259,6 +259,7 @@ lazy_static! {
             ("array_unique".to_owned(), Function::ArrayUnique),
             ("array_length".to_owned(), Function::ArrayLength),
             ("now".to_owned(), Function::TimestampNow),
+            ("make_timestamp".to_owned(), Function::MakeTimestamp),
             ("timestamp_extract_epoch".to_owned(), Function::TimestampExtractEpoch),
             ("timestamp_extract_year".to_owned(), Function::TimestampExtractYear),
             ("timestamp_extract_month".to_owned(), Function::TimestampExtractMonth),

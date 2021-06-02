@@ -10,7 +10,7 @@ use chrono::{Local, Datelike, Timelike};
 
 use itertools::Itertools;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float};
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp};
 use crate::execution::{ColumnProvider};
 
 
@@ -310,11 +310,19 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
-                    Function::TimestampNow  if arguments.len() == 0 => {
-                        if executed_arguments.is_empty() {
-                            Ok(Value::Timestamp(Local::now()))
-                        } else {
-                            Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                    Function::TimestampNow if arguments.len() == 0 => {
+                        Ok(Value::Timestamp(Local::now()))
+                    }
+                    Function::MakeTimestamp if arguments.len() == 6 => {
+                        match (&executed_arguments[0], &executed_arguments[1], &executed_arguments[2], &executed_arguments[3], &executed_arguments[4], &executed_arguments[5]) {
+                            (Value::Int(year), Value::Int(month), Value::Int(day), Value::Int(hour), Value::Int(minute), Value::Int(second)) => {
+                                Ok(
+                                    create_timestamp(*year as i32, *month as u32, *day as u32, *hour as u32, *minute as u32, *second as u32)
+                                    .map(|timestamp| Value::Timestamp(timestamp))
+                                    .unwrap_or(Value::Null)
+                                )
+                            }
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractEpoch if arguments.len() == 1 => {
