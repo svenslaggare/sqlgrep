@@ -82,13 +82,12 @@ impl<'a> ExecutionEngine<'a> {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = joined_table_data {
-                let join_clause = select_statement.join.as_ref().unwrap();
                 Ok(
                     execute_join(
                         table_definition,
                         &row,
                         &line_value,
-                        join_clause,
+                        select_statement.join.as_ref().unwrap(),
                         joined_table_data,
                         true,
                         |column_provider| {
