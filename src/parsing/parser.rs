@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::model::{Value, ValueType, Float};
-use crate::data_model::{JsonAccess, ColumnParsing, RegexPattern};
+use crate::data_model::{JsonAccess, ColumnParsing, RegexResultReference, RegexMode};
 use crate::parsing::tokenizer::{ParserError, Token, Keyword, tokenize};
 use crate::parsing::operator::{BinaryOperators, UnaryOperators, Operator};
 
@@ -50,7 +50,7 @@ impl ParseColumnDefinition {
                name: String,
                column_type: ValueType) -> ParseColumnDefinition {
         ParseColumnDefinition {
-            parsing: ColumnParsing::Regex(RegexPattern { pattern_name, group_index: pattern_index }),
+            parsing: ColumnParsing::Regex(RegexResultReference { pattern_name, group_index: pattern_index }),
             name,
             column_type,
             nullable: None,
@@ -83,7 +83,7 @@ pub enum ParseOperationTree {
     },
     CreateTable {
         name: String,
-        patterns: Vec<(String, String)>,
+        patterns: Vec<(String, String, RegexMode)>,
         columns: Vec<ParseColumnDefinition>
     },
     Multiple(Vec<ParseOperationTree>)
@@ -336,8 +336,9 @@ impl<'a> Parser<'a> {
                     match self.current() {
                         Token::Operator(Operator::Single('=')) => {
                             self.next()?;
+                            let regex_mode = self.parse_regex_mode()?;
                             let pattern = self.consume_string()?;
-                            patterns.push((pattern_name, pattern));
+                            patterns.push((pattern_name, pattern, regex_mode));
                         }
                         Token::LeftSquareParentheses => {
                             self.next()?;
@@ -348,8 +349,8 @@ impl<'a> Parser<'a> {
                                 ParserError::ExpectedRightSquareParentheses
                             )?;
 
-                            let mut patterns = vec![
-                                RegexPattern { pattern_name, group_index }
+                            let mut pattern_references = vec![
+                                RegexResultReference { pattern_name, group_index }
                             ];
 
                             if self.current() == &Token::Comma {
@@ -369,7 +370,7 @@ impl<'a> Parser<'a> {
                                         ParserError::ExpectedRightSquareParentheses
                                     )?;
 
-                                    patterns.push(RegexPattern::new(pattern_name, group_index));
+                                    pattern_references.push(RegexResultReference::new(pattern_name, group_index));
                                     match self.current() {
                                         Token::RightArrow => { break; },
                                         Token::Comma => {},
@@ -385,10 +386,10 @@ impl<'a> Parser<'a> {
                                 ParserError::ExpectedRightArrow
                             )?;
 
-                            if patterns.len() == 1 {
-                                columns.push(self.parse_define_column(ColumnParsing::Regex(patterns.remove(0)))?);
+                            if pattern_references.len() == 1 {
+                                columns.push(self.parse_define_column(ColumnParsing::Regex(pattern_references.remove(0)))?);
                             } else {
-                                columns.push(self.parse_define_column(ColumnParsing::MultiRegex(patterns))?);
+                                columns.push(self.parse_define_column(ColumnParsing::MultiRegex(pattern_references))?);
                             }
                         }
                         _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
@@ -404,9 +405,9 @@ impl<'a> Parser<'a> {
                     )?;
 
                     let pattern_name = format!("_pattern{}", patterns.len());
-                    patterns.push((pattern_name.clone(), pattern.clone()));
+                    patterns.push((pattern_name.clone(), pattern.clone(), RegexMode::Captures));
 
-                    columns.push(self.parse_define_column(ColumnParsing::Regex(RegexPattern { pattern_name, group_index: 1 }))?);
+                    columns.push(self.parse_define_column(ColumnParsing::Regex(RegexResultReference { pattern_name, group_index: 1 }))?);
                 }
                 Token::LeftCurlyParentheses => {
                     self.next()?;
@@ -466,6 +467,23 @@ impl<'a> Parser<'a> {
                 columns
             }
         )
+    }
+
+    fn parse_regex_mode(&mut self) -> ParserResult<RegexMode> {
+        let mut regex_mode = RegexMode::Captures;
+        match self.current() {
+            Token::Identifier(identifier) if identifier == "split" => {
+                regex_mode = RegexMode::Split;
+                self.next()?;
+            }
+            Token::Identifier(identifier) if identifier == "match" => {
+                regex_mode = RegexMode::Captures;
+                self.next()?;
+            }
+            _ => {}
+        }
+
+        Ok(regex_mode)
     }
 
     fn parse_define_column(&mut self, parsing: ColumnParsing) -> ParserResult<ParseColumnDefinition> {
@@ -1787,7 +1805,7 @@ fn test_parse_create_table1() {
     assert_eq!(
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParseColumnDefinition::new(
                 "line".to_string(),
                 1,
@@ -1846,7 +1864,7 @@ fn test_parse_create_table2() {
     assert_eq!(
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned())],
+            patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
                 ParseColumnDefinition::new(
                     "line".to_string(),
@@ -1936,7 +1954,7 @@ fn test_parse_create_table3() {
         ParseOperationTree::Multiple(vec![
             ParseOperationTree::CreateTable {
                 name: "test1".to_string(),
-                patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+                patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
                     ParseColumnDefinition::new(
                         "line".to_string(),
@@ -1948,7 +1966,7 @@ fn test_parse_create_table3() {
             },
             ParseOperationTree::CreateTable {
                 name: "test2".to_string(),
-                patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned())],
+                patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
                     ParseColumnDefinition::new(
                         "line".to_string(),
@@ -1999,7 +2017,7 @@ fn test_parse_create_table4() {
     assert_eq!(
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
-            patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned())],
+            patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
                 ParseColumnDefinition::new(
                     "_pattern0".to_string(),
@@ -2053,9 +2071,9 @@ fn test_parse_create_table5() {
     assert_eq!(
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParseColumnDefinition {
-                parsing: ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }),
+                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
                 name: "x".to_string(),
                 column_type: ValueType::Int,
                 nullable: Some(false),
@@ -2106,9 +2124,9 @@ fn test_parse_create_table6() {
     assert_eq!(
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParseColumnDefinition {
-                parsing: ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }),
+                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
                 name: "x".to_owned(),
                 column_type: ValueType::String,
                 nullable: None,
@@ -2168,13 +2186,13 @@ fn test_parse_create_table7() {
     assert_eq!(
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned())],
+            patterns: vec![("line".to_owned(), "A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
                 ParseColumnDefinition {
                     parsing: ColumnParsing::MultiRegex(vec![
-                        RegexPattern::new("line".to_owned(), 1),
-                        RegexPattern::new("line".to_owned(), 2),
-                        RegexPattern::new("line".to_owned(), 3)
+                        RegexResultReference::new("line".to_owned(), 1),
+                        RegexResultReference::new("line".to_owned(), 2),
+                        RegexResultReference::new("line".to_owned(), 3)
                     ]),
                     name: "x".to_string(),
                     column_type: ValueType::Array(Box::new(ValueType::Int)),
@@ -2183,6 +2201,57 @@ fn test_parse_create_table7() {
                     convert: None
                 }
             ]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_create_table8() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::Identifier("split".to_owned()),
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Split)],
+            columns: vec![ParseColumnDefinition::new(
+                "line".to_string(),
+                1,
+                "x".to_string(),
+                ValueType::Int
+            )]
         },
         tree
     );
@@ -2313,7 +2382,7 @@ fn test_parse_str3() {
         ParseOperationTree::CreateTable {
             name: "connections".to_string(),
             patterns: vec![
-                ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
+                ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
             ],
             columns: vec![
                 ParseColumnDefinition::new(
@@ -2410,7 +2479,7 @@ fn test_parse_str5() {
         ParseOperationTree::CreateTable {
             name: "test".to_string(),
             patterns: vec![
-                ("line".to_owned(), "testing (.*) (.*)".to_owned())
+                ("line".to_owned(), "testing (.*) (.*)".to_owned(), RegexMode::Captures)
             ],
             columns: vec![
                 ParseColumnDefinition::new(
@@ -2439,7 +2508,7 @@ fn test_parse_str_from_file1() {
         ParseOperationTree::CreateTable {
             name: "connections".to_string(),
             patterns: vec![
-                ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned())
+                ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
             ],
             columns: vec![
                 ParseColumnDefinition::new(
@@ -2460,6 +2529,75 @@ fn test_parse_str_from_file1() {
                     "year".to_string(),
                     ValueType::Int
                 ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    4,
+                    "month".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    5,
+                    "day".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    6,
+                    "hour".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    7,
+                    "minute".to_string(),
+                    ValueType::Int
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    8,
+                    "second".to_string(),
+                    ValueType::Int
+                )
+            ]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_str_from_file2() {
+    let tree = parse_str(&std::fs::read_to_string("testdata/ftpd_csv.txt").unwrap()).unwrap();
+
+    let mut year_column = ParseColumnDefinition::new(
+        "line".to_string(),
+        3,
+        "year".to_string(),
+        ValueType::Int
+    );
+
+    year_column.nullable = Some(false);
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "connections".to_string(),
+            patterns: vec![
+                ("line".to_owned(), ";".to_owned(), RegexMode::Split)
+            ],
+            columns: vec![
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    1,
+                    "ip".to_string(),
+                    ValueType::String
+                ),
+                ParseColumnDefinition::new(
+                    "line".to_string(),
+                    2,
+                    "hostname".to_string(),
+                    ValueType::String
+                ),
+                year_column,
                 ParseColumnDefinition::new(
                     "line".to_string(),
                     4,

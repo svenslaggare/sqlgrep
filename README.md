@@ -92,6 +92,9 @@ CREATE TABLE <name>(
     Separate pattern and column definition. Pattern can be used in multiple column definitions.
     <pattern name> = '<regex patern>',
     <pattern name>[<group index>] => <column name> <column type>,
+    
+    Use regex splits instead of matches:
+    <pattern name> = split '<regex patern>',
 
     Inline regex. Will be bound to the first group
     '<regex patern>' => <column name> <column type>

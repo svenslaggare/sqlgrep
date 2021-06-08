@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 
 use crate::parsing::parser::{ParseOperationTree, ParseExpressionTree, ParseColumnDefinition, ParseJoinClause};
 use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function, JoinClause};
-use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing, RegexPattern};
+use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing, RegexResultReference, RegexMode};
 use crate::parsing::operator::Operator;
 
 #[derive(Debug)]
@@ -196,7 +196,7 @@ fn transform_join(from: &(String, Option<String>), join: Option<ParseJoinClause>
 }
 
 fn create_create_table_statement(name: String,
-                                 patterns: Vec<(String, String)>,
+                                 patterns: Vec<(String, String, RegexMode)>,
                                  columns: Vec<ParseColumnDefinition>) -> Result<Statement, ConvertParseTreeError> {
     let column_definitions = columns
         .into_iter()
@@ -225,7 +225,7 @@ fn create_create_table_statement(name: String,
 
     let table_definition = TableDefinition::new(
         &name,
-        patterns.iter().map(|(x, y)| (x.as_str(), y.as_str())).collect(),
+        patterns.iter().map(|(pattern_name, pattern, mode)| (pattern_name.as_str(), pattern.as_str(), mode.clone())).collect(),
         column_definitions,
     ).ok_or(ConvertParseTreeError::InvalidPattern)?;
 
@@ -1007,7 +1007,7 @@ fn test_aggregate_statement6() {
 fn test_create_table_statement1() {
     let tree = ParseOperationTree::CreateTable {
         name: "test".to_string(),
-        patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned())],
+        patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
         columns: vec![
             ParseColumnDefinition::new(
                 "line".to_string(),
@@ -1035,5 +1035,5 @@ fn test_create_table_statement1() {
     assert_eq!(1, table_definition.columns.len());
     assert_eq!("x", table_definition.columns[0].name);
     assert_eq!(ValueType::Int, table_definition.columns[0].column_type);
-    assert_eq!(ColumnParsing::Regex(RegexPattern { pattern_name: "line".to_string(), group_index: 1 }), table_definition.columns[0].parsing);
+    assert_eq!(ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }), table_definition.columns[0].parsing);
 }

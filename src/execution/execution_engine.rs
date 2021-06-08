@@ -5,7 +5,7 @@ use std::fs::File;
 
 use fnv::FnvHasher;
 
-use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, RegexPattern, Row, TableDefinition, Tables};
+use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, RegexResultReference, Row, TableDefinition, Tables, RegexMode};
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
@@ -248,19 +248,19 @@ fn test_regex_array1() {
         TableDefinition::new(
             "connections",
             vec![
-                ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+                ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
             ],
             vec![
                 ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
                 ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
                 ColumnDefinition::with_parsing(
                     ColumnParsing::MultiRegex(vec![
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 9 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 4 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 5 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 6 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 7 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 8 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 9 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 4 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 5 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 6 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 7 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 8 },
                     ]),
                     "datetime",
                     ValueType::Array(Box::new(ValueType::String))
@@ -325,19 +325,19 @@ fn test_timestamp1() {
         TableDefinition::new(
             "connections",
             vec![
-                ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+                ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
             ],
             vec![
                 ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
                 ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
                 ColumnDefinition::with_parsing(
                     ColumnParsing::MultiRegex(vec![
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 9 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 4 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 5 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 6 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 7 },
-                        RegexPattern { pattern_name: "line".to_string(), group_index: 8 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 9 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 4 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 5 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 6 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 7 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 8 },
                     ]),
                     "timestamp",
                     ValueType::Timestamp

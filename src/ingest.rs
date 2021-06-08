@@ -5,7 +5,7 @@ use std::iter::FromIterator;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::data_model::{ColumnDefinition, TableDefinition, Tables};
+use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
 use crate::execution::join::{JoinedTableData};
@@ -64,7 +64,8 @@ pub struct FileIngester<'a> {
     execution_engine: ExecutionEngine<'a>,
     pub statistics: ExecutionStatistics,
     pub print_result: bool,
-    display_options: DisplayOptions
+    display_options: DisplayOptions,
+    output_printer: OutputPrinter
 }
 
 impl<'a> FileIngester<'a> {
@@ -73,6 +74,7 @@ impl<'a> FileIngester<'a> {
                single_result: bool,
                display_options: DisplayOptions,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
+        let output_printer = OutputPrinter::new(display_options.output_format.clone());
 
         Ok(
             FileIngester {
@@ -82,7 +84,8 @@ impl<'a> FileIngester<'a> {
                 execution_engine,
                 print_result: true,
                 statistics: ExecutionStatistics::new(),
-                display_options
+                display_options,
+                output_printer
             }
         )
     }
@@ -108,7 +111,7 @@ impl<'a> FileIngester<'a> {
                     if let Some(result_row) = result? {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
-                            OutputPrinter::new(self.single_result, self.display_options.output_format.clone()).print(&result_row)
+                            self.output_printer.print(&result_row, self.single_result);
                         }
                     }
                 } else {
@@ -129,7 +132,7 @@ impl<'a> FileIngester<'a> {
             if self.print_result {
                 if let Some(result_row) = result? {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
-                    OutputPrinter::new(true, self.display_options.output_format.clone()).print(&result_row)
+                    self.output_printer.print(&result_row, true);
                 }
             }
         }
@@ -142,7 +145,8 @@ pub struct FollowFileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
-    display_options: DisplayOptions
+    display_options: DisplayOptions,
+    output_printer: OutputPrinter
 }
 
 impl<'a> FollowFileIngester<'a> {
@@ -151,6 +155,8 @@ impl<'a> FollowFileIngester<'a> {
                head: bool,
                display_options: DisplayOptions,
                execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
+        let output_printer = OutputPrinter::new(display_options.output_format.clone());
+
         let mut reader = BufReader::new(file);
 
         if head {
@@ -164,7 +170,8 @@ impl<'a> FollowFileIngester<'a> {
                 running,
                 reader: Some(reader),
                 execution_engine,
-                display_options
+                display_options,
+                output_printer
             }
         )
     }
@@ -201,7 +208,7 @@ impl<'a> FollowFileIngester<'a> {
                     print!("\x1B[2J\x1B[1;1H");
                 }
 
-                OutputPrinter::new(refresh, self.display_options.output_format.clone()).print(&result_row)
+                self.output_printer.print(&result_row, refresh)
             }
 
             if !self.running.load(Ordering::SeqCst) {
@@ -214,21 +221,19 @@ impl<'a> FollowFileIngester<'a> {
 }
 
 struct OutputPrinter {
-    single_result: bool,
     format: OutputFormat,
     first_line: bool
 }
 
 impl OutputPrinter {
-    pub fn new(single_result: bool, format: OutputFormat) -> OutputPrinter {
+    pub fn new(format: OutputFormat) -> OutputPrinter {
         OutputPrinter {
-            single_result,
             format,
             first_line: true
         }
     }
 
-    pub fn print(&mut self, result_row: &ResultRow) {
+    pub fn print(&mut self, result_row: &ResultRow, single_result: bool) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
             if row.columns.len() == 1 && result_row.columns[0] == "input" && self.format == OutputFormat::Text {
@@ -281,7 +286,7 @@ impl OutputPrinter {
             self.first_line = false;
         }
 
-        if multiple_rows && !self.single_result {
+        if multiple_rows && !single_result {
             println!();
         }
     }
@@ -292,7 +297,7 @@ fn test_file_ingest1() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -349,7 +354,7 @@ fn test_file_ingest2() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -403,7 +408,7 @@ fn test_file_ingest3() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -456,7 +461,7 @@ fn test_file_ingest4() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -506,7 +511,7 @@ fn test_file_ingest5() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -561,7 +566,7 @@ fn test_file_ingest6() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
