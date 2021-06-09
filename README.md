@@ -93,7 +93,7 @@ CREATE TABLE <name>(
     <pattern name> = '<regex patern>',
     <pattern name>[<group index>] => <column name> <column type>,
     
-    Use regex splits instead of matches:
+    Use regex splits instead of matches.
     <pattern name> = split '<regex patern>',
 
     Inline regex. Will be bound to the first group
@@ -125,3 +125,4 @@ Placed after the column type and add additional constraints/transforms.
 * `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is _not_ inserted.
 * `TRIM`: Trim string types for whitespaces.
 * `CONVERT`: Tries to convert a string value into the value type.
+* `DEFAULT <value>`: Use this as default value instead of NULL.
