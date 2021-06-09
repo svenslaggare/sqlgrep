@@ -41,7 +41,8 @@ pub struct ParseColumnDefinition {
     pub column_type: ValueType,
     pub nullable: Option<bool>,
     pub trim: Option<bool>,
-    pub convert: Option<bool>
+    pub convert: Option<bool>,
+    pub default_value: Option<Value>
 }
 
 impl ParseColumnDefinition {
@@ -55,7 +56,8 @@ impl ParseColumnDefinition {
             column_type,
             nullable: None,
             trim: None,
-            convert: None
+            convert: None,
+            default_value: None
         }
     }
 }
@@ -493,6 +495,7 @@ impl<'a> Parser<'a> {
         let mut nullable = None;
         let mut trim = None;
         let mut convert = None;
+        let mut default_value = None;
 
         match self.current().clone() {
             Token::Keyword(Keyword::Not) => {
@@ -516,6 +519,21 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 convert = Some(true);
             }
+            Token::Keyword(Keyword::Default) => {
+                self.next()?;
+                match self.parse_primary_expression()? {
+                    ParseExpressionTree::Value(value) => {
+                        if let Some(value_type) = value.value_type() {
+                            if value_type != column_type {
+                                return Err(ParserError::ExpectedDefaultValueOfType(column_type));
+                            }
+                        }
+
+                        default_value = Some(value);
+                    }
+                    _ => { return Err(ParserError::ExpectedValueForDefaultValue); }
+                }
+            }
             _ => {}
         }
 
@@ -526,7 +544,8 @@ impl<'a> Parser<'a> {
                 column_type,
                 nullable,
                 trim,
-                convert
+                convert,
+                default_value
             }
         )
     }
@@ -2078,7 +2097,8 @@ fn test_parse_create_table5() {
                 column_type: ValueType::Int,
                 nullable: Some(false),
                 trim: None,
-                convert: None
+                convert: None,
+                default_value: None
             }]
         },
         tree
@@ -2131,7 +2151,8 @@ fn test_parse_create_table6() {
                 column_type: ValueType::String,
                 nullable: None,
                 trim: Some(true),
-                convert: None
+                convert: None,
+                default_value: None
             }]
         },
         tree
@@ -2198,7 +2219,8 @@ fn test_parse_create_table7() {
                     column_type: ValueType::Array(Box::new(ValueType::Int)),
                     nullable: None,
                     trim: None,
-                    convert: None
+                    convert: None,
+                    default_value: None
                 }
             ]
         },
@@ -2258,6 +2280,61 @@ fn test_parse_create_table8() {
 }
 
 #[test]
+fn test_parse_create_table9() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::new(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Create),
+            Token::Keyword(Keyword::Table),
+            Token::Identifier("test".to_string()),
+            Token::LeftParentheses,
+
+            Token::Identifier("line".to_string()),
+            Token::Operator(Operator::Single('=')),
+            Token::String("A: ([0-9]+)".to_owned()),
+            Token::Comma,
+
+            Token::Identifier("line".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1),
+            Token::RightSquareParentheses,
+            Token::RightArrow,
+            Token::Identifier("x".to_owned()),
+            Token::Identifier("INT".to_owned()),
+            Token::Keyword(Keyword::Default),
+            Token::Int(4711),
+
+            Token::RightParentheses,
+            Token::SemiColon,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse().unwrap();
+
+    assert_eq!(
+        ParseOperationTree::CreateTable {
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
+            columns: vec![ParseColumnDefinition {
+                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_owned(), group_index: 1 }),
+                name: "x".to_string(),
+                column_type: ValueType::Int,
+                nullable: None,
+                trim: None,
+                convert: None,
+                default_value: Some(Value::Int(4711))
+            }]
+        },
+        tree
+    );
+}
+
+#[test]
 fn test_parse_json_table1() {
     let tree = parse_str("CREATE TABLE connections({.test1.test2} => x INT);").unwrap();
 
@@ -2273,6 +2350,7 @@ fn test_parse_json_table1() {
                     nullable: None,
                     trim: None,
                     convert: None,
+                    default_value: None
                 }
             ]
         },
@@ -2309,7 +2387,8 @@ fn test_parse_json_table2() {
                     column_type: ValueType::Int,
                     nullable: None,
                     trim: None,
-                    convert: None
+                    convert: None,
+                    default_value: None
                 }
             ]
         },

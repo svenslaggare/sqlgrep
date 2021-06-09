@@ -219,6 +219,8 @@ fn create_create_table_statement(name: String,
                 column_definition.options.convert = *convert;
             }
 
+            column_definition.options.default_value = column.default_value.clone();
+
             column_definition
         })
         .collect::<Vec<_>>();

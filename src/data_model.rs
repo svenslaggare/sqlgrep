@@ -158,6 +158,10 @@ impl ColumnDefinition {
             options
         }
     }
+
+    pub fn default_value(&self) -> Value {
+        self.options.default_value.clone().unwrap_or(Value::Null)
+    }
 }
 
 pub enum RegexResult<'a> {
@@ -227,20 +231,25 @@ impl ColumnParsing {
     pub fn extract(&self, column: &ColumnDefinition, parsing_input: &ParsingInput) -> Value {
         match self {
             ColumnParsing::Regex(pattern) => {
-                ColumnParsing::extract_using_regex(&column.column_type, parsing_input, pattern)
+                ColumnParsing::extract_using_regex(
+                    &column.column_type,
+                    parsing_input,
+                    pattern,
+                    column.default_value()
+                )
             }
             ColumnParsing::MultiRegex(patterns) => {
                 match &column.column_type {
                     ValueType::Array(element) => {
                         let mut values = Vec::new();
                         for pattern in patterns {
-                            values.push(ColumnParsing::extract_using_regex(element, parsing_input, pattern));
+                            values.push(ColumnParsing::extract_using_regex(element, parsing_input, pattern, Value::Null));
                         }
 
                         if values.iter().any(|v| v.is_not_null()) {
                             Value::Array(*element.clone(), values)
                         } else {
-                            Value::Null
+                            column.default_value()
                         }
                     }
                     ValueType::Timestamp => {
@@ -252,7 +261,7 @@ impl ColumnParsing {
                         let mut second = 0u32;
 
                         for (index, pattern) in patterns.iter().enumerate() {
-                            let value = ColumnParsing::extract_using_regex(&ValueType::Int, parsing_input, pattern);
+                            let value = ColumnParsing::extract_using_regex(&ValueType::Int, parsing_input, pattern, Value::Null);
 
                             if let Value::Int(value_i64) = value {
                                 match index {
@@ -266,7 +275,7 @@ impl ColumnParsing {
                                 }
                             } else {
                                 if index == 1 {
-                                    if let Value::String(value) = ColumnParsing::extract_using_regex(&ValueType::String, parsing_input, pattern) {
+                                    if let Value::String(value) = ColumnParsing::extract_using_regex(&ValueType::String, parsing_input, pattern, Value::Null) {
                                         match value.to_lowercase().as_str() {
                                             "jan" => { month = 1; },
                                             "feb" => { month = 2; },
@@ -291,11 +300,11 @@ impl ColumnParsing {
 
                         match create_timestamp(year, month, day, hour, minute, second) {
                             Some(timestamp) => Value::Timestamp(timestamp),
-                            None => Value::Null
+                            None => column.default_value()
                         }
 
                     }
-                    _ => Value::Null
+                    _ => column.default_value()
                 }
             }
             ColumnParsing::Json(access) => {
@@ -309,7 +318,7 @@ impl ColumnParsing {
                         column.column_type.convert_json(value)
                     }
                 } else {
-                    Value::Null
+                    column.default_value()
                 }
             }
         }
@@ -317,7 +326,8 @@ impl ColumnParsing {
 
     fn extract_using_regex(column_type: &ValueType,
                            parsing_input: &ParsingInput,
-                           pattern: &RegexResultReference) -> Value {
+                           pattern: &RegexResultReference,
+                           default_value: Value) -> Value {
         let pattern_name = &pattern.pattern_name;
         let group_index = &pattern.group_index;
         if let Some(regex_result) = parsing_input.regex_results.get(&pattern_name) {
@@ -330,7 +340,7 @@ impl ColumnParsing {
                         if let Some(group) = group_result {
                             Value::from_option(column_type.parse(group.as_str()))
                         } else {
-                            Value::Null
+                            default_value
                         }
                     }
                 }
@@ -342,13 +352,13 @@ impl ColumnParsing {
                         if let Some(group) = group_result {
                             Value::from_option(column_type.parse(group))
                         } else {
-                            Value::Null
+                            default_value
                         }
                     }
                 }
             }
         } else {
-            Value::Null
+            default_value
         }
     }
 }
@@ -411,7 +421,8 @@ impl JsonAccess {
 pub struct ColumnOptions {
     pub nullable: bool,
     pub trim: bool,
-    pub convert: bool
+    pub convert: bool,
+    pub default_value: Option<Value>
 }
 
 impl ColumnOptions {
@@ -419,7 +430,8 @@ impl ColumnOptions {
         ColumnOptions {
             nullable: true,
             trim: false,
-            convert: false
+            convert: false,
+            default_value: None
         }
     }
 

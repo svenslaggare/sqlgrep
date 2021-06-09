@@ -5,7 +5,9 @@ use std::iter::FromIterator;
 use std::fmt::Formatter;
 
 use lazy_static::lazy_static;
+
 use crate::parsing::operator::Operator;
+use crate::model::ValueType;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -27,7 +29,8 @@ pub enum Keyword {
     Outer,
     Join,
     On,
-    Extract
+    Extract,
+    Default
 }
 
 impl std::fmt::Display for Keyword {
@@ -63,6 +66,8 @@ pub enum Token {
 #[derive(Debug, PartialEq, Clone)]
 pub enum ParserError {
     Unknown,
+    ReachedEndOfTokens,
+    TooManyTokens,
     IntConvertError,
     FloatConvertError,
     AlreadyHasDot,
@@ -92,14 +97,16 @@ pub enum ParserError {
     NotDefinedUnaryOperator(Operator),
     NotDefinedType(String),
     TrimOnlyForString,
-    ReachedEndOfTokens,
-    TooManyTokens
+    ExpectedValueForDefaultValue,
+    ExpectedDefaultValueOfType(ValueType)
 }
 
 impl std::fmt::Display for ParserError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ParserError::Unknown => { write!(f, "Unknown error") }
+            ParserError::ReachedEndOfTokens => { write!(f, "Reached end of tokens") }
+            ParserError::TooManyTokens => { write!(f, "Too many tokens") }
             ParserError::IntConvertError => { write!(f, "Failed to parse integer") }
             ParserError::FloatConvertError => { write!(f, "Failed to parse float") }
             ParserError::AlreadyHasDot => { write!(f, "The number already has a dot") }
@@ -129,8 +136,8 @@ impl std::fmt::Display for ParserError {
             ParserError::NotDefinedUnaryOperator(operator) => { write!(f, "'{}' is not a valid unary operator", operator) }
             ParserError::NotDefinedType(value_type) => { write!(f, "'{}' is not a valid type", value_type) }
             ParserError::TrimOnlyForString => { write!(f, "The 'TRIM' modifier is only available for 'TEXT' columns") }
-            ParserError::ReachedEndOfTokens => { write!(f, "Reached end of tokens") }
-            ParserError::TooManyTokens => { write!(f, "Too many tokens") }
+            ParserError::ExpectedValueForDefaultValue => { write!(f, "Expected a value expression for the default value") }
+            ParserError::ExpectedDefaultValueOfType(value_type) => { write!(f, "Expected default value be of type '{}'", value_type) }
         }
     }
 }
@@ -156,6 +163,7 @@ lazy_static! {
             ("join".to_owned(), Keyword::Join),
             ("on".to_owned(), Keyword::On),
             ("extract".to_owned(), Keyword::Extract),
+            ("default".to_owned(), Keyword::Default),
         ].into_iter()
     );
 

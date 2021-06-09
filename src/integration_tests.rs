@@ -206,6 +206,25 @@ fn test_ftpd7() {
 }
 
 #[test]
+fn test_ftpd8() {
+    let tables = create_tables("testdata/ftpd_default.txt");
+
+    let query_tree = parser::parse_str("SELECT * FROM connections WHERE ip IS NOT NULL").unwrap();
+    let query = parse_tree_converter::transform_statement(query_tree).unwrap();
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables)
+    ).unwrap();
+
+    ingester.process(query).unwrap();
+    assert_eq!(653, ingester.statistics.total_result_rows);
+}
+
+#[test]
 fn test_ftpd_csv1() {
     let tables = create_tables("testdata/ftpd_csv.txt");
 
