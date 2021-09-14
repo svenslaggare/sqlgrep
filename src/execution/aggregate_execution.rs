@@ -4,9 +4,9 @@ use std::hash::{Hash, Hasher};
 use fnv::FnvHasher;
 
 use crate::data_model::Row;
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, HashMapOwnedKeyColumnProvider, ResultRow};
+use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine, unique_values};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTree, Value, ValueType};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTree, Value, ValueType, ArithmeticOperator, Function};
 
 type GroupKey = Vec<Value>;
 type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
@@ -284,6 +284,15 @@ impl AggregateExecutionEngine {
             columns.push(aggregate.0.clone());
             let mut result_column = Vec::new();
 
+            let transform_value = |value: Value| {
+                if let Some(transform) = &aggregate.2 {
+                    let columns = SingleColumnProvider::new("$agg", &value);
+                    ExpressionExecutionEngine::new(&columns).evaluate(transform)
+                } else {
+                    Ok(value)
+                }
+            };
+
             match aggregate.1 {
                 Aggregate::GroupKey(ref column) => {
                     for group_key in self.groups.keys() {
@@ -293,7 +302,7 @@ impl AggregateExecutionEngine {
                 Aggregate::Count(_) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
                     for subgroups in self.groups.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
-                            result_column.push(group_value.clone());
+                            result_column.push(transform_value(group_value.clone())?);
                         }
                     }
                 }
@@ -311,9 +320,9 @@ impl AggregateExecutionEngine {
                                     |_| {},
                                 );
 
-                                result_column.push(group_value);
+                                result_column.push(transform_value(group_value)?);
                             } else {
-                                result_column.push(group_value.clone());
+                                result_column.push(transform_value(group_value.clone())?);
                             }
                         }
                     }
@@ -434,8 +443,8 @@ fn test_group_by_and_count() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -502,8 +511,8 @@ fn test_group_by_and_count2() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(Some("x".to_owned())))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(Some("x".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -552,8 +561,8 @@ fn test_group_by_and_count3() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -606,8 +615,8 @@ fn test_group_by_and_count_and_filter() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -661,8 +670,8 @@ fn test_group_by_and_max() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("name".to_owned(), Aggregate::GroupKey("name".to_owned())),
-            ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())))
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -718,8 +727,8 @@ fn test_group_by_and_min() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("name".to_owned(), Aggregate::GroupKey("name".to_owned())),
-            ("max".to_owned(), Aggregate::Min(ExpressionTree::ColumnAccess("x".to_owned())))
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            ("max".to_owned(), Aggregate::Min(ExpressionTree::ColumnAccess("x".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -775,9 +784,9 @@ fn test_group_by_and_count_and_max() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("name".to_owned(), Aggregate::GroupKey("name".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())))
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -835,8 +844,8 @@ fn test_group_by_and_average() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("name".to_owned(), Aggregate::GroupKey("name".to_owned())),
-            ("max".to_owned(), Aggregate::Average(ExpressionTree::ColumnAccess("x".to_owned())))
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            ("max".to_owned(), Aggregate::Average(ExpressionTree::ColumnAccess("x".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -892,8 +901,8 @@ fn test_group_by_and_sum() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("name".to_owned(), Aggregate::GroupKey("name".to_owned())),
-            ("max".to_owned(), Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())))
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            ("max".to_owned(), Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -944,12 +953,78 @@ fn test_group_by_and_sum() {
 }
 
 #[test]
+fn test_group_by_and_sum_and_transform() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            (
+                "max".to_owned(),
+                Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())),
+                Some(ExpressionTree::Arithmetic {
+                    operator: ArithmeticOperator::Multiply,
+                    left: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+                    right: Box::new(ExpressionTree::Value(Value::Int(2)))
+                })
+            )
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: Some(vec!["name".to_string()]),
+        having: None,
+        join: None
+    };
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Int(i * 1000),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Int(1000),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Int(15000 * 2), result.data[0].columns[1]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Int(1000 * 2), result.data[1].columns[1]);
+}
+
+
+#[test]
 fn test_count() {
     let mut aggregate_execution_engine = AggregateExecutionEngine::new();
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("count".to_owned(), Aggregate::Count(None))
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -994,8 +1069,8 @@ fn test_group_by_and_count_and_having1() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1059,8 +1134,8 @@ fn test_group_by_and_count_and_having2() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1124,8 +1199,8 @@ fn test_group_by_and_count_and_having3() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1215,8 +1290,8 @@ fn test_group_by_and_count_and_having4() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1310,8 +1385,8 @@ fn test_group_by_array_agg1() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("x".to_owned(), Aggregate::GroupKey("x".to_owned())),
-            ("ys".to_owned(), Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()), false))
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            ("ys".to_owned(), Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()), false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1347,6 +1422,88 @@ fn test_group_by_array_agg1() {
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.is_some());
+    }
+
+    let column_values = vec![Value::Int(2000), Value::Int(300 + 4)];
+    let columns = create_test_columns(vec!["x", "y"], &column_values);
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(columns.clone())
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+    assert!(result.is_some());
+
+    println!("{:?}", result);
+
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::Int(1000), result.data[0].columns[0]);
+    assert_eq!(
+        Value::Array(ValueType::Int, vec![Value::Int(100), Value::Int(101), Value::Int(102), Value::Int(103), Value::Int(104)]),
+        result.data[0].columns[1]
+    );
+
+    assert_eq!(Value::Int(2000), result.data[1].columns[0]);
+    assert_eq!(
+        Value::Array(ValueType::Int, vec![Value::Int(300), Value::Int(301), Value::Int(302), Value::Int(303), Value::Int(304)]),
+        result.data[1].columns[1]
+    );
+}
+
+#[test]
+fn test_group_by_array_agg2() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
+            (
+                "ys".to_owned(),
+                Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()), false),
+                Some(ExpressionTree::Function { function: Function::ArrayUnique, arguments: vec![ExpressionTree::ColumnAccess("$agg".to_owned())] })
+            )
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: Some(vec!["x".to_string()]),
+        having: None,
+        join: None
+    };
+
+    // Add first group
+    for _ in 0..2 {
+        for i in 0..5 {
+            let column_values = vec![Value::Int(1000), Value::Int(100 + i)];
+            let columns = create_test_columns(vec!["x", "y"], &column_values);
+            let result = aggregate_execution_engine.execute(
+                &aggregate_statement,
+                HashMapColumnProvider::new(columns.clone())
+            );
+
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(result.is_some());
+        }
+    }
+
+    // Add second group
+    for _ in 0..2 {
+        for i in 0..4 {
+            let column_values = vec![Value::Int(2000), Value::Int(300 + i)];
+            let columns = create_test_columns(vec!["x", "y"], &column_values);
+            let result = aggregate_execution_engine.execute(
+                &aggregate_statement,
+                HashMapColumnProvider::new(columns.clone())
+            );
+
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(result.is_some());
+        }
     }
 
     let column_values = vec![Value::Int(2000), Value::Int(300 + 4)];

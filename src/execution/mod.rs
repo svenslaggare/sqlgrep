@@ -93,6 +93,40 @@ impl<'a> ColumnProvider for HashMapOwnedKeyColumnProvider<'a> {
     }
 }
 
+pub struct SingleColumnProvider<'a> {
+    empty_keys: Vec<String>,
+    key: &'a str,
+    value: &'a Value
+}
+
+impl<'a> SingleColumnProvider<'a> {
+    pub fn new(key: &'a str, value: &'a Value) -> SingleColumnProvider<'a> {
+        SingleColumnProvider {
+            empty_keys: Vec::new(),
+            key,
+            value
+        }
+    }
+}
+
+impl<'a> ColumnProvider for SingleColumnProvider<'a> {
+    fn get(&self, name: &str) -> Option<&Value> {
+        if name == self.key {
+            Some(self.value)
+        } else {
+            None
+        }
+    }
+
+    fn add_key(&mut self, key: &str) {
+
+    }
+
+    fn keys(&self) -> &Vec<String> {
+        &self.empty_keys
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum ExecutionError {
     Expression(EvaluationError),

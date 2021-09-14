@@ -467,7 +467,7 @@ impl SelectStatement {
 
 #[derive(Debug, Hash)]
 pub struct AggregateStatement {
-    pub aggregates: Vec<(String, Aggregate)>,
+    pub aggregates: Vec<(String, Aggregate, Option<ExpressionTree>)>,
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,

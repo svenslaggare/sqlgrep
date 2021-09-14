@@ -118,10 +118,10 @@ fn create_aggregate_statement(projections: Vec<(Option<String>, ParseExpressionT
                               join: Option<ParseJoinClause>) -> Result<Statement, ConvertParseTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
-        let (default_name, aggregate) = transform_aggregate(tree, projection_index)?;
+        let (default_name, aggregate, transform) = transform_aggregate(tree, projection_index)?;
         let name = name.or(default_name).unwrap_or(format!("p{}", projection_index));
 
-        transformed_aggregates.push((name, aggregate));
+        transformed_aggregates.push((name, aggregate, transform));
     }
 
     let transformed_filter = if let Some(filter) = filter {
@@ -274,12 +274,22 @@ lazy_static! {
 }
 
 fn any_aggregates(projections: &Vec<(Option<String>, ParseExpressionTree)>) -> bool {
-    projections.iter().any(|(_, projection)| {
-        match projection {
-            ParseExpressionTree::Call { name, arguments: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => true,
-            _ => false
+    projections.iter().any(|(_, projection)| any_aggregates_in_expression(projection))
+}
+
+fn any_aggregates_in_expression(expression: &ParseExpressionTree) -> bool {
+    let mut is_aggregate = false;
+    expression.visit::<(), _>(&mut |expr| {
+        match expr {
+            ParseExpressionTree::Call { name, arguments: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => {
+                is_aggregate = true;
+            }
+            _ => {}
         }
-    })
+        Ok(())
+    }).unwrap();
+
+    is_aggregate
 }
 
 pub struct TransformExpressionState {
@@ -366,7 +376,7 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
         ParseExpressionTree::Call { name, arguments } => {
             if state.allow_aggregates {
                 match transform_call_aggregate(&name, arguments.clone(), 0) {
-                    Ok((_, aggregate)) => {
+                    Ok((_, aggregate, _)) => {
                         let aggregate_index = state.next_aggregate_index;
                         state.next_aggregate_index += 1;
                         return Ok(ExpressionTree::Aggregate(aggregate_index, Box::new(aggregate)));
@@ -397,27 +407,167 @@ pub fn transform_expression(tree: ParseExpressionTree, state: &mut TransformExpr
     }
 }
 
-fn transform_aggregate(tree: ParseExpressionTree, index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
+fn transform_aggregate(tree: ParseExpressionTree, aggregate_index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParseTreeError> {
+    let mut aggregate = Box::new(ParseExpressionTree::ColumnAccess("$agg".to_owned()));
     match tree {
-        ParseExpressionTree::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name))),
-        ParseExpressionTree::Call { name, arguments } => transform_call_aggregate(&name, arguments, index),
+        ParseExpressionTree::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name), None)),
+        ParseExpressionTree::Call { name, mut arguments } => {
+            let mut aggregate = *aggregate;
+
+            let mut aggregate_in_argument = false;
+            for argument in &mut arguments {
+                if any_aggregates_in_expression(argument) {
+                    std::mem::swap(&mut aggregate, argument);
+                    aggregate_in_argument = true;
+                    break;
+                }
+            }
+
+            if aggregate_in_argument {
+                let (aggregate_name, aggregate, _) = transform_aggregate(aggregate, aggregate_index)?;
+                let transform = transform_expression(
+                    ParseExpressionTree::Call { name, arguments },
+                    &mut TransformExpressionState::default()
+                )?;
+
+                Ok((aggregate_name, aggregate, Some(transform)))
+            } else {
+                transform_call_aggregate(&name, arguments, aggregate_index)
+            }
+        }
+        ParseExpressionTree::BinaryOperator { operator, mut left, mut right } => {
+            if any_aggregates_in_expression(&left) {
+                std::mem::swap(&mut aggregate, &mut left);
+            } else if any_aggregates_in_expression(&right) {
+                std::mem::swap(&mut aggregate, &mut right);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::BinaryOperator { operator, left, right },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::UnaryOperator { operator, mut operand } => {
+            if any_aggregates_in_expression(&operand) {
+                std::mem::swap(&mut aggregate, &mut operand);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::UnaryOperator { operator, operand },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::ArrayElementAccess { mut array, mut index } => {
+            if any_aggregates_in_expression(&array) {
+                std::mem::swap(&mut aggregate, &mut array);
+            } else if any_aggregates_in_expression(&index) {
+                std::mem::swap(&mut aggregate, &mut index);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::ArrayElementAccess { array, index },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::And { mut left, mut right } => {
+            if any_aggregates_in_expression(&left) {
+                std::mem::swap(&mut aggregate, &mut left);
+            } else if any_aggregates_in_expression(&right) {
+                std::mem::swap(&mut aggregate, &mut right);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::And { left, right },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::Or { mut left, mut right } => {
+            if any_aggregates_in_expression(&left) {
+                std::mem::swap(&mut aggregate, &mut left);
+            } else if any_aggregates_in_expression(&right) {
+                std::mem::swap(&mut aggregate, &mut right);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::Or { left, right },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::Is { mut left, mut right } => {
+            if any_aggregates_in_expression(&left) {
+                std::mem::swap(&mut aggregate, &mut left);
+            } else if any_aggregates_in_expression(&right) {
+                std::mem::swap(&mut aggregate, &mut right);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::Is { left, right },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::IsNot { mut left, mut right } => {
+            if any_aggregates_in_expression(&left) {
+                std::mem::swap(&mut aggregate, &mut left);
+            } else if any_aggregates_in_expression(&right) {
+                std::mem::swap(&mut aggregate, &mut right);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::IsNot { left, right },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
+        ParseExpressionTree::Invert { mut operand } => {
+            if any_aggregates_in_expression(&operand) {
+                std::mem::swap(&mut aggregate, &mut operand);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParseExpressionTree::Invert { operand },
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
         _ => { return Err(ConvertParseTreeError::UndefinedAggregate); }
     }
 }
 
 fn transform_call_aggregate(name: &str,
                             mut arguments: Vec<ParseExpressionTree>,
-                            index: usize) -> Result<(Option<String>, Aggregate), ConvertParseTreeError> {
+                            index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParseTreeError> {
     let name_lowercase = name.to_lowercase();
     if name_lowercase == "count" {
         let default_name = Some(format!("count{}", index));
         if arguments.is_empty() {
-            Ok((default_name, Aggregate::Count(None)))
+            Ok((default_name, Aggregate::Count(None), None))
         } else if arguments.len() == 1 {
             let expression = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
             match expression {
-                ExpressionTree::Wildcard => Ok((default_name, Aggregate::Count(None))),
-                ExpressionTree::ColumnAccess(column) => Ok((default_name, Aggregate::Count(Some(column)))),
+                ExpressionTree::Wildcard => Ok((default_name, Aggregate::Count(None), None)),
+                ExpressionTree::ColumnAccess(column) => Ok((default_name, Aggregate::Count(Some(column)), None)),
                 _ => { Err(ConvertParseTreeError::ExpectedColumnAccess) }
             }
         } else {
@@ -436,7 +586,7 @@ fn transform_call_aggregate(name: &str,
                 _ => { panic!("should not happen") }
             };
 
-            Ok((Some(format!("{}{}", name_lowercase, index)), aggregate))
+            Ok((Some(format!("{}{}", name_lowercase, index)), aggregate, None))
         } else if arguments.is_empty() {
             Err(ConvertParseTreeError::ExpectedArgument)
         } else {
@@ -1002,6 +1152,127 @@ fn test_aggregate_statement6() {
             }
         ),
         statement.having
+    );
+}
+
+#[test]
+fn test_aggregate_statement7() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![
+            (
+                None,
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('*'),
+                    left: Box::new(ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
+                    right: Box::new(ParseExpressionTree::Value(Value::Int(2)))
+                }
+            ),
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: None,
+        having: None,
+        join: None,
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("max0", statement.aggregates[0].0);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!(
+        Some(ExpressionTree::Arithmetic {
+            operator: ArithmeticOperator::Multiply,
+            left: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+            right: Box::new(ExpressionTree::Value(Value::Int(2)))
+        }),
+        statement.aggregates[0].2
+    );
+}
+
+#[test]
+fn test_aggregate_statement8() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![
+            (
+                None,
+                ParseExpressionTree::BinaryOperator {
+                    operator: Operator::Single('*'),
+                    left: Box::new(ParseExpressionTree::Value(Value::Int(2))),
+                    right: Box::new(ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
+                }
+            ),
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: None,
+        having: None,
+        join: None,
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("max0", statement.aggregates[0].0);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!(
+        Some(ExpressionTree::Arithmetic {
+            operator: ArithmeticOperator::Multiply,
+            left: Box::new(ExpressionTree::Value(Value::Int(2))),
+            right: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+        }),
+        statement.aggregates[0].2
+    );
+}
+
+#[test]
+fn test_aggregate_statement9() {
+    let tree = ParseOperationTree::Select {
+        projections: vec![
+            (
+                None,
+                ParseExpressionTree::Call {
+                    name: "SQRT".to_owned(),
+                    arguments: vec![ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }]
+                }
+            ),
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: None,
+        having: None,
+        join: None,
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("max0", statement.aggregates[0].0);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!(
+        Some(ExpressionTree::Function {
+            function: Function::Sqrt,
+            arguments: vec![ExpressionTree::ColumnAccess("$agg".to_owned())]
+        }),
+        statement.aggregates[0].2
     );
 }
 

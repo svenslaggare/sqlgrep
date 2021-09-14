@@ -381,9 +381,9 @@ fn test_file_ingest2() {
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
+            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
         ],
         from: "connections".to_string(),
         filename: None,
@@ -435,8 +435,8 @@ fn test_file_ingest3() {
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
         ],
         from: "connections".to_string(),
         filename: None,
@@ -488,9 +488,9 @@ fn test_file_ingest4() {
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned()))),
+            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned())), None),
         ],
         from: "connections".to_string(),
         filename: None,
@@ -538,10 +538,10 @@ fn test_file_ingest5() {
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned())),
-            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
+            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
+            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
         ],
         from: "connections".to_string(),
         filename: None,
@@ -593,9 +593,9 @@ fn test_file_ingest6() {
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned()))),
+            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned())), None),
         ],
         from: "connections".to_string(),
         filename: None,
