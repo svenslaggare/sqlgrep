@@ -1,7 +1,7 @@
-use std::str::FromStr;
+use std::str::{FromStr, Chars};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::iter::FromIterator;
+use std::iter::{FromIterator, Peekable};
 use std::fmt::Formatter;
 
 use lazy_static::lazy_static;
@@ -64,7 +64,58 @@ pub enum Token {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum ParserError {
+pub struct TokenLocation {
+    pub line: usize,
+    pub column: usize,
+}
+
+impl TokenLocation {
+    pub fn new(line: usize, column: usize) -> TokenLocation {
+        TokenLocation {
+            line,
+            column
+        }
+    }
+}
+
+impl Default for TokenLocation {
+    fn default() -> Self {
+        TokenLocation::new(0, 0)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParserToken {
+    pub location: TokenLocation,
+    pub token: Token
+}
+
+impl ParserToken {
+    pub fn new(line: usize, column: usize, token: Token) -> ParserToken {
+        ParserToken {
+            location: TokenLocation { line, column },
+            token
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParserError {
+    pub location: TokenLocation,
+    pub error: ParserErrorType
+}
+
+impl ParserError {
+    pub fn new(location: TokenLocation, error: ParserErrorType) -> ParserError {
+        ParserError {
+            location,
+            error
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum ParserErrorType {
     Unknown,
     ReachedEndOfTokens,
     TooManyTokens,
@@ -101,43 +152,43 @@ pub enum ParserError {
     ExpectedDefaultValueOfType(ValueType)
 }
 
-impl std::fmt::Display for ParserError {
+impl std::fmt::Display for ParserErrorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserError::Unknown => { write!(f, "Unknown error") }
-            ParserError::ReachedEndOfTokens => { write!(f, "Reached end of tokens") }
-            ParserError::TooManyTokens => { write!(f, "Too many tokens") }
-            ParserError::IntConvertError => { write!(f, "Failed to parse integer") }
-            ParserError::FloatConvertError => { write!(f, "Failed to parse float") }
-            ParserError::AlreadyHasDot => { write!(f, "The number already has a dot") }
-            ParserError::ExpectedKeyword(keyword) => { write!(f, "Expected {} keyword", keyword) }
-            ParserError::ExpectedAnyKeyword(keywords) => { write!(f, "Expected {} keyword", keywords.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(" or ")) }
-            ParserError::ExpectedLeftParentheses => { write!(f, "Expected '('") }
-            ParserError::ExpectedRightParentheses => { write!(f, "Expected ')'") }
-            ParserError::ExpectedLeftSquareParentheses => { write!(f, "Expected '['") }
-            ParserError::ExpectedRightSquareParentheses => { write!(f, "Expected ']'") }
-            ParserError::ExpectedExpression => { write!(f, "Expected an expression") }
-            ParserError::ExpectedArgumentListContinuation => { write!(f, "Expected ',' or ')'") }
-            ParserError::ExpectedProjectionContinuation => { write!(f, "Expected ','") }
-            ParserError::ExpectedColumnDefinitionStart => { write!(f, "Expected start of column definition.")  }
-            ParserError::ExpectedJsonColumnPartStart => { write!(f, "Expected '.', '[' or '}}'")  }
-            ParserError::ExpectedColumnDefinitionContinuation => { write!(f, "Expected ',' or ')'")  }
-            ParserError::ExpectedIdentifier => { write!(f, "Expected an identifier") }
-            ParserError::ExpectedString => { write!(f, "Expected a string") }
-            ParserError::ExpectedInt => { write!(f, "Expected an integer") }
-            ParserError::ExpectedOperator => { write!(f, "Expected an operator") }
-            ParserError::ExpectedSpecificOperator(operator) => { write!(f, "Expected '{}' operator", operator) }
-            ParserError::ExpectedColon => { write!(f, "Expected ':'") }
-            ParserError::ExpectedRightArrow => { write!(f, "Expected '=>'") }
-            ParserError::ExpectedSemiColon => { write!(f, "Expected ';'") }
-            ParserError::ExpectedNull => { write!(f, "Expected NULL") }
-            ParserError::ExpectedColumnAccess => { write!(f, "Expected column access") }
-            ParserError::NotDefinedBinaryOperator(operator) => { write!(f, "'{}' is not a valid binary operator", operator) }
-            ParserError::NotDefinedUnaryOperator(operator) => { write!(f, "'{}' is not a valid unary operator", operator) }
-            ParserError::NotDefinedType(value_type) => { write!(f, "'{}' is not a valid type", value_type) }
-            ParserError::TrimOnlyForString => { write!(f, "The 'TRIM' modifier is only available for 'TEXT' columns") }
-            ParserError::ExpectedValueForDefaultValue => { write!(f, "Expected a value expression for the default value") }
-            ParserError::ExpectedDefaultValueOfType(value_type) => { write!(f, "Expected default value be of type '{}'", value_type) }
+            ParserErrorType::Unknown => { write!(f, "Unknown error") }
+            ParserErrorType::ReachedEndOfTokens => { write!(f, "Reached end of tokens") }
+            ParserErrorType::TooManyTokens => { write!(f, "Too many tokens") }
+            ParserErrorType::IntConvertError => { write!(f, "Failed to parse integer") }
+            ParserErrorType::FloatConvertError => { write!(f, "Failed to parse float") }
+            ParserErrorType::AlreadyHasDot => { write!(f, "The number already has a dot") }
+            ParserErrorType::ExpectedKeyword(keyword) => { write!(f, "Expected {} keyword", keyword) }
+            ParserErrorType::ExpectedAnyKeyword(keywords) => { write!(f, "Expected {} keyword", keywords.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(" or ")) }
+            ParserErrorType::ExpectedLeftParentheses => { write!(f, "Expected '('") }
+            ParserErrorType::ExpectedRightParentheses => { write!(f, "Expected ')'") }
+            ParserErrorType::ExpectedLeftSquareParentheses => { write!(f, "Expected '['") }
+            ParserErrorType::ExpectedRightSquareParentheses => { write!(f, "Expected ']'") }
+            ParserErrorType::ExpectedExpression => { write!(f, "Expected an expression") }
+            ParserErrorType::ExpectedArgumentListContinuation => { write!(f, "Expected ',' or ')'") }
+            ParserErrorType::ExpectedProjectionContinuation => { write!(f, "Expected ','") }
+            ParserErrorType::ExpectedColumnDefinitionStart => { write!(f, "Expected start of column definition.")  }
+            ParserErrorType::ExpectedJsonColumnPartStart => { write!(f, "Expected '.', '[' or '}}'")  }
+            ParserErrorType::ExpectedColumnDefinitionContinuation => { write!(f, "Expected ',' or ')'")  }
+            ParserErrorType::ExpectedIdentifier => { write!(f, "Expected an identifier") }
+            ParserErrorType::ExpectedString => { write!(f, "Expected a string") }
+            ParserErrorType::ExpectedInt => { write!(f, "Expected an integer") }
+            ParserErrorType::ExpectedOperator => { write!(f, "Expected an operator") }
+            ParserErrorType::ExpectedSpecificOperator(operator) => { write!(f, "Expected '{}' operator", operator) }
+            ParserErrorType::ExpectedColon => { write!(f, "Expected ':'") }
+            ParserErrorType::ExpectedRightArrow => { write!(f, "Expected '=>'") }
+            ParserErrorType::ExpectedSemiColon => { write!(f, "Expected ';'") }
+            ParserErrorType::ExpectedNull => { write!(f, "Expected NULL") }
+            ParserErrorType::ExpectedColumnAccess => { write!(f, "Expected column access") }
+            ParserErrorType::NotDefinedBinaryOperator(operator) => { write!(f, "'{}' is not a valid binary operator", operator) }
+            ParserErrorType::NotDefinedUnaryOperator(operator) => { write!(f, "'{}' is not a valid unary operator", operator) }
+            ParserErrorType::NotDefinedType(value_type) => { write!(f, "'{}' is not a valid type", value_type) }
+            ParserErrorType::TrimOnlyForString => { write!(f, "The 'TRIM' modifier is only available for 'TEXT' columns") }
+            ParserErrorType::ExpectedValueForDefaultValue => { write!(f, "Expected a value expression for the default value") }
+            ParserErrorType::ExpectedDefaultValueOfType(value_type) => { write!(f, "Expected default value be of type '{}'", value_type) }
         }
     }
 }
@@ -170,17 +221,57 @@ lazy_static! {
     static ref TWO_CHAR_OPERATORS: HashSet<char> = HashSet::from_iter(vec!['<', '>', '!', '=', '-'].into_iter());
 }
 
-pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
-    let mut tokens = Vec::new();
-    let mut char_iterator = text.chars().peekable();
+pub fn tokenize_simple(text: &str) -> Result<Vec<Token>, ParserError> {
+    Ok(tokenize(text)?.into_iter().map(|token| token.token).collect())
+}
+
+pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
+    struct TokenizerState<'a> {
+        char_iterator: Peekable<Chars<'a>>,
+        tokens: Vec<ParserToken>,
+        line: usize,
+        column: usize
+    }
+
+    impl<'a> TokenizerState<'a> {
+        fn next_char(&mut self) -> Option<char> {
+            let result = self.char_iterator.next();
+
+            if result.is_some() {
+                self.column += 1;
+            }
+
+            result
+        }
+
+        fn location(&self) -> TokenLocation {
+            TokenLocation { line: self.line, column: self.column }
+        }
+
+        fn add(&mut self, token: Token) {
+            self.tokens.push(ParserToken::new(self.line, self.column, token));
+        }
+    }
+
+    let mut state = TokenizerState {
+        char_iterator: text.chars().peekable(),
+        tokens: Vec::new(),
+        line: 0,
+        column: 0
+    };
 
     let mut current_str: Option<String> = None;
     let mut is_escaped = false;
     let mut is_comment = false;
-    while let Some(current) = char_iterator.next() {
-        if let Some(Token::Operator(Operator::Dual('-', '-'))) = tokens.last() {
+    while let Some(current) = state.char_iterator.next() {
+        if current == '\n' {
+            state.line += 1;
+            state.column = 0;
+        }
+
+        if let Some(Token::Operator(Operator::Dual('-', '-'))) = state.tokens.last().map(|t| &t.token) {
             is_comment = true;
-            tokens.remove(tokens.len() - 1);
+            state.tokens.remove(state.tokens.len() - 1);
         }
 
         if is_comment {
@@ -201,7 +292,7 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
 
         if is_string_start {
             if current_str.is_some() {
-                tokens.push(Token::String(current_str.unwrap()));
+                state.add(Token::String(current_str.unwrap()));
                 current_str = None;
             } else {
                 current_str = Some(String::new());
@@ -220,9 +311,9 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             identifier.push(current);
 
             loop {
-                match char_iterator.peek() {
+                match state.char_iterator.peek() {
                     Some(next) if next.is_alphanumeric() || next == &'_' => {
-                        identifier.push(char_iterator.next().unwrap());
+                        identifier.push(state.next_char().unwrap());
                     }
                     _ => {
                         break
@@ -231,19 +322,19 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             }
 
             if let Some(keyword) = KEYWORDS.get(&identifier.to_lowercase()) {
-                if keyword == &Keyword::Not && tokens.last() == Some(Token::Keyword(Keyword::Is)).as_ref() {
-                    *tokens.last_mut().unwrap() = Token::Keyword(Keyword::IsNot);
+                if keyword == &Keyword::Not && state.tokens.last().map(|t| &t.token) == Some(Token::Keyword(Keyword::Is)).as_ref() {
+                    state.tokens.last_mut().unwrap().token = Token::Keyword(Keyword::IsNot);
                 } else {
-                    tokens.push(Token::Keyword(keyword.clone()));
+                    state.add(Token::Keyword(keyword.clone()));
                 }
             } else if identifier.to_lowercase() == "null" {
-                tokens.push(Token::Null);
+                state.add(Token::Null);
             } else if identifier.to_lowercase() == "true" {
-                tokens.push(Token::True);
+                state.add(Token::True);
             } else if identifier.to_lowercase() == "false" {
-                tokens.push(Token::False);
+                state.add(Token::False);
             } else {
-                tokens.push(Token::Identifier(identifier));
+                state.add(Token::Identifier(identifier));
             }
         } else if current.is_numeric() {
             let mut number = String::new();
@@ -251,17 +342,17 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             let mut has_dot = false;
 
             loop {
-                match char_iterator.peek() {
+                match state.char_iterator.peek() {
                     Some(next) if next.is_numeric() => {
-                        number.push(char_iterator.next().unwrap());
+                        number.push(state.next_char().unwrap());
                     }
                     Some(next) if next == &'.' => {
                         if has_dot {
-                            return Err(ParserError::AlreadyHasDot);
+                            return Err(ParserError::new(state.location(), ParserErrorType::AlreadyHasDot));
                         }
 
                         has_dot = true;
-                        number.push(char_iterator.next().unwrap());
+                        number.push(state.next_char().unwrap());
                     }
                     _ => {
                         break
@@ -270,41 +361,41 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             }
 
             if has_dot {
-                tokens.push(Token::Float(f64::from_str(&number).map_err(|_err| ParserError::FloatConvertError)?));
+                state.add(Token::Float(f64::from_str(&number).map_err(|_err| ParserError::new(state.location(), ParserErrorType::FloatConvertError))?));
             } else {
-                tokens.push(Token::Int(i64::from_str(&number).map_err(|_err| ParserError::IntConvertError)?));
+                state.add(Token::Int(i64::from_str(&number).map_err(|_err| ParserError::new(state.location(), ParserErrorType::IntConvertError))?));
             }
         } else if current == '(' {
-            tokens.push(Token::LeftParentheses);
+            state.add(Token::LeftParentheses);
         } else if current == ')' {
-            tokens.push(Token::RightParentheses);
+            state.add(Token::RightParentheses);
         } else if current == '[' {
-            tokens.push(Token::LeftSquareParentheses);
+            state.add(Token::LeftSquareParentheses);
         } else if current == ']' {
-            tokens.push(Token::RightSquareParentheses);
+            state.add(Token::RightSquareParentheses);
         } else if current == '{' {
-            tokens.push(Token::LeftCurlyParentheses);
+            state.add(Token::LeftCurlyParentheses);
         } else if current == '}' {
-            tokens.push(Token::RightCurlyParentheses);
+            state.add(Token::RightCurlyParentheses);
         } else if current == ',' {
-            tokens.push(Token::Comma);
+            state.add(Token::Comma);
         } else if current == ';' {
-            tokens.push(Token::SemiColon);
+            state.add(Token::SemiColon);
         } else if current == ':' {
-            tokens.push(Token::Colon);
+            state.add(Token::Colon);
         } else if current.is_whitespace() {
             // Skip
         } else {
             //If the previous token is an operator and the current one also is, upgrade to a two-op char
             let mut is_dual = false;
-            if let Some(last) = tokens.last() {
+            if let Some(last) = state.tokens.last().map(|t| &t.token) {
                 match last {
                     Token::Operator(Operator::Single('=')) if current == '>' => {
-                        *tokens.last_mut().unwrap() = Token::RightArrow;
+                        state.tokens.last_mut().unwrap().token = Token::RightArrow;
                         is_dual = true;
                     },
                     Token::Operator(Operator::Single(operator)) if TWO_CHAR_OPERATORS.contains(operator) => {
-                        *tokens.last_mut().unwrap() = Token::Operator(Operator::Dual(*operator, current));
+                        state.tokens.last_mut().unwrap().token = Token::Operator(Operator::Dual(*operator, current));
                         is_dual = true;
                     }
                     _ => {}
@@ -312,19 +403,19 @@ pub fn tokenize(text: &str) -> Result<Vec<Token>, ParserError> {
             }
 
             if !is_dual {
-                tokens.push(Token::Operator(Operator::Single(current)));
+                state.add(Token::Operator(Operator::Single(current)));
             }
         }
     }
 
-    tokens.push(Token::End);
-    Ok(tokens)
+    state.add(Token::End);
+    Ok(state.tokens)
 }
 
 
 #[test]
 fn test_tokenize1() {
-    let tokens = tokenize("a1 + b + caba + 134 + 12");
+    let tokens = tokenize_simple("a1 + b + caba + 134 + 12");
     assert_eq!(
         vec![
             Token::Identifier("a1".to_string()),
@@ -344,7 +435,7 @@ fn test_tokenize1() {
 
 #[test]
 fn test_tokenize2() {
-    let tokens = tokenize("f(a, b, 4)");
+    let tokens = tokenize_simple("f(a, b, 4)");
     assert_eq!(
         vec![
             Token::Identifier("f".to_string()),
@@ -363,7 +454,7 @@ fn test_tokenize2() {
 
 #[test]
 fn test_tokenize3() {
-    let tokens = tokenize("a + 4");
+    let tokens = tokenize_simple("a + 4");
     assert_eq!(
         vec![
             Token::Identifier("a".to_string()),
@@ -377,7 +468,7 @@ fn test_tokenize3() {
 
 #[test]
 fn test_tokenize4() {
-    let tokens = tokenize("SELECT x FROM test WHERE x > 4");
+    let tokens = tokenize_simple("SELECT x FROM test WHERE x > 4");
     assert_eq!(
         vec![
             Token::Keyword(Keyword::Select),
@@ -396,7 +487,7 @@ fn test_tokenize4() {
 
 #[test]
 fn test_tokenize5() {
-    let tokens = tokenize("a <= 4");
+    let tokens = tokenize_simple("a <= 4");
     assert_eq!(
         vec![
             Token::Identifier("a".to_string()),
@@ -410,7 +501,7 @@ fn test_tokenize5() {
 
 #[test]
 fn test_tokenize6() {
-    let tokens = tokenize("NULL true FALSE");
+    let tokens = tokenize_simple("NULL true FALSE");
     assert_eq!(
         vec![
             Token::Null,
@@ -424,7 +515,7 @@ fn test_tokenize6() {
 
 #[test]
 fn test_tokenize7() {
-    let tokens = tokenize("x + 'test 4711.1337' + y");
+    let tokens = tokenize_simple("x + 'test 4711.1337' + y");
     assert_eq!(
         vec![
             Token::Identifier("x".to_owned()),
@@ -440,7 +531,7 @@ fn test_tokenize7() {
 
 #[test]
 fn test_tokenize8() {
-    let tokens = tokenize("x + 'test \\'4711\\'.1337' + y");
+    let tokens = tokenize_simple("x + 'test \\'4711\\'.1337' + y");
     assert_eq!(
         vec![
             Token::Identifier("x".to_owned()),
@@ -456,7 +547,7 @@ fn test_tokenize8() {
 
 #[test]
 fn test_tokenize9() {
-    let tokens = tokenize("a => 4");
+    let tokens = tokenize_simple("a => 4");
     assert_eq!(
         vec![
             Token::Identifier("a".to_string()),
@@ -470,7 +561,7 @@ fn test_tokenize9() {
 
 #[test]
 fn test_tokenize10() {
-    let tokens = tokenize("line => 'connection from ([0-9.]+) \\\\((.*)\\\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)'");
+    let tokens = tokenize_simple("line => 'connection from ([0-9.]+) \\\\((.*)\\\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)'");
     assert_eq!(
         vec![
             Token::Identifier("line".to_owned()),
@@ -484,7 +575,7 @@ fn test_tokenize10() {
 
 #[test]
 fn test_tokenize11() {
-    let tokens = tokenize("4.0");
+    let tokens = tokenize_simple("4.0");
     assert_eq!(
         vec![
             Token::Float(4.0),
@@ -496,7 +587,7 @@ fn test_tokenize11() {
 
 #[test]
 fn test_tokenize12() {
-    let tokens = tokenize("x IS NOT NULL");
+    let tokens = tokenize_simple("x IS NOT NULL");
     assert_eq!(
         vec![
             Token::Identifier("x".to_owned()),
@@ -510,7 +601,7 @@ fn test_tokenize12() {
 
 #[test]
 fn test_tokenize13() {
-    let tokens = tokenize("x IS NOT NULL--this is a comment\ny + x");
+    let tokens = tokenize_simple("x IS NOT NULL--this is a comment\ny + x");
     assert_eq!(
         vec![
             Token::Identifier("x".to_owned()),

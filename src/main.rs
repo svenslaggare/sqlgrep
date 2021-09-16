@@ -121,7 +121,7 @@ fn parse_statement(line: &str) -> Option<Statement> {
     match parsing::parse(line) {
         Ok(statement) => Some(statement),
         Err(err) => {
-            println!("Failed parsing input: {}", err);
+            println!("Failed parsing input: {}.", err);
             None
         }
     }

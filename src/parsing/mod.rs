@@ -4,8 +4,8 @@ pub mod parser;
 pub mod parse_tree_converter;
 
 use crate::model::Statement;
-use crate::parsing::parse_tree_converter::ConvertParseTreeError;
-use crate::parsing::tokenizer::ParserError;
+use crate::parsing::parse_tree_converter::{ConvertParseTreeErrorType, ConvertParseTreeError};
+use crate::parsing::tokenizer::{ParserErrorType, ParserError};
 
 #[derive(Debug)]
 pub enum CommonParserError {
@@ -16,8 +16,8 @@ pub enum CommonParserError {
 impl std::fmt::Display for CommonParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CommonParserError::ParserError(err) => write!(f, "{}", err),
-            CommonParserError::ConvertParseTreeError(err) => write!(f, "{}", err),
+            CommonParserError::ParserError(err) => write!(f, "{} ({}:{})", err.error, err.location.line + 1, err.location.column + 1),
+            CommonParserError::ConvertParseTreeError(err) => write!(f, "{} ({}:{})", err.error, err.location.line + 1, err.location.column + 1),
         }
     }
 }

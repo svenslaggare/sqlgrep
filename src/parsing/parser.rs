@@ -2,78 +2,96 @@ use std::collections::{HashMap, HashSet};
 
 use crate::model::{Value, ValueType, Float};
 use crate::data_model::{JsonAccess, ColumnParsing, RegexResultReference, RegexMode};
-use crate::parsing::tokenizer::{ParserError, Token, Keyword, tokenize};
+use crate::parsing::tokenizer::{ParserErrorType, Token, Keyword, tokenize_simple, ParserToken, tokenize, ParserError, TokenLocation};
 use crate::parsing::operator::{BinaryOperators, UnaryOperators, Operator};
 
-pub fn parse_str(text: &str) -> ParserResult<ParseOperationTree> {
+pub fn parse_str(text: &str) -> ParserResult<ParserOperationTree> {
     let tokens = tokenize(text)?;
 
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    Parser::new(
-        &binary_operators,
-        &unary_operators,
-        tokens
-    ).parse()
+    Parser::new(&binary_operators, &unary_operators, tokens).parse()
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum ParseExpressionTree {
+pub struct ParserExpressionTree {
+    pub location: TokenLocation,
+    pub tree: ParserExpressionTreeData
+}
+
+impl ParserExpressionTree {
+    pub fn new(location: TokenLocation, tree: ParserExpressionTreeData) -> ParserExpressionTree {
+        ParserExpressionTree {
+            location,
+            tree
+        }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum ParserExpressionTreeData {
     Value(Value),
     ColumnAccess(String),
     Wildcard,
-    BinaryOperator { operator: Operator, left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    UnaryOperator { operator: Operator, operand: Box<ParseExpressionTree>},
-    Invert { operand: Box<ParseExpressionTree> },
-    Is { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    IsNot { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    And { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    Or { left: Box<ParseExpressionTree>, right: Box<ParseExpressionTree> },
-    Call { name: String, arguments: Vec<ParseExpressionTree> },
-    ArrayElementAccess { array: Box<ParseExpressionTree>, index: Box<ParseExpressionTree> }
+    BinaryOperator { operator: Operator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    UnaryOperator { operator: Operator, operand: Box<ParserExpressionTree>},
+    Invert { operand: Box<ParserExpressionTree> },
+    Is { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    IsNot { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    And { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    Or { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    Call { name: String, arguments: Vec<ParserExpressionTree> },
+    ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> }
 }
 
-impl ParseExpressionTree {
-    pub fn visit<'a, E, F: FnMut(&'a ParseExpressionTree) -> Result<(), E>>(&'a self, f: &mut F) -> Result<(), E> {
+impl ParserExpressionTreeData {
+    pub fn with_location(self, location: TokenLocation) -> ParserExpressionTree {
+        ParserExpressionTree {
+            location,
+            tree: self
+        }
+    }
+
+    pub fn visit<'a, E, F: FnMut(&'a ParserExpressionTreeData) -> Result<(), E>>(&'a self, f: &mut F) -> Result<(), E> {
         match self {
-            ParseExpressionTree::Value(_) => {}
-            ParseExpressionTree::ColumnAccess(_) => {}
-            ParseExpressionTree::Wildcard => {}
-            ParseExpressionTree::BinaryOperator { left, right, .. } => {
-                left.visit(f)?;
-                right.visit(f)?;
+            ParserExpressionTreeData::Value(_) => {}
+            ParserExpressionTreeData::ColumnAccess(_) => {}
+            ParserExpressionTreeData::Wildcard => {}
+            ParserExpressionTreeData::BinaryOperator { left, right, .. } => {
+                left.tree.visit(f)?;
+                right.tree.visit(f)?;
             }
-            ParseExpressionTree::UnaryOperator { operand, .. } => {
-                operand.visit(f)?;
+            ParserExpressionTreeData::UnaryOperator { operand, .. } => {
+                operand.tree.visit(f)?;
             }
-            ParseExpressionTree::Invert { operand } => {
-                operand.visit(f)?;
+            ParserExpressionTreeData::Invert { operand } => {
+                operand.tree.visit(f)?;
             }
-            ParseExpressionTree::Is { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
+            ParserExpressionTreeData::Is { left, right } => {
+                left.tree.visit(f)?;
+                right.tree.visit(f)?;
             }
-            ParseExpressionTree::IsNot { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
+            ParserExpressionTreeData::IsNot { left, right } => {
+                left.tree.visit(f)?;
+                right.tree.visit(f)?;
             }
-            ParseExpressionTree::And { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
+            ParserExpressionTreeData::And { left, right } => {
+                left.tree.visit(f)?;
+                right.tree.visit(f)?;
             }
-            ParseExpressionTree::Or { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
+            ParserExpressionTreeData::Or { left, right } => {
+                left.tree.visit(f)?;
+                right.tree.visit(f)?;
             }
-            ParseExpressionTree::Call { arguments, .. } => {
+            ParserExpressionTreeData::Call { arguments, .. } => {
                 for arg in arguments {
-                    arg.visit(f)?;
+                    arg.tree.visit(f)?;
                 }
             }
-            ParseExpressionTree::ArrayElementAccess { array, index } => {
-                array.visit(f)?;
-                index.visit(f)?;
+            ParserExpressionTreeData::ArrayElementAccess { array, index } => {
+                array.tree.visit(f)?;
+                index.tree.visit(f)?;
             }
         }
 
@@ -83,7 +101,7 @@ impl ParseExpressionTree {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct ParseColumnDefinition {
+pub struct ParserColumnDefinition {
     pub parsing: ColumnParsing,
     pub name: String,
     pub column_type: ValueType,
@@ -93,12 +111,12 @@ pub struct ParseColumnDefinition {
     pub default_value: Option<Value>
 }
 
-impl ParseColumnDefinition {
+impl ParserColumnDefinition {
     pub fn new(pattern_name: String,
                pattern_index: usize,
                name: String,
-               column_type: ValueType) -> ParseColumnDefinition {
-        ParseColumnDefinition {
+               column_type: ValueType) -> ParserColumnDefinition {
+        ParserColumnDefinition {
             parsing: ColumnParsing::Regex(RegexResultReference { pattern_name, group_index: pattern_index }),
             name,
             column_type,
@@ -111,7 +129,7 @@ impl ParseColumnDefinition {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct ParseJoinClause {
+pub struct ParserJoinClause {
     pub joiner_table: String,
     pub joiner_filename: String,
     pub left_table: String,
@@ -122,27 +140,29 @@ pub struct ParseJoinClause {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum ParseOperationTree {
+pub enum ParserOperationTree {
     Select {
-        projections: Vec<(Option<String>, ParseExpressionTree)>,
+        location: TokenLocation,
+        projections: Vec<(Option<String>, ParserExpressionTree)>,
         from: (String, Option<String>),
-        filter: Option<ParseExpressionTree>,
+        filter: Option<ParserExpressionTree>,
         group_by: Option<Vec<String>>,
-        having: Option<ParseExpressionTree>,
-        join: Option<ParseJoinClause>
+        having: Option<ParserExpressionTree>,
+        join: Option<ParserJoinClause>
     },
     CreateTable {
+        location: TokenLocation,
         name: String,
         patterns: Vec<(String, String, RegexMode)>,
-        columns: Vec<ParseColumnDefinition>
+        columns: Vec<ParserColumnDefinition>
     },
-    Multiple(Vec<ParseOperationTree>)
+    Multiple(Vec<ParserOperationTree>)
 }
 
 pub type ParserResult<T> = Result<T, ParserError>;
 
 pub struct Parser<'a> {
-    tokens: Vec<Token>,
+    tokens: Vec<ParserToken>,
     index: isize,
     binary_operators: &'a BinaryOperators,
     unary_operators: &'a UnaryOperators
@@ -151,7 +171,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn new(binary_operators: &'a BinaryOperators,
                unary_operators: &'a UnaryOperators,
-               tokens: Vec<Token>) -> Parser<'a> {
+               tokens: Vec<ParserToken>) -> Parser<'a> {
         Parser {
             tokens,
             index: -1,
@@ -160,7 +180,18 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> ParserResult<ParseOperationTree> {
+    pub fn from_plain_tokens(binary_operators: &'a BinaryOperators,
+                             unary_operators: &'a UnaryOperators,
+                             tokens: Vec<Token>) -> Parser<'a> {
+        Parser {
+            tokens: tokens.into_iter().map(|token| ParserToken::new(0, 0, token)).collect(),
+            index: -1,
+            binary_operators,
+            unary_operators
+        }
+    }
+
+    pub fn parse(&mut self) -> ParserResult<ParserOperationTree> {
         self.next()?;
 
         let operation = match self.current() {
@@ -170,7 +201,7 @@ impl<'a> Parser<'a> {
             Token::Keyword(Keyword::Create) => {
                 self.parse_multiple_create_table()
             }
-            _=> { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Select, Keyword::Create])); }
+            _=> { return Err(self.create_error(ParserErrorType::ExpectedAnyKeyword(vec![Keyword::Select, Keyword::Create]))); }
         };
 
         if self.current() == &Token::SemiColon {
@@ -182,17 +213,18 @@ impl<'a> Parser<'a> {
                 if (self.index as usize) + 1 == self.tokens.len() {
                     Ok(operation)
                 } else {
-                    Err(ParserError::TooManyTokens)
+                    Err(self.create_error(ParserErrorType::TooManyTokens))
                 }
             }
             Err(err) => Err(err)
         }
     }
 
-    fn parse_select(&mut self) -> ParserResult<ParseOperationTree> {
+    fn parse_select(&mut self) -> ParserResult<ParserOperationTree> {
         let mut projections = Vec::new();
         self.next()?;
 
+        let location = self.current_location();
         loop {
             let mut projection_name = None;
             let projection = self.parse_expression_internal()?;
@@ -212,7 +244,7 @@ impl<'a> Parser<'a> {
                     self.next()?;
                     break;
                 }
-                _ => { return Err(ParserError::ExpectedProjectionContinuation); }
+                _ => { return Err(self.create_error(ParserErrorType::ExpectedProjectionContinuation)); }
             }
         }
 
@@ -223,7 +255,7 @@ impl<'a> Parser<'a> {
 
             self.expect_and_consume_token(
                 Token::Colon,
-                ParserError::ExpectedColon
+                ParserErrorType::ExpectedColon
             )?;
 
             filename = Some(self.consume_string()?);
@@ -252,7 +284,7 @@ impl<'a> Parser<'a> {
 
                         self.expect_and_consume_token(
                             Token::Keyword(Keyword::By),
-                            ParserError::ExpectedKeyword(Keyword::By)
+                            ParserErrorType::ExpectedKeyword(Keyword::By)
                         )?;
 
                         let mut group_by_keys = Vec::new();
@@ -272,7 +304,7 @@ impl<'a> Parser<'a> {
                         self.next()?;
                         break;
                     }
-                    _ => { return Err(ParserError::ExpectedAnyKeyword(vec![Keyword::Where, Keyword::Group])); }
+                    _ => { return Err(self.create_error(ParserErrorType::ExpectedAnyKeyword(vec![Keyword::Where, Keyword::Group]))); }
                 }
 
                 if self.current() == &Token::End {
@@ -282,7 +314,8 @@ impl<'a> Parser<'a> {
         }
 
         Ok(
-            ParseOperationTree::Select {
+            ParserOperationTree::Select {
+                location,
                 projections,
                 from: (table_name, filename),
                 filter,
@@ -293,29 +326,29 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_join(&mut self, is_outer: bool) -> ParserResult<ParseJoinClause> {
+    fn parse_join(&mut self, is_outer: bool) -> ParserResult<ParserJoinClause> {
         self.next()?;
 
         self.expect_and_consume_token(
             Token::Keyword(Keyword::Join),
-            ParserError::ExpectedKeyword(Keyword::Join)
+            ParserErrorType::ExpectedKeyword(Keyword::Join)
         )?;
 
         let joiner_table = self.consume_identifier()?;
         self.expect_and_consume_token(
             Token::Colon,
-            ParserError::ExpectedColon
+            ParserErrorType::ExpectedColon
         )?;
 
         self.expect_and_consume_token(
             Token::Colon,
-            ParserError::ExpectedColon
+            ParserErrorType::ExpectedColon
         )?;
         let joiner_filename = self.consume_string()?;
 
         self.expect_and_consume_token(
             Token::Keyword(Keyword::On),
-            ParserError::ExpectedKeyword(Keyword::On)
+            ParserErrorType::ExpectedKeyword(Keyword::On)
         )?;
 
         let left_table = self.consume_identifier()?;
@@ -329,7 +362,7 @@ impl<'a> Parser<'a> {
         let right_column = self.consume_identifier()?;
 
         Ok(
-            ParseJoinClause {
+            ParserJoinClause {
                 joiner_table,
                 joiner_filename,
                 left_table,
@@ -341,7 +374,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn parse_multiple_create_table(&mut self) -> ParserResult<ParseOperationTree> {
+    fn parse_multiple_create_table(&mut self) -> ParserResult<ParserOperationTree> {
         let mut operations = Vec::new();
 
         loop {
@@ -355,23 +388,24 @@ impl<'a> Parser<'a> {
         if operations.len() == 1 {
             Ok(operations.remove(0))
         } else {
-            Ok(ParseOperationTree::Multiple(operations))
+            Ok(ParserOperationTree::Multiple(operations))
         }
     }
 
-    fn parse_create_table(&mut self) -> ParserResult<ParseOperationTree> {
+    fn parse_create_table(&mut self) -> ParserResult<ParserOperationTree> {
         self.next()?;
 
+        let location = self.current_location();
         self.expect_and_consume_token(
             Token::Keyword(Keyword::Table),
-            ParserError::ExpectedKeyword(Keyword::Table)
+            ParserErrorType::ExpectedKeyword(Keyword::Table)
         )?;
 
         let table_name = self.consume_identifier()?;
 
         self.expect_and_consume_token(
             Token::LeftParentheses,
-            ParserError::ExpectedLeftParentheses
+            ParserErrorType::ExpectedLeftParentheses
         )?;
 
         let mut patterns = Vec::new();
@@ -396,7 +430,7 @@ impl<'a> Parser<'a> {
 
                             self.expect_and_consume_token(
                                 Token::RightSquareParentheses,
-                                ParserError::ExpectedRightSquareParentheses
+                                ParserErrorType::ExpectedRightSquareParentheses
                             )?;
 
                             let mut pattern_references = vec![
@@ -410,14 +444,14 @@ impl<'a> Parser<'a> {
 
                                     self.expect_and_consume_token(
                                         Token::LeftSquareParentheses,
-                                        ParserError::ExpectedLeftSquareParentheses
+                                        ParserErrorType::ExpectedLeftSquareParentheses
                                     )?;
 
                                     let group_index = self.consume_int()? as usize;
 
                                     self.expect_and_consume_token(
                                         Token::RightSquareParentheses,
-                                        ParserError::ExpectedRightSquareParentheses
+                                        ParserErrorType::ExpectedRightSquareParentheses
                                     )?;
 
                                     pattern_references.push(RegexResultReference::new(pattern_name, group_index));
@@ -425,7 +459,7 @@ impl<'a> Parser<'a> {
                                         Token::RightArrow => { break; },
                                         Token::Comma => {},
                                         _ => {
-                                            return Err(ParserError::ExpectedRightArrow);
+                                            return Err(self.create_error(ParserErrorType::ExpectedRightArrow));
                                         }
                                     }
                                 }
@@ -433,7 +467,7 @@ impl<'a> Parser<'a> {
 
                             self.expect_and_consume_token(
                                 Token::RightArrow,
-                                ParserError::ExpectedRightArrow
+                                ParserErrorType::ExpectedRightArrow
                             )?;
 
                             if pattern_references.len() == 1 {
@@ -442,7 +476,7 @@ impl<'a> Parser<'a> {
                                 columns.push(self.parse_define_column(ColumnParsing::MultiRegex(pattern_references))?);
                             }
                         }
-                        _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
+                        _ => { return Err(self.create_error(ParserErrorType::ExpectedColumnDefinitionStart)) }
                     }
                 }
                 Token::String(pattern) => {
@@ -451,7 +485,7 @@ impl<'a> Parser<'a> {
 
                     self.expect_and_consume_token(
                         Token::RightArrow,
-                        ParserError::ExpectedRightArrow
+                        ParserErrorType::ExpectedRightArrow
                     )?;
 
                     let pattern_name = format!("_pattern{}", patterns.len());
@@ -473,26 +507,26 @@ impl<'a> Parser<'a> {
                             Token::LeftSquareParentheses => {
                                 self.next()?;
                                 let index = self.consume_int()? as usize;
-                                self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightSquareParentheses)?;
+                                self.expect_and_consume_token(Token::RightSquareParentheses, ParserErrorType::ExpectedRightSquareParentheses)?;
                                 json_access_parts.push(JsonAccess::Array { index, inner: None });
                             },
                             Token::RightCurlyParentheses => {
                                 self.next()?;
                                 break;
                             }
-                            _ => { return Err(ParserError::ExpectedJsonColumnPartStart) }
+                            _ => { return Err(self.create_error(ParserErrorType::ExpectedJsonColumnPartStart)) }
                         }
                     }
 
                     self.expect_and_consume_token(
                         Token::RightArrow,
-                        ParserError::ExpectedRightArrow
+                        ParserErrorType::ExpectedRightArrow
                     )?;
 
                     let json_access = JsonAccess::from_linear(json_access_parts);
                     columns.push(self.parse_define_column(ColumnParsing::Json(json_access))?);
                 }
-                _ => { return Err(ParserError::ExpectedColumnDefinitionStart) }
+                _ => { return Err(self.create_error(ParserErrorType::ExpectedColumnDefinitionStart)) }
             }
 
             match self.current() {
@@ -501,17 +535,18 @@ impl<'a> Parser<'a> {
                     self.next()?;
                     break;
                 }
-                _ => { return Err(ParserError::ExpectedColumnDefinitionContinuation); }
+                _ => { return Err(self.create_error(ParserErrorType::ExpectedColumnDefinitionContinuation)); }
             }
         }
 
         self.expect_and_consume_token(
             Token::SemiColon,
-            ParserError::ExpectedSemiColon
+            ParserErrorType::ExpectedSemiColon
         )?;
 
         Ok(
-            ParseOperationTree::CreateTable {
+            ParserOperationTree::CreateTable {
+                location,
                 name: table_name,
                 patterns,
                 columns
@@ -536,7 +571,7 @@ impl<'a> Parser<'a> {
         Ok(regex_mode)
     }
 
-    fn parse_define_column(&mut self, parsing: ColumnParsing) -> ParserResult<ParseColumnDefinition> {
+    fn parse_define_column(&mut self, parsing: ColumnParsing) -> ParserResult<ParserColumnDefinition> {
         let column_name = self.consume_identifier()?;
         let column_type = self.parse_type()?;
 
@@ -550,14 +585,14 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 self.expect_and_consume_token(
                     Token::Null,
-                    ParserError::ExpectedNull
+                    ParserErrorType::ExpectedNull
                 )?;
 
                 nullable = Some(false);
             }
             Token::Identifier(identifier) if identifier.to_lowercase() == "trim" => {
                 if column_type != ValueType::String {
-                    return Err(ParserError::TrimOnlyForString);
+                    return Err(self.create_error(ParserErrorType::TrimOnlyForString));
                 }
 
                 self.next()?;
@@ -569,24 +604,24 @@ impl<'a> Parser<'a> {
             }
             Token::Keyword(Keyword::Default) => {
                 self.next()?;
-                match self.parse_primary_expression()? {
-                    ParseExpressionTree::Value(value) => {
+                match self.parse_primary_expression()?.tree {
+                    ParserExpressionTreeData::Value(value) => {
                         if let Some(value_type) = value.value_type() {
                             if value_type != column_type {
-                                return Err(ParserError::ExpectedDefaultValueOfType(column_type));
+                                return Err(self.create_error(ParserErrorType::ExpectedDefaultValueOfType(column_type)));
                             }
                         }
 
                         default_value = Some(value);
                     }
-                    _ => { return Err(ParserError::ExpectedValueForDefaultValue); }
+                    _ => { return Err(self.create_error(ParserErrorType::ExpectedValueForDefaultValue)); }
                 }
             }
             _ => {}
         }
 
         Ok(
-            ParseColumnDefinition {
+            ParserColumnDefinition {
                 parsing,
                 name: column_name,
                 column_type,
@@ -599,27 +634,28 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type(&mut self) -> ParserResult<ValueType> {
+        let location = self.current_location();
         let mut type_value = self.consume_identifier()?;
         while self.current() == &Token::LeftSquareParentheses {
             self.next()?;
-            self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightParentheses)?;
+            self.expect_and_consume_token(Token::RightSquareParentheses, ParserErrorType::ExpectedRightParentheses)?;
             type_value += "[]";
         }
 
-        ValueType::from_str(&type_value.to_lowercase()).ok_or(ParserError::NotDefinedType(type_value))
+        ValueType::from_str(&type_value.to_lowercase()).ok_or(ParserError::new(location, ParserErrorType::NotDefinedType(type_value)))
     }
 
-    pub fn parse_expression(&mut self) -> ParserResult<ParseExpressionTree> {
+    pub fn parse_expression(&mut self) -> ParserResult<ParserExpressionTree> {
         self.next()?;
         self.parse_expression_internal()
     }
 
-    fn parse_expression_internal(&mut self) -> ParserResult<ParseExpressionTree> {
+    fn parse_expression_internal(&mut self) -> ParserResult<ParserExpressionTree> {
         let lhs = self.parse_unary_operator()?;
         self.parse_binary_operator_rhs(0, lhs)
     }
 
-    fn parse_binary_operator_rhs(&mut self, precedence: i32, lhs: ParseExpressionTree) -> ParserResult<ParseExpressionTree> {
+    fn parse_binary_operator_rhs(&mut self, precedence: i32, lhs: ParserExpressionTree) -> ParserResult<ParserExpressionTree> {
         let mut lhs = lhs;
         loop {
             let token_precedence = self.get_token_precedence()?;
@@ -628,6 +664,7 @@ impl<'a> Parser<'a> {
                 return Ok(lhs);
             }
 
+            let op_location = self.current_location();
             let op = self.current().clone();
             self.next()?;
 
@@ -638,33 +675,33 @@ impl<'a> Parser<'a> {
 
             match op {
                 Token::Operator(Operator::Single('.')) => {
-                    match (lhs, rhs) {
-                        (ParseExpressionTree::ColumnAccess(left), ParseExpressionTree::ColumnAccess(right)) => {
-                            lhs = ParseExpressionTree::ColumnAccess(format!("{}.{}", left, right));
+                    match (lhs.tree, rhs.tree) {
+                        (ParserExpressionTreeData::ColumnAccess(left), ParserExpressionTreeData::ColumnAccess(right)) => {
+                            lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::ColumnAccess(format!("{}.{}", left, right)));
                         }
-                        _ => { return Err(ParserError::ExpectedColumnAccess); }
+                        _ => { return Err(ParserError::new(op_location, ParserErrorType::ExpectedColumnAccess)); }
                     }
                 }
                 Token::Operator(op) => {
-                    lhs = ParseExpressionTree::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) });
                 }
                 Token::Keyword(Keyword::Is) => {
-                    lhs = ParseExpressionTree::Is { left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::Is { left: Box::new(lhs), right: Box::new(rhs) });
                 }
                 Token::Keyword(Keyword::IsNot) => {
-                    lhs = ParseExpressionTree::IsNot { left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::IsNot { left: Box::new(lhs), right: Box::new(rhs) });
                 }
                 Token::Keyword(Keyword::And) => {
-                    lhs = ParseExpressionTree::And { left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::And { left: Box::new(lhs), right: Box::new(rhs) });
                 }
                 Token::Keyword(Keyword::Or) => {
-                    lhs = ParseExpressionTree::Or { left: Box::new(lhs), right: Box::new(rhs) };
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::Or { left: Box::new(lhs), right: Box::new(rhs) });
                 }
                 Token::LeftSquareParentheses => {
-                    lhs = ParseExpressionTree::ArrayElementAccess { array: Box::new(lhs), index: Box::new(rhs) };
-                    self.expect_and_consume_token(Token::RightSquareParentheses, ParserError::ExpectedRightSquareParentheses)?;
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::ArrayElementAccess { array: Box::new(lhs), index: Box::new(rhs) });
+                    self.expect_and_consume_token(Token::RightSquareParentheses, ParserErrorType::ExpectedRightSquareParentheses)?;
                 }
-                _ => { return Err(ParserError::ExpectedOperator); }
+                _ => { return Err(ParserError::new(op_location, ParserErrorType::ExpectedOperator)); }
             }
         }
     }
@@ -674,7 +711,7 @@ impl<'a> Parser<'a> {
             Token::Operator(op) => {
                 match self.binary_operators.get(op) {
                     Some(bin_op) => Ok(bin_op.precedence),
-                    None => Err(ParserError::NotDefinedBinaryOperator(op.clone()))
+                    None => Err(self.create_error(ParserErrorType::NotDefinedBinaryOperator(op.clone())))
                 }
             }
             Token::Keyword(Keyword::Is) => Ok(2),
@@ -686,31 +723,32 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_primary_expression(&mut self) -> ParserResult<ParseExpressionTree> {
+    fn parse_primary_expression(&mut self) -> ParserResult<ParserExpressionTree> {
+        let token_location = self.current_location();
         match self.current().clone() {
             Token::Int(value) => {
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::Int(value)))
+                Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Value(Value::Int(value))))
             }
             Token::Float(value) => {
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::Float(Float(value))))
+                Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Value(Value::Float(Float(value)))))
             }
             Token::String(value) => {
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::String(value)))
+                Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Value(Value::String(value))))
             }
             Token::Null => {
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::Null))
+                Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Value(Value::Null)))
             }
             Token::True => {
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::Bool(true)))
+                Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Value(Value::Bool(true))))
             }
             Token::False => {
                 self.next()?;
-                Ok(ParseExpressionTree::Value(Value::Bool(false)))
+                Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Value(Value::Bool(false))))
             }
             Token::Identifier(identifier) => self.parse_identifier_expression(identifier.clone()),
             Token::LeftParentheses => {
@@ -719,7 +757,7 @@ impl<'a> Parser<'a> {
 
                 self.expect_and_consume_token(
                     Token::RightParentheses,
-                    ParserError::ExpectedRightParentheses
+                    ParserErrorType::ExpectedRightParentheses
                 )?;
 
                 expression
@@ -727,20 +765,21 @@ impl<'a> Parser<'a> {
             Token::Keyword(Keyword::Extract) => {
                 self.parse_extract_expression()
             }
-            _ => Err(ParserError::ExpectedExpression)
+            _ => Err(self.create_error(ParserErrorType::ExpectedExpression))
         }
     }
 
-    fn parse_identifier_expression(&mut self, identifier: String) -> ParserResult<ParseExpressionTree> {
+    fn parse_identifier_expression(&mut self, identifier: String) -> ParserResult<ParserExpressionTree> {
         self.next()?;
 
+        let token_location = self.current_location();
         match self.current() {
             Token::LeftParentheses => (),
-            _ => return Ok(ParseExpressionTree::ColumnAccess(identifier))
+            _ => return Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::ColumnAccess(identifier)))
         }
 
         self.next()?;
-        let mut arguments = Vec::<ParseExpressionTree>::new();
+        let mut arguments = Vec::<ParserExpressionTree>::new();
 
         match self.current() {
             Token::RightParentheses => (),
@@ -750,7 +789,7 @@ impl<'a> Parser<'a> {
                     match self.current() {
                         Token::RightParentheses => { break; }
                         Token::Comma => {}
-                        _ => return Err(ParserError::ExpectedArgumentListContinuation)
+                        _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
                     }
 
                     self.next()?;
@@ -759,21 +798,22 @@ impl<'a> Parser<'a> {
         }
 
         self.next()?;
-        return Ok(ParseExpressionTree::Call {name: identifier, arguments });
+        return Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Call {name: identifier, arguments }));
     }
 
-    fn parse_unary_operator(&mut self) -> ParserResult<ParseExpressionTree> {
+    fn parse_unary_operator(&mut self) -> ParserResult<ParserExpressionTree> {
         match self.current() {
             Token::Operator(_) | Token::Keyword(Keyword::Not) => {},
             _ => return self.parse_primary_expression()
         }
 
+        let op_location = self.current_location();
         let op_token = self.current().clone();
         self.next()?;
 
         match op_token {
             Token::Operator(Operator::Single('*')) => {
-                return Ok(ParseExpressionTree::Wildcard);
+                return Ok(ParserExpressionTree::new(op_location, ParserExpressionTreeData::Wildcard));
             }
             _ => {}
         };
@@ -782,33 +822,39 @@ impl<'a> Parser<'a> {
         match op_token {
             Token::Operator(op) => {
                 if !self.unary_operators.exists(&op) {
-                    return Err(ParserError::NotDefinedUnaryOperator(op));
+                    return Err(ParserError::new(op_location, ParserErrorType::NotDefinedUnaryOperator(op)));
                 }
 
-                Ok(ParseExpressionTree::UnaryOperator { operator: op, operand: Box::new(operand) })
+                Ok(ParserExpressionTree::new(op_location,ParserExpressionTreeData::UnaryOperator { operator: op, operand: Box::new(operand) }))
             }
             Token::Keyword(Keyword::Not) => {
-                Ok(ParseExpressionTree::Invert { operand: Box::new(operand) })
+                Ok(ParserExpressionTree::new(op_location,ParserExpressionTreeData::Invert { operand: Box::new(operand) }))
             }
-            _ => Err(ParserError::Unknown)
+            _ => Err(ParserError::new(op_location, ParserErrorType::Unknown))
         }
     }
 
-    fn parse_extract_expression(&mut self) -> ParserResult<ParseExpressionTree> {
+    fn parse_extract_expression(&mut self) -> ParserResult<ParserExpressionTree> {
         self.next()?;
 
-        self.expect_and_consume_token(Token::LeftParentheses, ParserError::ExpectedLeftParentheses)?;
+        self.expect_and_consume_token(Token::LeftParentheses, ParserErrorType::ExpectedLeftParentheses)?;
 
+        let token_location = self.current_location();
         let identifier = self.consume_identifier()?;
-        self.expect_and_consume_token(Token::Keyword(Keyword::From), ParserError::ExpectedKeyword(Keyword::From))?;
+        self.expect_and_consume_token(Token::Keyword(Keyword::From), ParserErrorType::ExpectedKeyword(Keyword::From))?;
         let from_expression = self.parse_expression_internal()?;
 
-        self.expect_and_consume_token(Token::RightParentheses, ParserError::ExpectedRightParentheses)?;
+        self.expect_and_consume_token(Token::RightParentheses, ParserErrorType::ExpectedRightParentheses)?;
 
-        Ok(ParseExpressionTree::Call {
-            name: format!("timestamp_extract_{}", identifier.to_lowercase()),
-            arguments: vec![from_expression]
-        })
+        Ok(
+            ParserExpressionTree::new(
+                token_location,
+                ParserExpressionTreeData::Call {
+                    name: format!("timestamp_extract_{}", identifier.to_lowercase()),
+                    arguments: vec![from_expression]
+                }
+            )
+        )
     }
 
     fn consume_identifier(&mut self) -> ParserResult<String> {
@@ -817,7 +863,7 @@ impl<'a> Parser<'a> {
             self.next()?;
             Ok(identifier)
         } else {
-            Err(ParserError::ExpectedIdentifier)
+            Err(self.create_error(ParserErrorType::ExpectedIdentifier))
         }
     }
 
@@ -827,7 +873,7 @@ impl<'a> Parser<'a> {
             self.next()?;
             Ok(string)
         } else {
-            Err(ParserError::ExpectedString)
+            Err(self.create_error(ParserErrorType::ExpectedString))
         }
     }
 
@@ -837,41 +883,50 @@ impl<'a> Parser<'a> {
             self.next()?;
             Ok(value)
         } else {
-            Err(ParserError::ExpectedInt)
+            Err(self.create_error(ParserErrorType::ExpectedInt))
         }
     }
 
-    fn expect_and_consume_token(&mut self, token: Token, error: ParserError) -> ParserResult<()> {
+    fn expect_and_consume_token(&mut self, token: Token, error: ParserErrorType) -> ParserResult<()> {
         self.expect_token(token, error)?;
         self.next()?;
         Ok(())
     }
 
     fn expect_and_consume_operator(&mut self, operator: Operator) -> ParserResult<()> {
-        self.expect_token(Token::Operator(operator), ParserError::ExpectedSpecificOperator(operator))?;
+        self.expect_token(Token::Operator(operator), ParserErrorType::ExpectedSpecificOperator(operator))?;
         self.next()?;
         Ok(())
     }
 
-    fn expect_token(&self, token: Token, error: ParserError) -> ParserResult<()> {
+    fn expect_token(&self, token: Token, error: ParserErrorType) -> ParserResult<()> {
         if self.current() != &token {
-            return Err(error);
+            return Err(self.create_error(error));
         }
 
         Ok(())
     }
 
     fn current(&self) -> &Token {
-        &self.tokens[self.index as usize]
+        &self.tokens[self.index as usize].token
+    }
+
+    fn current_location(&self) -> TokenLocation {
+        self.tokens[self.index as usize].location.clone()
+    }
+
+    fn create_error(&self, error: ParserErrorType) -> ParserError {
+        ParserError::new(self.current_location(), error)
     }
 
     fn next(&mut self) -> ParserResult<&Token> {
-        self.index += 1;
-        if self.index >= self.tokens.len() as isize {
-            return Err(ParserError::ReachedEndOfTokens);
+        let next_index = self.index + 1;
+        if next_index >= self.tokens.len() as isize {
+            return Err(self.create_error(ParserErrorType::ReachedEndOfTokens));
         }
 
-        Ok(&self.tokens[self.index as usize])
+        self.index = next_index;
+        Ok(&self.tokens[self.index as usize].token)
     }
 }
 
@@ -880,7 +935,7 @@ fn test_advance_parser() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -893,8 +948,8 @@ fn test_advance_parser() {
     assert_eq!(&Token::Identifier("a".to_string()), parser.next().unwrap());
     assert_eq!(&Token::Operator(Operator::Single('+')), parser.next().unwrap());
     assert_eq!(&Token::Int(4), parser.next().unwrap());
-    assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
-    assert_eq!(Err(ParserError::ReachedEndOfTokens), parser.next());
+    assert_eq!(Err(ParserErrorType::ReachedEndOfTokens), parser.next().map_err(|err| err.error));
+    assert_eq!(Err(ParserErrorType::ReachedEndOfTokens), parser.next().map_err(|err| err.error));
 }
 
 #[test]
@@ -902,73 +957,73 @@ fn test_parse_values() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let tree = Parser::new(
+    let tree = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
             Token::Int(4711),
             Token::End
         ]
-    ).parse_expression().unwrap();
+    ).parse_expression().unwrap().tree;
 
     assert_eq!(
-        ParseExpressionTree::Value(Value::Int(4711)),
+        ParserExpressionTreeData::Value(Value::Int(4711)),
         tree
     );
 
-    let tree = Parser::new(
+    let tree = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
             Token::Null,
             Token::End
         ]
-    ).parse_expression().unwrap();
+    ).parse_expression().unwrap().tree;
 
     assert_eq!(
-        ParseExpressionTree::Value(Value::Null),
+        ParserExpressionTreeData::Value(Value::Null),
         tree
     );
 
-    let tree = Parser::new(
+    let tree = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
             Token::True,
             Token::End
         ]
-    ).parse_expression().unwrap();
+    ).parse_expression().unwrap().tree;
 
     assert_eq!(
-        ParseExpressionTree::Value(Value::Bool(true)),
+        ParserExpressionTreeData::Value(Value::Bool(true)),
         tree
     );
 
-    let tree = Parser::new(
+    let tree = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
             Token::False,
             Token::End
         ]
-    ).parse_expression().unwrap();
+    ).parse_expression().unwrap().tree;
 
     assert_eq!(
-        ParseExpressionTree::Value(Value::Bool(false)),
+        ParserExpressionTreeData::Value(Value::Bool(false)),
         tree
     );
 
-    let tree = Parser::new(
+    let tree = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
             Token::String("hello world!".to_owned()),
             Token::End
         ]
-    ).parse_expression().unwrap();
+    ).parse_expression().unwrap().tree;
 
     assert_eq!(
-        ParseExpressionTree::Value(Value::String("hello world!".to_owned())),
+        ParserExpressionTreeData::Value(Value::String("hello world!".to_owned())),
         tree
     );
 }
@@ -978,7 +1033,7 @@ fn test_parse_expression1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -991,12 +1046,12 @@ fn test_parse_expression1() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::BinaryOperator {
+        ParserExpressionTreeData::BinaryOperator {
             operator: Operator::Single('+'),
-            left: Box::new(ParseExpressionTree::ColumnAccess("a".to_string())),
-            right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+            left: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default())),
+            right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1005,7 +1060,7 @@ fn test_parse_expression2() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1022,18 +1077,18 @@ fn test_parse_expression2() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::BinaryOperator {
+        ParserExpressionTreeData::BinaryOperator {
             operator: Operator::Single('*'),
             left: Box::new(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('+'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("a".to_string())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
-            right: Box::new(ParseExpressionTree::ColumnAccess("b".to_string()))
+            right: Box::new(ParserExpressionTreeData::ColumnAccess("b".to_string()).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1042,7 +1097,7 @@ fn test_parse_expression3() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1054,11 +1109,11 @@ fn test_parse_expression3() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::UnaryOperator {
+        ParserExpressionTreeData::UnaryOperator {
             operator: Operator::Single('-'),
-            operand: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+            operand: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1067,7 +1122,7 @@ fn test_parse_expression4() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1083,14 +1138,14 @@ fn test_parse_expression4() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::Call {
+        ParserExpressionTreeData::Call {
             name: "f".to_string(),
             arguments: vec![
-                ParseExpressionTree::Value(Value::Int(4)),
-                ParseExpressionTree::ColumnAccess("a".to_string()),
+                ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()),
+                ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default()),
             ]
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1099,7 +1154,7 @@ fn test_parse_expression5() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1112,11 +1167,11 @@ fn test_parse_expression5() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::And {
-            left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
-            right: Box::new(ParseExpressionTree::Value(Value::Bool(false)))
+        ParserExpressionTreeData::And {
+            left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
+            right: Box::new(ParserExpressionTreeData::Value(Value::Bool(false)).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1125,7 +1180,7 @@ fn test_parse_expression6() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1137,11 +1192,11 @@ fn test_parse_expression6() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::UnaryOperator {
+        ParserExpressionTreeData::UnaryOperator {
             operator: Operator::Single('-'),
-            operand: Box::new(ParseExpressionTree::Value(Value::Int(4)))
+            operand: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1150,7 +1205,7 @@ fn test_parse_expression7() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1162,10 +1217,10 @@ fn test_parse_expression7() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::Invert {
-            operand: Box::new(ParseExpressionTree::Value(Value::Bool(true)))
+        ParserExpressionTreeData::Invert {
+            operand: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1174,7 +1229,7 @@ fn test_parse_expression8() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1187,14 +1242,14 @@ fn test_parse_expression8() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::Is {
-            left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
-            right: Box::new(ParseExpressionTree::Value(Value::Null))
+        ParserExpressionTreeData::Is {
+            left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
+            right: Box::new(ParserExpressionTreeData::Value(Value::Null).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1207,11 +1262,11 @@ fn test_parse_expression8() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::IsNot {
-            left: Box::new(ParseExpressionTree::Value(Value::Bool(true))),
-            right: Box::new(ParseExpressionTree::Value(Value::Null))
+        ParserExpressionTreeData::IsNot {
+            left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
+            right: Box::new(ParserExpressionTreeData::Value(Value::Null).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1220,7 +1275,7 @@ fn test_parse_expression9() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1233,8 +1288,8 @@ fn test_parse_expression9() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::ColumnAccess("a.b".to_owned()),
-        tree
+        ParserExpressionTreeData::ColumnAccess("a.b".to_owned()),
+        tree.tree
     );
 }
 
@@ -1243,7 +1298,7 @@ fn test_parse_expression10() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1257,11 +1312,11 @@ fn test_parse_expression10() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::ArrayElementAccess {
-            array: Box::new(ParseExpressionTree::ColumnAccess("a".to_owned())),
-            index: Box::new(ParseExpressionTree::Value(Value::Int(11)))
+        ParserExpressionTreeData::ArrayElementAccess {
+            array: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_owned()).with_location(Default::default())),
+            index: Box::new(ParserExpressionTreeData::Value(Value::Int(11)).with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1270,7 +1325,7 @@ fn test_parse_expression11() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1286,15 +1341,15 @@ fn test_parse_expression11() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::ArrayElementAccess {
-            array: Box::new(ParseExpressionTree::ColumnAccess("a".to_owned())),
-            index: Box::new(ParseExpressionTree::BinaryOperator {
+        ParserExpressionTreeData::ArrayElementAccess {
+            array: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_owned()).with_location(Default::default())),
+            index: Box::new(ParserExpressionTreeData::BinaryOperator {
                 operator: Operator::Single('+'),
-                left: Box::new(ParseExpressionTree::Value(Value::Int(11))),
-                right: Box::new(ParseExpressionTree::ColumnAccess("a".to_owned()))
-            })
+                left: Box::new(ParserExpressionTreeData::Value(Value::Int(11)).with_location(Default::default())),
+                right: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_owned()).with_location(Default::default()))
+            }.with_location(Default::default()))
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1303,7 +1358,7 @@ fn test_parse_expression12() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1319,11 +1374,11 @@ fn test_parse_expression12() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParseExpressionTree::Call {
+        ParserExpressionTreeData::Call {
             name: "timestamp_extract_epoch".to_string(),
-            arguments: vec![ParseExpressionTree::ColumnAccess("timestamp".to_owned())]
+            arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())]
         },
-        tree
+        tree.tree
     );
 }
 
@@ -1332,7 +1387,7 @@ fn test_parse_select1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1347,8 +1402,9 @@ fn test_parse_select1() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: None,
             group_by: None,
@@ -1364,7 +1420,7 @@ fn test_parse_select2() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1379,8 +1435,9 @@ fn test_parse_select2() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::Wildcard)],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::Wildcard.with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: None,
             group_by: None,
@@ -1396,7 +1453,7 @@ fn test_parse_select_and_filter1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1415,15 +1472,16 @@ fn test_parse_select_and_filter1() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: None,
@@ -1438,7 +1496,7 @@ fn test_parse_select_and_filter2() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1459,15 +1517,21 @@ fn test_parse_select_and_filter2() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(Some("xxx".to_owned()), ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![
+                (
+                    Some("xxx".to_owned()),
+                    ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())
+                )
+            ],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: None,
@@ -1482,7 +1546,7 @@ fn test_parse_select_and_filter3() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1504,15 +1568,22 @@ fn test_parse_select_and_filter3() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] })],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(
+                None,
+                ParserExpressionTreeData::Call {
+                    name: "MAX".to_owned(),
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                }.with_location(Default::default())
+            )],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: None,
@@ -1527,7 +1598,7 @@ fn test_parse_select_and_filter4() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1551,24 +1622,28 @@ fn test_parse_select_and_filter4() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
+        ParserOperationTree::Select {
+            location: Default::default(),
             projections: vec![
                 (
                     None,
-                    ParseExpressionTree::BinaryOperator {
+                    ParserExpressionTreeData::BinaryOperator {
                         operator: Operator::Single('*'),
-                        left: Box::new(ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] }),
-                        right: Box::new(ParseExpressionTree::Value(Value::Int(2)))
-                    }
+                        left: Box::new(ParserExpressionTreeData::Call {
+                            name: "MAX".to_owned(),
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                        }.with_location(Default::default())),
+                        right: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default()))
+                    }.with_location(Default::default())
                 )
             ],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: None,
@@ -1583,7 +1658,7 @@ fn test_parse_with_filename() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1601,8 +1676,9 @@ fn test_parse_with_filename() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), Some("test.log".to_owned())),
             filter: None,
             group_by: None,
@@ -1618,7 +1694,7 @@ fn test_parse_select_group_by1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1640,15 +1716,16 @@ fn test_parse_select_group_by1() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: Some(vec!["x".to_owned()]),
             having: None,
@@ -1663,7 +1740,7 @@ fn test_parse_select_group_by2() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1687,15 +1764,16 @@ fn test_parse_select_group_by2() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: Some(vec!["x".to_owned(), "y".to_owned()]),
             having: None,
@@ -1710,7 +1788,7 @@ fn test_parse_select_having() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1733,23 +1811,24 @@ fn test_parse_select_having() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('<'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("y".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("y".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             join: None,
         },
@@ -1762,7 +1841,7 @@ fn test_parse_inner_join1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1795,20 +1874,21 @@ fn test_parse_inner_join1() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: None,
             join: Some(
-                ParseJoinClause {
+                ParserJoinClause {
                     joiner_table: "table1".to_string(),
                     joiner_filename: "file.log".to_string(),
                     left_table: "table2".to_string(),
@@ -1828,7 +1908,7 @@ fn test_parse_outer_join1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1861,20 +1941,21 @@ fn test_parse_outer_join1() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
-            projections: vec![(None, ParseExpressionTree::ColumnAccess("x".to_owned()))],
+        ParserOperationTree::Select {
+            location: Default::default(),
+            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Single('>'),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(4)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
+                }.with_location(Default::default())
             ),
             group_by: None,
             having: None,
             join: Some(
-                ParseJoinClause {
+                ParserJoinClause {
                     joiner_table: "table1".to_string(),
                     joiner_filename: "file.log".to_string(),
                     left_table: "table2".to_string(),
@@ -1894,7 +1975,7 @@ fn test_parse_create_table1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1925,10 +2006,11 @@ fn test_parse_create_table1() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-            columns: vec![ParseColumnDefinition::new(
+            columns: vec![ParserColumnDefinition::new(
                 "line".to_string(),
                 1,
                 "x".to_string(),
@@ -1944,7 +2026,7 @@ fn test_parse_create_table2() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -1984,17 +2066,18 @@ fn test_parse_create_table2() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     1,
                     "x".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     2,
                     "y".to_string(),
@@ -2011,7 +2094,7 @@ fn test_parse_create_table3() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2073,12 +2156,13 @@ fn test_parse_create_table3() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::Multiple(vec![
-            ParseOperationTree::CreateTable {
+        ParserOperationTree::Multiple(vec![
+            ParserOperationTree::CreateTable {
+                location: Default::default(),
                 name: "test1".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
-                    ParseColumnDefinition::new(
+                    ParserColumnDefinition::new(
                         "line".to_string(),
                         1,
                         "x".to_string(),
@@ -2086,17 +2170,18 @@ fn test_parse_create_table3() {
                     )
                 ]
             },
-            ParseOperationTree::CreateTable {
+            ParserOperationTree::CreateTable {
+                location: Default::default(),
                 name: "test2".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
-                    ParseColumnDefinition::new(
+                    ParserColumnDefinition::new(
                         "line".to_string(),
                         1,
                         "x".to_string(),
                         ValueType::Int
                     ),
-                    ParseColumnDefinition::new(
+                    ParserColumnDefinition::new(
                         "line".to_string(),
                         2,
                         "y".to_string(),
@@ -2114,7 +2199,7 @@ fn test_parse_create_table4() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2137,11 +2222,12 @@ fn test_parse_create_table4() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "_pattern0".to_string(),
                     1,
                     "x".to_string(),
@@ -2158,7 +2244,7 @@ fn test_parse_create_table5() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2191,10 +2277,11 @@ fn test_parse_create_table5() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-            columns: vec![ParseColumnDefinition {
+            columns: vec![ParserColumnDefinition {
                 parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
                 name: "x".to_string(),
                 column_type: ValueType::Int,
@@ -2213,7 +2300,7 @@ fn test_parse_create_table6() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2245,10 +2332,11 @@ fn test_parse_create_table6() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-            columns: vec![ParseColumnDefinition {
+            columns: vec![ParserColumnDefinition {
                 parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
                 name: "x".to_owned(),
                 column_type: ValueType::String,
@@ -2267,7 +2355,7 @@ fn test_parse_create_table7() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2308,11 +2396,12 @@ fn test_parse_create_table7() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
-                ParseColumnDefinition {
+                ParserColumnDefinition {
                     parsing: ColumnParsing::MultiRegex(vec![
                         RegexResultReference::new("line".to_owned(), 1),
                         RegexResultReference::new("line".to_owned(), 2),
@@ -2336,7 +2425,7 @@ fn test_parse_create_table8() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2368,10 +2457,11 @@ fn test_parse_create_table8() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Split)],
-            columns: vec![ParseColumnDefinition::new(
+            columns: vec![ParserColumnDefinition::new(
                 "line".to_string(),
                 1,
                 "x".to_string(),
@@ -2387,7 +2477,7 @@ fn test_parse_create_table9() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
 
-    let mut parser = Parser::new(
+    let mut parser = Parser::from_plain_tokens(
         &binary_operators,
         &unary_operators,
         vec![
@@ -2420,10 +2510,11 @@ fn test_parse_create_table9() {
     let tree = parser.parse().unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: Default::default(),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-            columns: vec![ParseColumnDefinition {
+            columns: vec![ParserColumnDefinition {
                 parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_owned(), group_index: 1 }),
                 name: "x".to_string(),
                 column_type: ValueType::Int,
@@ -2442,11 +2533,12 @@ fn test_parse_json_table1() {
     let tree = parse_str("CREATE TABLE connections({.test1.test2} => x INT);").unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(0, 9),
             name: "connections".to_string(),
             patterns: vec![],
             columns: vec![
-                ParseColumnDefinition {
+                ParserColumnDefinition {
                     parsing: ColumnParsing::Json(JsonAccess::Field { name: "test1".to_owned(), inner: Some(Box::new(JsonAccess::Field { name: "test2".to_string(), inner: None })) }),
                     name: "x".to_string(),
                     column_type: ValueType::Int,
@@ -2466,11 +2558,12 @@ fn test_parse_json_table2() {
     let tree = parse_str("CREATE TABLE connections({.test1[3].test2.test3[4]} => x INT);").unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(0, 9),
             name: "connections".to_string(),
             patterns: vec![],
             columns: vec![
-                ParseColumnDefinition {
+                ParserColumnDefinition {
                     parsing: ColumnParsing::Json(JsonAccess::Field {
                         name: "test1".to_owned(),
                         inner: Some(
@@ -2504,18 +2597,25 @@ fn test_parse_str1() {
     let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x").unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
+        ParserOperationTree::Select {
+            location: TokenLocation::new(0, 5),
             projections: vec![
-                (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
-                (None, ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] })
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 5))),
+                (
+                    None,
+                    ParserExpressionTreeData::Call {
+                        name: "MAX".to_owned(),
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 7))]
+                    }.with_location(TokenLocation::new(0, 7))
+                )
             ],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Dual('>', '='),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 17))),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 18)))
+                }.with_location(TokenLocation::new(0, 17))
             ),
             group_by: Some(vec!["x".to_owned()]),
             having: None,
@@ -2530,16 +2630,27 @@ fn test_parse_str2() {
     let tree = parse_str("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE x >= 13 GROUP BY x").unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select { projections: vec![
-                (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
-                (None, ParseExpressionTree::Call { name: "MAX".to_owned(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] })
-            ], from: ("test".to_string(), Some("/haha/test.log".to_owned())), filter: Some(
-                ParseExpressionTree::BinaryOperator {
+        ParserOperationTree::Select {
+            location: TokenLocation::new(0, 5),
+            projections: vec![
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 5))),
+                (
+                    None,
+                    ParserExpressionTreeData::Call {
+                        name: "MAX".to_owned(),
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 7))]
+                    }.with_location(TokenLocation::new(0, 7))
+                )
+                ],
+            from: ("test".to_string(), Some("/haha/test.log".to_owned())),
+            filter: Some(
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Dual('>', '='),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
-                }
-            ), group_by: Some(vec!["x".to_owned()]), having: None, join: None, },
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 17))),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 18)))
+                }.with_location(TokenLocation::new(0, 17))
+            ),
+            group_by: Some(vec!["x".to_owned()]), having: None, join: None, },
         tree
     );
 }
@@ -2561,55 +2672,56 @@ fn test_parse_str3() {
     );").unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(1, 9),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
             ],
             columns: vec![
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     1,
                     "ip".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     2,
                     "hostname".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     9,
                     "year".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     4,
                     "month".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     5,
                     "day".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     6,
                     "hour".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     7,
                     "minute".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     8,
                     "second".to_string(),
@@ -2626,18 +2738,25 @@ fn test_parse_str4() {
     let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x, y, z").unwrap();
 
     assert_eq!(
-        ParseOperationTree::Select {
+        ParserOperationTree::Select {
+            location: TokenLocation::new(0, 5),
             projections: vec![
-                (None, ParseExpressionTree::ColumnAccess("x".to_owned())),
-                (None, ParseExpressionTree::Call { name: "MAX".to_string(), arguments: vec![ParseExpressionTree::ColumnAccess("x".to_owned())] })
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 5))),
+                (
+                    None,
+                    ParserExpressionTreeData::Call {
+                        name: "MAX".to_string(),
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 7))]
+                    }.with_location(TokenLocation::new(0, 7))
+                )
             ],
             from: ("test".to_string(), None),
             filter: Some(
-                ParseExpressionTree::BinaryOperator {
+                ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Dual('>', '='),
-                    left: Box::new(ParseExpressionTree::ColumnAccess("x".to_owned())),
-                    right: Box::new(ParseExpressionTree::Value(Value::Int(13)))
-                }
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 17))),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 18)))
+                }.with_location(TokenLocation::new(0, 17))
             ),
             group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()]),
             having: None,
@@ -2658,19 +2777,20 @@ fn test_parse_str5() {
     );").unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(1, 9),
             name: "test".to_string(),
             patterns: vec![
                 ("line".to_owned(), "testing (.*) (.*)".to_owned(), RegexMode::Captures)
             ],
             columns: vec![
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     1,
                     "ip".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     2,
                     "hostname".to_string(),
@@ -2687,55 +2807,56 @@ fn test_parse_str_from_file1() {
     let tree = parse_str(&std::fs::read_to_string("testdata/ftpd.txt").unwrap()).unwrap();
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(0, 9),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
             ],
             columns: vec![
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     1,
                     "ip".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     2,
                     "hostname".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     9,
                     "year".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     4,
                     "month".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     5,
                     "day".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     6,
                     "hour".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     7,
                     "minute".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     8,
                     "second".to_string(),
@@ -2751,7 +2872,7 @@ fn test_parse_str_from_file1() {
 fn test_parse_str_from_file2() {
     let tree = parse_str(&std::fs::read_to_string("testdata/ftpd_csv.txt").unwrap()).unwrap();
 
-    let mut year_column = ParseColumnDefinition::new(
+    let mut year_column = ParserColumnDefinition::new(
         "line".to_string(),
         3,
         "year".to_string(),
@@ -2761,50 +2882,51 @@ fn test_parse_str_from_file2() {
     year_column.nullable = Some(false);
 
     assert_eq!(
-        ParseOperationTree::CreateTable {
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(0, 9),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), ";".to_owned(), RegexMode::Split)
             ],
             columns: vec![
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     1,
                     "ip".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     2,
                     "hostname".to_string(),
                     ValueType::String
                 ),
                 year_column,
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     4,
                     "month".to_string(),
                     ValueType::String
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     5,
                     "day".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     6,
                     "hour".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     7,
                     "minute".to_string(),
                     ValueType::Int
                 ),
-                ParseColumnDefinition::new(
+                ParserColumnDefinition::new(
                     "line".to_string(),
                     8,
                     "second".to_string(),
