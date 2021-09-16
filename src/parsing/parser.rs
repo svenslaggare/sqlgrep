@@ -2534,7 +2534,7 @@ fn test_parse_json_table1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 9),
+            location: TokenLocation::new(0, 6),
             name: "connections".to_string(),
             patterns: vec![],
             columns: vec![
@@ -2559,7 +2559,7 @@ fn test_parse_json_table2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 9),
+            location: TokenLocation::new(0, 6),
             name: "connections".to_string(),
             patterns: vec![],
             columns: vec![
@@ -2598,24 +2598,24 @@ fn test_parse_str1() {
 
     assert_eq!(
         ParserOperationTree::Select {
-            location: TokenLocation::new(0, 5),
+            location: TokenLocation::new(0, 6),
             projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 5))),
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
                 (
                     None,
                     ParserExpressionTreeData::Call {
                         name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 7))]
-                    }.with_location(TokenLocation::new(0, 7))
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))]
+                    }.with_location(TokenLocation::new(0, 13))
                 )
             ],
             from: ("test".to_string(), None),
             filter: Some(
                 ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Dual('>', '='),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 17))),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 18)))
-                }.with_location(TokenLocation::new(0, 17))
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 34))),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 36)))
+                }.with_location(TokenLocation::new(0, 34))
             ),
             group_by: Some(vec!["x".to_owned()]),
             having: None,
@@ -2631,24 +2631,24 @@ fn test_parse_str2() {
 
     assert_eq!(
         ParserOperationTree::Select {
-            location: TokenLocation::new(0, 5),
+            location: TokenLocation::new(0, 6),
             projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 5))),
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
                 (
                     None,
                     ParserExpressionTreeData::Call {
                         name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 7))]
-                    }.with_location(TokenLocation::new(0, 7))
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))]
+                    }.with_location(TokenLocation::new(0, 13))
                 )
                 ],
             from: ("test".to_string(), Some("/haha/test.log".to_owned())),
             filter: Some(
                 ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Dual('>', '='),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 17))),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 18)))
-                }.with_location(TokenLocation::new(0, 17))
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 52))),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 54)))
+                }.with_location(TokenLocation::new(0, 52))
             ),
             group_by: Some(vec!["x".to_owned()]), having: None, join: None, },
         tree
@@ -2673,7 +2673,7 @@ fn test_parse_str3() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(1, 9),
+            location: TokenLocation::new(1, 10),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
@@ -2739,24 +2739,24 @@ fn test_parse_str4() {
 
     assert_eq!(
         ParserOperationTree::Select {
-            location: TokenLocation::new(0, 5),
+            location: TokenLocation::new(0, 6),
             projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 5))),
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
                 (
                     None,
                     ParserExpressionTreeData::Call {
                         name: "MAX".to_string(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 7))]
-                    }.with_location(TokenLocation::new(0, 7))
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))]
+                    }.with_location(TokenLocation::new(0, 13))
                 )
             ],
             from: ("test".to_string(), None),
             filter: Some(
                 ParserExpressionTreeData::BinaryOperator {
                     operator: Operator::Dual('>', '='),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 17))),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 18)))
-                }.with_location(TokenLocation::new(0, 17))
+                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 34))),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 36)))
+                }.with_location(TokenLocation::new(0, 34))
             ),
             group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()]),
             having: None,
@@ -2778,7 +2778,7 @@ fn test_parse_str5() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(1, 9),
+            location: TokenLocation::new(1, 10),
             name: "test".to_string(),
             patterns: vec![
                 ("line".to_owned(), "testing (.*) (.*)".to_owned(), RegexMode::Captures)
@@ -2808,7 +2808,7 @@ fn test_parse_str_from_file1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 9),
+            location: TokenLocation::new(0, 6),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
@@ -2883,7 +2883,7 @@ fn test_parse_str_from_file2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 9),
+            location: TokenLocation::new(0, 6),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), ";".to_owned(), RegexMode::Split)

@@ -76,6 +76,51 @@ impl TokenLocation {
             column
         }
     }
+
+    pub fn extract_near(&self, text: &str) -> String {
+        if let Some(line) = text.lines().nth(self.line) {
+            let mut words = Vec::new();
+            let mut word_start: usize = 0;
+            let mut word_length: usize = 0;
+            let mut index = 0;
+
+            let mut line_chars = line.chars().collect::<Vec<_>>();
+            for current in &line_chars {
+                if current.is_whitespace() {
+                    words.push((word_start, word_length));
+                    word_length = 0;
+                    word_start = index + 1;
+                } else {
+                    word_length += 1;
+                }
+
+                index += 1;
+            }
+
+            if word_length > 0 {
+                words.push((word_start, word_length));
+            }
+
+            let get_substr = |(start, length): &(usize, usize)| String::from_iter(&line_chars[*start..(*start + *length)]);
+
+            let mut near_text = String::new();
+            for (word_index, &(word_start, word_length)) in words.iter().enumerate() {
+                if word_start >= self.column || word_start + word_length >= self.column {
+                    near_text = format!(
+                        "{}{}{}",
+                        words.get(word_index - 1).map(|w| get_substr(w) + " ").unwrap_or(String::new()),
+                        get_substr(&(word_start, word_length)),
+                        words.get(word_index + 1).map(|w| " ".to_owned() + &get_substr(w)).unwrap_or(String::new()),
+                    );
+                    break;
+                }
+            }
+
+            near_text
+        } else {
+            String::new()
+        }
+    }
 }
 
 impl Default for TokenLocation {
@@ -230,7 +275,8 @@ pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
         char_iterator: Peekable<Chars<'a>>,
         tokens: Vec<ParserToken>,
         line: usize,
-        column: usize
+        column: usize,
+        token_column_start: usize
     }
 
     impl<'a> TokenizerState<'a> {
@@ -249,7 +295,8 @@ pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
         }
 
         fn add(&mut self, token: Token) {
-            self.tokens.push(ParserToken::new(self.line, self.column, token));
+            self.tokens.push(ParserToken::new(self.line, self.token_column_start, token));
+            self.token_column_start = self.column;
         }
     }
 
@@ -257,16 +304,18 @@ pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
         char_iterator: text.chars().peekable(),
         tokens: Vec::new(),
         line: 0,
-        column: 0
+        column: 0,
+        token_column_start: 0
     };
 
     let mut current_str: Option<String> = None;
     let mut is_escaped = false;
     let mut is_comment = false;
-    while let Some(current) = state.char_iterator.next() {
+    while let Some(current) = state.next_char() {
         if current == '\n' {
             state.line += 1;
             state.column = 0;
+            state.token_column_start = 0;
         }
 
         if let Some(Token::Operator(Operator::Dual('-', '-'))) = state.tokens.last().map(|t| &t.token) {

@@ -5,7 +5,7 @@ pub mod parse_tree_converter;
 
 use crate::model::Statement;
 use crate::parsing::parse_tree_converter::{ConvertParseTreeErrorType, ConvertParseTreeError};
-use crate::parsing::tokenizer::{ParserErrorType, ParserError};
+use crate::parsing::tokenizer::{ParserErrorType, ParserError, TokenLocation};
 
 #[derive(Debug)]
 pub enum CommonParserError {
@@ -13,11 +13,20 @@ pub enum CommonParserError {
     ConvertParseTreeError(ConvertParseTreeError)
 }
 
+impl CommonParserError {
+    pub fn location(&self) -> &TokenLocation {
+        match self {
+            CommonParserError::ParserError(err) => &err.location,
+            CommonParserError::ConvertParseTreeError(err) => &err.location
+        }
+    }
+}
+
 impl std::fmt::Display for CommonParserError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CommonParserError::ParserError(err) => write!(f, "{} ({}:{})", err.error, err.location.line + 1, err.location.column + 1),
-            CommonParserError::ConvertParseTreeError(err) => write!(f, "{} ({}:{})", err.error, err.location.line + 1, err.location.column + 1),
+            CommonParserError::ParserError(err) => write!(f, "{}", err.error),
+            CommonParserError::ConvertParseTreeError(err) => write!(f, "{}", err.error),
         }
     }
 }

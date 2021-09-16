@@ -118,7 +118,7 @@ impl<'a> ColumnProvider for SingleColumnProvider<'a> {
         }
     }
 
-    fn add_key(&mut self, key: &str) {
+    fn add_key(&mut self, _: &str) {
 
     }
 

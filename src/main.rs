@@ -121,7 +121,14 @@ fn parse_statement(line: &str) -> Option<Statement> {
     match parsing::parse(line) {
         Ok(statement) => Some(statement),
         Err(err) => {
-            println!("Failed parsing input: {}.", err);
+            let near_text = err.location().extract_near(line);
+
+            if !near_text.is_empty() {
+                println!("Failed parsing input: {} (near `{}`).", err, near_text);
+            } else {
+                println!("Failed parsing input: {}.", err);
+            }
+
             None
         }
     }
