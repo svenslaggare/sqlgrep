@@ -352,7 +352,7 @@ pub enum Aggregate {
     Max(ExpressionTree),
     Average(ExpressionTree),
     Sum(ExpressionTree),
-    CollectArray(ExpressionTree, bool)
+    CollectArray(ExpressionTree)
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -429,7 +429,7 @@ impl ExpressionTree {
                     Aggregate::Sum(expression) => {
                         expression.visit(f)?;
                     }
-                    Aggregate::CollectArray(expression, _) => {
+                    Aggregate::CollectArray(expression) => {
                         expression.visit(f)?;
                     }
                 }

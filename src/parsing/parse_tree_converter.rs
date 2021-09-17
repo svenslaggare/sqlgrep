@@ -270,7 +270,6 @@ lazy_static! {
             "avg".to_owned(),
             "sum".to_owned(),
             "array_agg".to_owned(),
-            "array_agg_unique".to_owned()
          ].into_iter()
     );
 
@@ -611,8 +610,7 @@ fn transform_call_aggregate(location: TokenLocation,
                 "min" => Aggregate::Min(expression),
                 "avg" => Aggregate::Average(expression),
                 "sum" => Aggregate::Sum(expression),
-                "array_agg" => Aggregate::CollectArray(expression, false),
-                "array_agg_unique" => Aggregate::CollectArray(expression, true),
+                "array_agg" => Aggregate::CollectArray(expression),
                 _ => { panic!("should not happen") }
             };
 

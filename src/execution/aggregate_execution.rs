@@ -185,7 +185,7 @@ impl AggregateExecutionEngine {
                     let sum = sum_entry.0.clone();
                     *self.get_group(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
                 }
-                Aggregate::CollectArray(ref expression, _) => {
+                Aggregate::CollectArray(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let group_value = self.get_group(
                         group_key.clone(),
@@ -306,24 +306,10 @@ impl AggregateExecutionEngine {
                         }
                     }
                 }
-                Aggregate::CollectArray(_, unique) => {
+                Aggregate::CollectArray(_) => {
                     for subgroups in self.groups.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
-                            if unique {
-                                let mut group_value = group_value.clone();
-                                group_value.modify(
-                                    |_| {},
-                                    |_| {},
-                                    |_| {},
-                                    |_| {},
-                                    |array| { unique_values(array); },
-                                    |_| {},
-                                );
-
-                                result_column.push(transform_value(group_value)?);
-                            } else {
-                                result_column.push(transform_value(group_value.clone())?);
-                            }
+                            result_column.push(transform_value(group_value.clone())?);
                         }
                     }
                 }
@@ -1386,7 +1372,7 @@ fn test_group_by_array_agg1() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("ys".to_owned(), Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()), false), None)
+            ("ys".to_owned(), Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned())), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1462,7 +1448,7 @@ fn test_group_by_array_agg2() {
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
             (
                 "ys".to_owned(),
-                Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()), false),
+                Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned())),
                 Some(ExpressionTree::Function { function: Function::ArrayUnique, arguments: vec![ExpressionTree::ColumnAccess("$agg".to_owned())] })
             )
         ],

@@ -62,7 +62,7 @@ Supported aggregates:
 * `max`
 * `sum`
 * `avg`
-* `array_agg` (and own variant: `array_agg_unique`)
+* `array_agg`
 
 Supported functions:
 * `least(INT|REAL, INT|REAL) => INT|REAL`
