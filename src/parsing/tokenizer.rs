@@ -461,6 +461,15 @@ pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
     Ok(state.tokens)
 }
 
+pub fn keywords_list(uppercase: bool) -> Vec<String> {
+    let keywords = KEYWORDS.keys();
+
+    if uppercase {
+        keywords.map(|keyword| keyword.to_uppercase()).collect()
+    } else {
+        keywords.cloned().collect()
+    }
+}
 
 #[test]
 fn test_tokenize1() {

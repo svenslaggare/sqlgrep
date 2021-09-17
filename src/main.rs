@@ -1,21 +1,22 @@
-use std::io::{Write, Error};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::fs::File;
+use std::iter::FromIterator;
 
 use structopt::StructOpt;
 
-use rustyline::Editor;
+use rustyline::{Editor, Context};
 use rustyline::validate::{Validator, ValidationContext, ValidationResult};
 use rustyline::error::ReadlineError;
-use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
+use rustyline_derive::{Helper, Highlighter, Hinter};
+use rustyline::completion::{Completer, Pair};
 
 use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
 use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFormat};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
-use sqlgrep::parsing::parser_tree_converter;
 use sqlgrep::parsing;
+use sqlgrep::parsing::tokenizer::keywords_list;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -38,8 +39,10 @@ struct CommandLineInput {
     format: String
 }
 
-#[derive(Completer, Helper, Highlighter, Hinter)]
-struct InputValidator {}
+#[derive(Helper, Highlighter, Hinter)]
+struct InputValidator {
+    completion_words: Vec<String>
+}
 
 impl Validator for InputValidator {
     fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
@@ -51,6 +54,39 @@ impl Validator for InputValidator {
         }
     }
 }
+
+impl Completer for InputValidator {
+    type Candidate = Pair;
+
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        ctx: &Context<'_>,
+    ) -> Result<(usize, Vec<Pair>), ReadlineError> {
+        let mut current_word = Vec::new();
+        for char in line.chars().rev() {
+            if char.is_whitespace() {
+                break;
+            }
+
+            current_word.push(char);
+        }
+
+        let current_word_length = current_word.len();
+        let current_word = String::from_iter(current_word.into_iter().rev()).to_uppercase();
+
+        let mut results = Vec::new();
+        for completion in &self.completion_words {
+            if completion.starts_with(&current_word) {
+                results.push(Pair { display: completion.to_owned(), replacement: completion.to_owned() });
+            }
+        }
+
+        Ok((pos - current_word_length, results))
+    }
+}
+
 
 fn define_table(tables: &mut Tables, text: String) -> bool {
     let create_table_statement = parsing::parse(&text);
@@ -242,7 +278,10 @@ fn main() {
         execute(&command_line_input, &mut tables, running.clone(), command, true);
     } else {
         let mut line_editor = Editor::new();
-        let validator = InputValidator {};
+        let validator = InputValidator {
+            completion_words:  keywords_list(true)
+        };
+        
         line_editor.set_helper(Some(validator));
 
         while let Ok(mut line) = line_editor.readline("> ") {
