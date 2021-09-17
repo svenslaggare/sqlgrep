@@ -1,6 +1,7 @@
 use std::io::{Write, Error};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::fs::File;
 
 use structopt::StructOpt;
 
@@ -15,7 +16,6 @@ use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFo
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 use sqlgrep::parsing::parser_tree_converter;
 use sqlgrep::parsing;
-use std::fs::File;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -36,34 +36,6 @@ struct CommandLineInput {
     stdin: bool,
     #[structopt(long, help="The output format. Supported values: text, json, csv.", default_value="text")]
     format: String
-}
-
-struct ReadLinePrompt {
-    prompt: String
-}
-
-impl ReadLinePrompt {
-    fn new(prompt: &str) -> ReadLinePrompt {
-        ReadLinePrompt {
-            prompt: prompt.to_string()
-        }
-    }
-}
-
-impl std::iter::Iterator for ReadLinePrompt {
-    type Item = String;
-
-    fn next(&mut self) -> Option<String> {
-        let mut line = String::new();
-
-        print!("{}", self.prompt);
-        std::io::stdout().flush().unwrap();
-
-        match std::io::stdin().read_line(&mut line) {
-            Ok(_) => Some(line.trim().to_string()),
-            Err(_) => None
-        }
-    }
 }
 
 #[derive(Completer, Helper, Highlighter, Hinter)]
