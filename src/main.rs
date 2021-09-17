@@ -279,7 +279,7 @@ fn main() {
     } else {
         let mut line_editor = Editor::new();
         let validator = InputValidator {
-            completion_words:  keywords_list(true)
+            completion_words: keywords_list(true)
         };
         
         line_editor.set_helper(Some(validator));
