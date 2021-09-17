@@ -326,48 +326,44 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         }
                     }
                     Function::TimestampExtractEpoch if arguments.len() == 1 => {
-                        let arg = executed_arguments.remove(0);
-
-                        match arg {
-                            Value::Timestamp(timestamp) => {
-                                Ok(Value::Float(Float(timestamp.timestamp_millis() as f64 / 1000.0)))
-                            },
+                        match executed_arguments.remove(0) {
+                            Value::Timestamp(timestamp) => Ok(Value::Float(Float(timestamp.timestamp_millis() as f64 / 1000.0))),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractYear if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
-                            Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.year() as i64)) }
+                            Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.year() as i64)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractMonth if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
-                            Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.month() as i64)) }
+                            Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.month() as i64)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractDay if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
-                            Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.day() as i64)) }
+                            Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.day() as i64)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractHour if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
-                            Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.hour() as i64)) }
+                            Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.hour() as i64)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractMinute if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
-                            Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.minute() as i64)) }
+                            Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.minute() as i64)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
                     Function::TimestampExtractSecond if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
-                            Value::Timestamp(timestamp) => { Ok(Value::Int(timestamp.second() as i64)) }
+                            Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.second() as i64)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
