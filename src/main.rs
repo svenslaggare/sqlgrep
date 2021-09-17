@@ -13,7 +13,7 @@ use sqlgrep::data_model::{Tables};
 use sqlgrep::model::{Statement};
 use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFormat};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
-use sqlgrep::parsing::parse_tree_converter;
+use sqlgrep::parsing::parser_tree_converter;
 use sqlgrep::parsing;
 use std::fs::File;
 

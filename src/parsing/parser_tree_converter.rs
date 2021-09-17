@@ -12,14 +12,14 @@ use crate::parsing::operator::Operator;
 use crate::parsing::tokenizer::TokenLocation;
 
 #[derive(Debug)]
-pub struct ConvertParseTreeError {
+pub struct ConvertParserTreeError {
     pub location: TokenLocation,
-    pub error: ConvertParseTreeErrorType
+    pub error: ConvertParserTreeErrorType
 }
 
-impl ConvertParseTreeError {
-    pub fn new(location: TokenLocation, error: ConvertParseTreeErrorType) -> ConvertParseTreeError {
-        ConvertParseTreeError {
+impl ConvertParserTreeError {
+    pub fn new(location: TokenLocation, error: ConvertParserTreeErrorType) -> ConvertParserTreeError {
+        ConvertParserTreeError {
             location,
             error
         }
@@ -27,7 +27,7 @@ impl ConvertParseTreeError {
 }
 
 #[derive(Debug)]
-pub enum ConvertParseTreeErrorType {
+pub enum ConvertParserTreeErrorType {
     UndefinedOperator(Operator),
     ExpectedArgument,
     TooManyArguments,
@@ -42,32 +42,32 @@ pub enum ConvertParseTreeErrorType {
     InvalidJoinerTable(String)
 }
 
-impl ConvertParseTreeErrorType {
-    pub fn with_location(self, location: TokenLocation) -> ConvertParseTreeError {
-        ConvertParseTreeError::new(location, self)
+impl ConvertParserTreeErrorType {
+    pub fn with_location(self, location: TokenLocation) -> ConvertParserTreeError {
+        ConvertParserTreeError::new(location, self)
     }
 }
 
-impl std::fmt::Display for ConvertParseTreeErrorType {
+impl std::fmt::Display for ConvertParserTreeErrorType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConvertParseTreeErrorType::UndefinedOperator(operator) => { write!(f, "The operator '{}' is not defined", operator) }
-            ConvertParseTreeErrorType::ExpectedArgument => { write!(f, "Expected an argument") }
-            ConvertParseTreeErrorType::TooManyArguments => { write!(f, "Too many arguments") }
-            ConvertParseTreeErrorType::ExpectedColumnAccess => { write!(f, "Expected column access") }
-            ConvertParseTreeErrorType::UndefinedAggregate => { write!(f, "Undefined aggregate") }
-            ConvertParseTreeErrorType::UndefinedStatement => { write!(f, "Undefined statement") }
-            ConvertParseTreeErrorType::UndefinedExpression => { write!(f, "Undefined expression") }
-            ConvertParseTreeErrorType::UndefinedFunction(name) => { write!(f, "Undefined function: {}", name) }
-            ConvertParseTreeErrorType::InvalidPattern => { write!(f, "Undefined pattern") }
-            ConvertParseTreeErrorType::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") },
-            ConvertParseTreeErrorType::InvalidOnJoin => { write!(f, "Left or right join side does not exist") },
-            ConvertParseTreeErrorType::InvalidJoinerTable(table) => { write!(f, "Expected left or right side to be {}", table) },
+            ConvertParserTreeErrorType::UndefinedOperator(operator) => { write!(f, "The operator '{}' is not defined", operator) }
+            ConvertParserTreeErrorType::ExpectedArgument => { write!(f, "Expected an argument") }
+            ConvertParserTreeErrorType::TooManyArguments => { write!(f, "Too many arguments") }
+            ConvertParserTreeErrorType::ExpectedColumnAccess => { write!(f, "Expected column access") }
+            ConvertParserTreeErrorType::UndefinedAggregate => { write!(f, "Undefined aggregate") }
+            ConvertParserTreeErrorType::UndefinedStatement => { write!(f, "Undefined statement") }
+            ConvertParserTreeErrorType::UndefinedExpression => { write!(f, "Undefined expression") }
+            ConvertParserTreeErrorType::UndefinedFunction(name) => { write!(f, "Undefined function: {}", name) }
+            ConvertParserTreeErrorType::InvalidPattern => { write!(f, "Undefined pattern") }
+            ConvertParserTreeErrorType::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") },
+            ConvertParserTreeErrorType::InvalidOnJoin => { write!(f, "Left or right join side does not exist") },
+            ConvertParserTreeErrorType::InvalidJoinerTable(table) => { write!(f, "Expected left or right side to be {}", table) },
         }
     }
 }
 
-pub fn transform_statement(tree: ParserOperationTree) -> Result<Statement, ConvertParseTreeError> {
+pub fn transform_statement(tree: ParserOperationTree) -> Result<Statement, ConvertParserTreeError> {
     match tree {
         ParserOperationTree::Select { location, projections, from, filter, group_by, having, join } => {
             if let Some(group_by) = group_by {
@@ -77,7 +77,7 @@ pub fn transform_statement(tree: ParserOperationTree) -> Result<Statement, Conve
                     create_aggregate_statement(location, projections, from, filter, None, having, join)
                 } else {
                     if having.is_some() {
-                        return Err(ConvertParseTreeErrorType::HavingClauseNotPossible.with_location(location));
+                        return Err(ConvertParserTreeErrorType::HavingClauseNotPossible.with_location(location));
                     }
 
                     create_select_statement(location, projections, from, filter, join)
@@ -100,7 +100,7 @@ fn create_select_statement(location: TokenLocation,
                            projections: Vec<(Option<String>, ParserExpressionTree)>,
                            from: (String, Option<String>),
                            filter: Option<ParserExpressionTree>,
-                           join: Option<ParserJoinClause>) -> Result<Statement, ConvertParseTreeError> {
+                           join: Option<ParserJoinClause>) -> Result<Statement, ConvertParserTreeError> {
     let mut transformed_projections = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let expression = transform_expression(tree, &mut TransformExpressionState::default())?;
@@ -139,7 +139,7 @@ fn create_aggregate_statement(location: TokenLocation,
                               filter: Option<ParserExpressionTree>,
                               group_by: Option<Vec<String>>,
                               having: Option<ParserExpressionTree>,
-                              join: Option<ParserJoinClause>) -> Result<Statement, ConvertParseTreeError> {
+                              join: Option<ParserJoinClause>) -> Result<Statement, ConvertParserTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let (default_name, aggregate, transform) = transform_aggregate(tree, projection_index)?;
@@ -179,7 +179,7 @@ fn create_aggregate_statement(location: TokenLocation,
 
 fn transform_join(location: TokenLocation,
                   from: &(String, Option<String>),
-                  join: Option<ParserJoinClause>) -> Result<Option<JoinClause>, ConvertParseTreeError> {
+                  join: Option<ParserJoinClause>) -> Result<Option<JoinClause>, ConvertParserTreeError> {
     if let Some(join) = join {
         if join.left_table == from.0 {
             if join.right_table == join.joiner_table {
@@ -195,7 +195,7 @@ fn transform_join(location: TokenLocation,
                     )
                 )
             } else {
-                return Err(ConvertParseTreeErrorType::InvalidJoinerTable(join.joiner_table).with_location(location));
+                return Err(ConvertParserTreeErrorType::InvalidJoinerTable(join.joiner_table).with_location(location));
             }
         } else if join.right_table == from.0 {
             if join.left_table == join.joiner_table {
@@ -211,10 +211,10 @@ fn transform_join(location: TokenLocation,
                     )
                 )
             } else {
-                return Err(ConvertParseTreeErrorType::InvalidJoinerTable(join.joiner_table).with_location(location));
+                return Err(ConvertParserTreeErrorType::InvalidJoinerTable(join.joiner_table).with_location(location));
             }
         } else {
-            return Err(ConvertParseTreeErrorType::InvalidOnJoin.with_location(location));
+            return Err(ConvertParserTreeErrorType::InvalidOnJoin.with_location(location));
         }
     } else {
         Ok(None)
@@ -224,7 +224,7 @@ fn transform_join(location: TokenLocation,
 fn create_create_table_statement(location: TokenLocation,
                                  name: String,
                                  patterns: Vec<(String, String, RegexMode)>,
-                                 columns: Vec<ParserColumnDefinition>) -> Result<Statement, ConvertParseTreeError> {
+                                 columns: Vec<ParserColumnDefinition>) -> Result<Statement, ConvertParserTreeError> {
     let column_definitions = columns
         .into_iter()
         .map(|column| {
@@ -256,7 +256,7 @@ fn create_create_table_statement(location: TokenLocation,
         &name,
         patterns.iter().map(|(pattern_name, pattern, mode)| (pattern_name.as_str(), pattern.as_str(), mode.clone())).collect(),
         column_definitions,
-    ).ok_or(ConvertParseTreeErrorType::InvalidPattern.with_location(location))?;
+    ).ok_or(ConvertParserTreeErrorType::InvalidPattern.with_location(location))?;
 
     Ok(Statement::CreateTable(table_definition))
 }
@@ -332,7 +332,7 @@ impl Default for TransformExpressionState {
     }
 }
 
-pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExpressionState) -> Result<ExpressionTree, ConvertParseTreeError> {
+pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExpressionState) -> Result<ExpressionTree, ConvertParserTreeError> {
     match tree.tree {
         ParserExpressionTreeData::Value(value) => Ok(ExpressionTree::Value(value)),
         ParserExpressionTreeData::ColumnAccess(name) => {
@@ -360,7 +360,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
                 Operator::Dual('!', '=') => Ok(ExpressionTree::Compare { operator: CompareOperator::NotEqual, left, right }),
                 Operator::Dual('>', '=') => Ok(ExpressionTree::Compare { operator: CompareOperator::GreaterThanOrEqual, left, right }),
                 Operator::Dual('<', '=') => Ok(ExpressionTree::Compare { operator: CompareOperator::LessThanOrEqual, left, right }),
-                _ => { return Err(ConvertParseTreeErrorType::UndefinedOperator(operator).with_location(tree.location)); }
+                _ => { return Err(ConvertParserTreeErrorType::UndefinedOperator(operator).with_location(tree.location)); }
             }
         }
         ParserExpressionTreeData::UnaryOperator { operator, operand } => {
@@ -368,7 +368,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
 
             match operator {
                 Operator::Single('-') => Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Negative, operand }),
-                _ => { return Err(ConvertParseTreeErrorType::UndefinedOperator(operator).with_location(tree.location)); }
+                _ => { return Err(ConvertParserTreeErrorType::UndefinedOperator(operator).with_location(tree.location)); }
             }
         }
         ParserExpressionTreeData::Invert { operand } => {
@@ -409,7 +409,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
                     }
                     Err(err) => {
                         match err.error {
-                            ConvertParseTreeErrorType::UndefinedAggregate => {}
+                            ConvertParserTreeErrorType::UndefinedAggregate => {}
                             _ => { return Err(err); }
                         }
                     }
@@ -423,7 +423,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
 
             FUNCTIONS.get(&name.to_lowercase()).map(|function| {
                 ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
-            }).ok_or(ConvertParseTreeErrorType::UndefinedFunction(name).with_location(tree.location.clone()))
+            }).ok_or(ConvertParserTreeErrorType::UndefinedFunction(name).with_location(tree.location.clone()))
         }
         ParserExpressionTreeData::ArrayElementAccess { array, index } => {
             let array = Box::new(transform_expression(*array, state)?);
@@ -433,7 +433,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
     }
 }
 
-fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParseTreeError> {
+fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
     let mut aggregate = Box::new(ParserExpressionTreeData::ColumnAccess("$agg".to_owned()).with_location(tree.location.clone()));
     match tree.tree {
         ParserExpressionTreeData::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name), None)),
@@ -577,14 +577,14 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
 
             Ok((aggregate_name, aggregate, Some(transform)))
         }
-        _ => { return Err(ConvertParseTreeErrorType::UndefinedAggregate.with_location(tree.location)); }
+        _ => { return Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(tree.location)); }
     }
 }
 
 fn transform_call_aggregate(location: TokenLocation,
                             name: &str,
                             mut arguments: Vec<ParserExpressionTree>,
-                            index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParseTreeError> {
+                            index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
     let name_lowercase = name.to_lowercase();
     if name_lowercase == "count" {
         let default_name = Some(format!("count{}", index));
@@ -597,10 +597,10 @@ fn transform_call_aggregate(location: TokenLocation,
             match expression {
                 ExpressionTree::Wildcard => Ok((default_name, Aggregate::Count(None), None)),
                 ExpressionTree::ColumnAccess(column) => Ok((default_name, Aggregate::Count(Some(column)), None)),
-                _ => { Err(ConvertParseTreeErrorType::ExpectedColumnAccess.with_location(location)) }
+                _ => { Err(ConvertParserTreeErrorType::ExpectedColumnAccess.with_location(location)) }
             }
         } else {
-            Err(ConvertParseTreeErrorType::TooManyArguments.with_location(location))
+            Err(ConvertParserTreeErrorType::TooManyArguments.with_location(location))
         }
     } else if AGGREGATE_FUNCTIONS.contains(&name_lowercase) {
         if arguments.len() == 1 {
@@ -616,12 +616,12 @@ fn transform_call_aggregate(location: TokenLocation,
 
             Ok((Some(format!("{}{}", name_lowercase, index)), aggregate, None))
         } else if arguments.is_empty() {
-            Err(ConvertParseTreeErrorType::ExpectedArgument.with_location(location))
+            Err(ConvertParserTreeErrorType::ExpectedArgument.with_location(location))
         } else {
-            Err(ConvertParseTreeErrorType::TooManyArguments.with_location(location))
+            Err(ConvertParserTreeErrorType::TooManyArguments.with_location(location))
         }
     } else {
-        Err(ConvertParseTreeErrorType::UndefinedAggregate.with_location(location))
+        Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(location))
     }
 }
 
