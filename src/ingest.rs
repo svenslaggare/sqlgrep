@@ -97,12 +97,16 @@ impl<'a> FileIngester<'a> {
         }
 
         let joined_table_data = match statement.join_clause() {
-            Some(join_clause) => Some(JoinedTableData::execute(&mut self.execution_engine, join_clause)?),
+            Some(join_clause) => Some(JoinedTableData::execute(&mut self.execution_engine, self.running.clone(), join_clause)?),
             None => None,
         };
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
+                if !self.running.load(Ordering::SeqCst) {
+                    break;
+                }
+
                 if let Ok(line) = line {
                     self.statistics.total_lines += 1;
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
@@ -115,10 +119,6 @@ impl<'a> FileIngester<'a> {
                         }
                     }
                 } else {
-                    break;
-                }
-
-                if !self.running.load(Ordering::SeqCst) {
                     break;
                 }
             }
@@ -185,6 +185,10 @@ impl<'a> FollowFileIngester<'a> {
         }
 
         loop {
+            if !self.running.load(Ordering::SeqCst) {
+                break;
+            }
+
             if let Err(_) = reader.read_line(&mut line) {
                 break;
             }
@@ -209,10 +213,6 @@ impl<'a> FollowFileIngester<'a> {
                 }
 
                 self.output_printer.print(&result_row, refresh)
-            }
-
-            if !self.running.load(Ordering::SeqCst) {
-                break;
             }
         }
 

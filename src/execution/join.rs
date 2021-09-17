@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use std::io::{BufReader, BufRead};
 use std::fs::File;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::data_model::{Row, TableDefinition};
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
@@ -26,7 +28,9 @@ impl JoinedTableData {
         }
     }
 
-    pub fn execute(execution_engine: &mut ExecutionEngine, join: &JoinClause) -> ExecutionResult<JoinedTableData> {
+    pub fn execute(execution_engine: &mut ExecutionEngine,
+                   running: Arc<AtomicBool>,
+                   join: &JoinClause) -> ExecutionResult<JoinedTableData> {
         let join_statement = Statement::Select(SelectStatement {
             projections: vec![("wildcard".to_owned(), ExpressionTree::Wildcard)],
             from: join.joined_table.clone(),
@@ -46,7 +50,13 @@ impl JoinedTableData {
         let joined_file = File::open(&join.joined_filename)
             .map_err(|err| ExecutionError::FailOpenFile(format!("{}", err)))?;
 
-        for line in BufReader::new(joined_file).lines() {
+        for (line_number, line) in BufReader::new(joined_file).lines().enumerate() {
+            if line_number > 0 && line_number % 10 == 0 {
+                if !running.load(Ordering::SeqCst) {
+                    break;
+                }
+            }
+
             if let Ok(line) = line {
                 let (result, _) = execution_engine.execute(&join_statement, line.clone(), &config, None);
                 if let Some(result) = result? {
