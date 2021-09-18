@@ -33,6 +33,7 @@ pub enum ConvertParserTreeErrorType {
     TooManyArguments,
     ExpectedColumnAccess,
     UndefinedAggregate,
+    TooManyAggregates,
     UndefinedStatement,
     UndefinedExpression,
     UndefinedFunction(String),
@@ -56,6 +57,7 @@ impl std::fmt::Display for ConvertParserTreeErrorType {
             ConvertParserTreeErrorType::TooManyArguments => { write!(f, "Too many arguments") }
             ConvertParserTreeErrorType::ExpectedColumnAccess => { write!(f, "Expected column access") }
             ConvertParserTreeErrorType::UndefinedAggregate => { write!(f, "Undefined aggregate") }
+            ConvertParserTreeErrorType::TooManyAggregates => { write!(f, "Too many aggregates") }
             ConvertParserTreeErrorType::UndefinedStatement => { write!(f, "Undefined statement") }
             ConvertParserTreeErrorType::UndefinedExpression => { write!(f, "Undefined expression") }
             ConvertParserTreeErrorType::UndefinedFunction(name) => { write!(f, "Undefined function: {}", name) }
@@ -299,25 +301,6 @@ lazy_static! {
     );
 }
 
-fn any_aggregates(projections: &Vec<(Option<String>, ParserExpressionTree)>) -> bool {
-    projections.iter().any(|(_, projection)| any_aggregates_in_expression(projection))
-}
-
-fn any_aggregates_in_expression(expression: &ParserExpressionTree) -> bool {
-    let mut is_aggregate = false;
-    expression.tree.visit::<(), _>(&mut |expr| {
-        match expr {
-            ParserExpressionTreeData::Call { name, arguments: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => {
-                is_aggregate = true;
-            }
-            _ => {}
-        }
-        Ok(())
-    }).unwrap();
-
-    is_aggregate
-}
-
 pub struct TransformExpressionState {
     allow_aggregates: bool,
     next_aggregate_index: usize
@@ -434,6 +417,10 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
 }
 
 fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
+    if count_aggregates_in_expression(&tree) > 1 {
+        return Err(ConvertParserTreeErrorType::TooManyAggregates.with_location(tree.location));
+    }
+
     let mut aggregate = Box::new(ParserExpressionTreeData::ColumnAccess("$agg".to_owned()).with_location(tree.location.clone()));
     match tree.tree {
         ParserExpressionTreeData::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name), None)),
@@ -623,6 +610,29 @@ fn transform_call_aggregate(location: TokenLocation,
     } else {
         Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(location))
     }
+}
+
+fn any_aggregates(projections: &Vec<(Option<String>, ParserExpressionTree)>) -> bool {
+    projections.iter().any(|(_, projection)| any_aggregates_in_expression(projection))
+}
+
+fn any_aggregates_in_expression(expression: &ParserExpressionTree) -> bool {
+    count_aggregates_in_expression(expression) > 0
+}
+
+fn count_aggregates_in_expression(expression: &ParserExpressionTree) -> usize {
+    let mut num_aggregates = 0;
+    expression.tree.visit::<(), _>(&mut |expr| {
+        match expr {
+            ParserExpressionTreeData::Call { name, arguments: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => {
+                num_aggregates += 1;
+            }
+            _ => {}
+        }
+        Ok(())
+    }).unwrap();
+
+    num_aggregates
 }
 
 #[test]
