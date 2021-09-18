@@ -72,10 +72,10 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    pub fn execute_select(&mut self,
-                          select_statement: &SelectStatement,
-                          line: String,
-                          joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
+    fn execute_select(&mut self,
+                      select_statement: &SelectStatement,
+                      line: String,
+                      joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
         let table_definition = self.get_table(&select_statement.from)?;
         let select_execution_engine = SelectExecutionEngine::new();
         let row = table_definition.extract(&line);
@@ -111,10 +111,10 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    pub fn execute_aggregate(&mut self,
-                             aggregate_statement: &AggregateStatement,
-                             line: String,
-                             joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
+    fn execute_aggregate(&mut self,
+                         aggregate_statement: &AggregateStatement,
+                         line: String,
+                         joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
         self.try_clear_aggregate_state(aggregate_statement);
 
         let table_definition = self.tables.get(&aggregate_statement.from)
@@ -155,10 +155,10 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    pub fn execute_aggregate_update(&mut self,
-                                    aggregate_statement: &AggregateStatement,
-                                    line: String,
-                                    joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<bool> {
+    fn execute_aggregate_update(&mut self,
+                                aggregate_statement: &AggregateStatement,
+                                line: String,
+                                joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<bool> {
         self.try_clear_aggregate_state(aggregate_statement);
 
         let table_definition = self.tables.get(&aggregate_statement.from)
@@ -206,7 +206,7 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    pub fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+    fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         self.aggregate_execution_engine.execute_result(aggregate_statement)
     }
 
