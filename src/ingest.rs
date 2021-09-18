@@ -9,7 +9,7 @@ use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
 use crate::execution::join::{JoinedTableData};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, JoinClause, Statement};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, JoinClause, Statement, NullableCompareOperator, BooleanOperator};
 use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct ExecutionStatistics {
@@ -602,8 +602,10 @@ fn test_file_ingest6() {
         filter: None,
         group_by: Some(vec!["hostname".to_owned()]),
         having: Some(
-            ExpressionTree::And {
-                left: Box::new(ExpressionTree::IsNot {
+            ExpressionTree::BooleanOperation {
+                operator: BooleanOperator::And,
+                left: Box::new(ExpressionTree::NullableCompare {
+                    operator: NullableCompareOperator::NotEqual,
                     left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("hostname".to_owned())))),
                     right: Box::new(ExpressionTree::Value(Value::Null))
                 }),

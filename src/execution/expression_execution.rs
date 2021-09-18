@@ -10,7 +10,7 @@ use chrono::{Local, Datelike, Timelike};
 
 use itertools::Itertools;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp};
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator};
 use crate::execution::{ColumnProvider};
 
 
@@ -88,17 +88,14 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     Ok(Value::Bool(false))
                 }
             }
-            ExpressionTree::Is { left, right } => {
+            ExpressionTree::NullableCompare { left, right, operator } => {
                 let left_value = self.evaluate(left)?;
                 let right_value = self.evaluate(right)?;
 
-                Ok(Value::Bool(left_value == right_value))
-            }
-            ExpressionTree::IsNot { left, right } => {
-                let left_value = self.evaluate(left)?;
-                let right_value = self.evaluate(right)?;
-
-                Ok(Value::Bool(left_value != right_value))
+                match operator {
+                    NullableCompareOperator::Equal => Ok(Value::Bool(left_value == right_value)),
+                    NullableCompareOperator::NotEqual => Ok(Value::Bool(left_value != right_value))
+                }
             }
             ExpressionTree::Arithmetic { left, right, operator } => {
                 let left_value = self.evaluate(left)?;
@@ -161,11 +158,11 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     |_| None,
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
-            ExpressionTree::And { left, right } => {
-                Ok(Value::Bool(self.evaluate(left)?.bool() && self.evaluate(right)?.bool()))
-            }
-            ExpressionTree::Or { left, right } => {
-                Ok(Value::Bool(self.evaluate(left)?.bool() || self.evaluate(right)?.bool()))
+            ExpressionTree::BooleanOperation { operator, left, right } => {
+                match operator {
+                    BooleanOperator::And => Ok(Value::Bool(self.evaluate(left)?.bool() && self.evaluate(right)?.bool())),
+                    BooleanOperator::Or => Ok(Value::Bool(self.evaluate(left)?.bool() || self.evaluate(right)?.bool()))
+                }
             }
             ExpressionTree::Function { function, arguments } => {
                 let mut executed_arguments = Vec::new();
@@ -515,7 +512,8 @@ fn test_evaluate_compare3() {
 
     assert_eq!(
         Ok(Value::Bool(true)),
-        expression_execution_engine.evaluate(&ExpressionTree::Is {
+        expression_execution_engine.evaluate(&ExpressionTree::NullableCompare {
+            operator: NullableCompareOperator::Equal,
             left: Box::new(ExpressionTree::Value(Value::Null)),
             right: Box::new(ExpressionTree::Value(Value::Null)),
         })
@@ -523,7 +521,8 @@ fn test_evaluate_compare3() {
 
     assert_eq!(
         Ok(Value::Bool(true)),
-        expression_execution_engine.evaluate(&ExpressionTree::IsNot {
+        expression_execution_engine.evaluate(&ExpressionTree::NullableCompare {
+            operator: NullableCompareOperator::NotEqual,
             left: Box::new(ExpressionTree::Value(Value::Int(10))),
             right: Box::new(ExpressionTree::Value(Value::Null)),
         })
@@ -538,7 +537,8 @@ fn test_evaluate_and() {
 
     assert_eq!(
         Ok(Value::Bool(true)),
-        expression_execution_engine.evaluate(&ExpressionTree::And {
+        expression_execution_engine.evaluate(&ExpressionTree::BooleanOperation {
+            operator: BooleanOperator::And,
             left: Box::new(ExpressionTree::Compare {
                 left: Box::new(ExpressionTree::Value(Value::Int(10))),
                 right: Box::new(ExpressionTree::Value(Value::Int(4))),
@@ -554,7 +554,8 @@ fn test_evaluate_and() {
 
     assert_eq!(
         Ok(Value::Bool(false)),
-        expression_execution_engine.evaluate(&ExpressionTree::And {
+        expression_execution_engine.evaluate(&ExpressionTree::BooleanOperation {
+            operator: BooleanOperator::And,
             left: Box::new(ExpressionTree::Compare {
                 left: Box::new(ExpressionTree::Value(Value::Int(10))),
                 right: Box::new(ExpressionTree::Value(Value::Int(4))),
@@ -577,7 +578,8 @@ fn test_evaluate_or() {
 
     assert_eq!(
         Ok(Value::Bool(true)),
-        expression_execution_engine.evaluate(&ExpressionTree::Or {
+        expression_execution_engine.evaluate(&ExpressionTree::BooleanOperation {
+            operator: BooleanOperator::Or,
             left: Box::new(ExpressionTree::Compare {
                 left: Box::new(ExpressionTree::Value(Value::Int(10))),
                 right: Box::new(ExpressionTree::Value(Value::Int(4))),
@@ -593,7 +595,8 @@ fn test_evaluate_or() {
 
     assert_eq!(
         Ok(Value::Bool(true)),
-        expression_execution_engine.evaluate(&ExpressionTree::Or {
+        expression_execution_engine.evaluate(&ExpressionTree::BooleanOperation {
+            operator: BooleanOperator::Or,
             left: Box::new(ExpressionTree::Compare {
                 left: Box::new(ExpressionTree::Value(Value::Int(10))),
                 right: Box::new(ExpressionTree::Value(Value::Int(4))),

@@ -6,7 +6,7 @@ use fnv::FnvHasher;
 use crate::data_model::Row;
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine, unique_values};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTree, Value, ValueType, ArithmeticOperator, Function};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTree, Value, ValueType, ArithmeticOperator, Function, BooleanOperator};
 
 type GroupKey = Vec<Value>;
 type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
@@ -1284,7 +1284,8 @@ fn test_group_by_and_count_and_having4() {
         filter: None,
         group_by: Some(vec!["x".to_string()]),
         having: Some(
-            ExpressionTree::And {
+            ExpressionTree::BooleanOperation {
+                operator: BooleanOperator::And,
                 left: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::GreaterThan,
                     left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count(None)))),

@@ -6,7 +6,7 @@ use std::iter::FromIterator;
 use lazy_static::lazy_static;
 
 use crate::parsing::parser::{ParserOperationTree, ParserExpressionTreeData, ParserColumnDefinition, ParserJoinClause, ParserExpressionTree};
-use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function, JoinClause};
+use crate::model::{Statement, ExpressionTree, ArithmeticOperator, CompareOperator, SelectStatement, Value, Aggregate, AggregateStatement, ValueType, UnaryArithmeticOperator, Function, JoinClause, NullableCompareOperator, BooleanOperator};
 use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing, RegexResultReference, RegexMode};
 use crate::parsing::operator::Operator;
 use crate::parsing::tokenizer::TokenLocation;
@@ -346,6 +346,12 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
                 _ => { return Err(ConvertParserTreeErrorType::UndefinedOperator(operator).with_location(tree.location)); }
             }
         }
+        ParserExpressionTreeData::BooleanOperation { operator, left, right } => {
+            let left = Box::new(transform_expression(*left, state)?);
+            let right = Box::new(transform_expression(*right, state)?);
+
+            Ok(ExpressionTree::BooleanOperation { operator, left, right })
+        }
         ParserExpressionTreeData::UnaryOperator { operator, operand } => {
             let operand = Box::new(transform_expression(*operand, state)?);
 
@@ -358,29 +364,11 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
             let operand = Box::new(transform_expression(*operand, state)?);
             Ok(ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Invert, operand })
         }
-        ParserExpressionTreeData::Is { left, right } => {
+        ParserExpressionTreeData::NullableCompare { operator, left, right } => {
             let left = Box::new(transform_expression(*left, state)?);
             let right = Box::new(transform_expression(*right, state)?);
 
-            Ok(ExpressionTree::Is { left, right })
-        }
-        ParserExpressionTreeData::IsNot { left, right } => {
-            let left = Box::new(transform_expression(*left, state)?);
-            let right = Box::new(transform_expression(*right, state)?);
-
-            Ok(ExpressionTree::IsNot { left, right })
-        }
-        ParserExpressionTreeData::And { left, right } => {
-            let left = Box::new(transform_expression(*left, state)?);
-            let right = Box::new(transform_expression(*right, state)?);
-
-            Ok(ExpressionTree::And { left, right })
-        }
-        ParserExpressionTreeData::Or { left, right } => {
-            let left = Box::new(transform_expression(*left, state)?);
-            let right = Box::new(transform_expression(*right, state)?);
-
-            Ok(ExpressionTree::Or { left, right })
+            Ok(ExpressionTree::NullableCompare { operator, left, right })
         }
         ParserExpressionTreeData::Call { name, arguments } => {
             if state.allow_aggregates {
@@ -463,6 +451,21 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
 
             Ok((aggregate_name, aggregate, Some(transform)))
         }
+        ParserExpressionTreeData::BooleanOperation { operator, mut left, mut right } => {
+            if any_aggregates_in_expression(&left) {
+                std::mem::swap(&mut aggregate, &mut left);
+            } else if any_aggregates_in_expression(&right) {
+                std::mem::swap(&mut aggregate, &mut right);
+            }
+
+            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
+            let transform = transform_expression(
+                ParserExpressionTreeData::BooleanOperation { operator, left, right }.with_location(tree.location),
+                &mut TransformExpressionState::default()
+            )?;
+
+            Ok((aggregate_name, aggregate, Some(transform)))
+        }
         ParserExpressionTreeData::UnaryOperator { operator, mut operand } => {
             if any_aggregates_in_expression(&operand) {
                 std::mem::swap(&mut aggregate, &mut operand);
@@ -491,7 +494,7 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
 
             Ok((aggregate_name, aggregate, Some(transform)))
         }
-        ParserExpressionTreeData::And { mut left, mut right } => {
+        ParserExpressionTreeData::NullableCompare { operator, mut left, mut right } => {
             if any_aggregates_in_expression(&left) {
                 std::mem::swap(&mut aggregate, &mut left);
             } else if any_aggregates_in_expression(&right) {
@@ -500,52 +503,7 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
 
             let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
             let transform = transform_expression(
-                ParserExpressionTreeData::And { left, right }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
-        }
-        ParserExpressionTreeData::Or { mut left, mut right } => {
-            if any_aggregates_in_expression(&left) {
-                std::mem::swap(&mut aggregate, &mut left);
-            } else if any_aggregates_in_expression(&right) {
-                std::mem::swap(&mut aggregate, &mut right);
-            }
-
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::Or { left, right }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
-        }
-        ParserExpressionTreeData::Is { mut left, mut right } => {
-            if any_aggregates_in_expression(&left) {
-                std::mem::swap(&mut aggregate, &mut left);
-            } else if any_aggregates_in_expression(&right) {
-                std::mem::swap(&mut aggregate, &mut right);
-            }
-
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::Is { left, right }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
-        }
-        ParserExpressionTreeData::IsNot { mut left, mut right } => {
-            if any_aggregates_in_expression(&left) {
-                std::mem::swap(&mut aggregate, &mut left);
-            } else if any_aggregates_in_expression(&right) {
-                std::mem::swap(&mut aggregate, &mut right);
-            }
-
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::IsNot { left, right }.with_location(tree.location),
+                ParserExpressionTreeData::NullableCompare { operator, left, right }.with_location(tree.location),
                 &mut TransformExpressionState::default()
             )?;
 
@@ -1186,7 +1144,8 @@ fn test_aggregate_statement6() {
         filter: None,
         group_by: None,
         having: Some(
-            ParserExpressionTreeData::And {
+            ParserExpressionTreeData::BooleanOperation {
+                operator: BooleanOperator::And,
                 left: Box::new(
                     ParserExpressionTreeData::BinaryOperator {
                         operator: Operator::Single('='),
@@ -1222,7 +1181,8 @@ fn test_aggregate_statement6() {
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
     assert_eq!(
         Some(
-            ExpressionTree::And {
+            ExpressionTree::BooleanOperation {
+                operator: BooleanOperator::And,
                 left: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::Equal,
                     left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("x".to_owned())))),

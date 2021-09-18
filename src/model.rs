@@ -307,11 +307,23 @@ pub enum CompareOperator {
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
+pub enum NullableCompareOperator {
+    Equal,
+    NotEqual
+}
+
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum ArithmeticOperator {
     Add,
     Subtract,
     Multiply,
     Divide
+}
+
+#[derive(Debug, PartialEq, Hash, Clone)]
+pub enum BooleanOperator {
+    And,
+    Or
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -361,11 +373,9 @@ pub enum ExpressionTree {
     ColumnAccess(String),
     Wildcard,
     Compare { operator: CompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    Is { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    IsNot { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    And { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    Or { left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    NullableCompare { operator: NullableCompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    BooleanOperation { operator: BooleanOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
     Function { function: Function, arguments: Vec<ExpressionTree> },
     ArrayElementAccess { array: Box<ExpressionTree>, index: Box<ExpressionTree> },
@@ -382,23 +392,15 @@ impl ExpressionTree {
                 left.visit(f)?;
                 right.visit(f)?;
             }
-            ExpressionTree::Is { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::IsNot { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::And { left, right } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::Or { left, right } => {
+            ExpressionTree::NullableCompare { left, right, .. } => {
                 left.visit(f)?;
                 right.visit(f)?;
             }
             ExpressionTree::Arithmetic { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::BooleanOperation { left, right, .. } => {
                 left.visit(f)?;
                 right.visit(f)?;
             }

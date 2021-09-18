@@ -10,7 +10,7 @@ use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapC
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
 use crate::execution::select_execution::SelectExecutionEngine;
-use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, JoinClause, SelectStatement, Statement, Value, ValueType};
+use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, JoinClause, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -428,7 +428,8 @@ fn test_json_array1() {
         ],
         from: "clients".to_string(),
         filename: None,
-        filter: Some(ExpressionTree::IsNot {
+        filter: Some(ExpressionTree::NullableCompare {
+            operator: NullableCompareOperator::NotEqual,
             left: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Null))
         }),

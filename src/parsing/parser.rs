@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::model::{Value, ValueType, Float};
+use crate::model::{Value, ValueType, Float, NullableCompareOperator, BooleanOperator};
 use crate::data_model::{JsonAccess, ColumnParsing, RegexResultReference, RegexMode};
 use crate::parsing::tokenizer::{ParserErrorType, Token, Keyword, tokenize_simple, ParserToken, tokenize, ParserError, TokenLocation};
 use crate::parsing::operator::{BinaryOperators, UnaryOperators, Operator};
@@ -35,12 +35,10 @@ pub enum ParserExpressionTreeData {
     ColumnAccess(String),
     Wildcard,
     BinaryOperator { operator: Operator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    BooleanOperation { operator: BooleanOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     UnaryOperator { operator: Operator, operand: Box<ParserExpressionTree>},
     Invert { operand: Box<ParserExpressionTree> },
-    Is { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
-    IsNot { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
-    And { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
-    Or { left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    NullableCompare { operator: NullableCompareOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     Call { name: String, arguments: Vec<ParserExpressionTree> },
     ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> }
 }
@@ -62,25 +60,17 @@ impl ParserExpressionTreeData {
                 left.tree.visit(f)?;
                 right.tree.visit(f)?;
             }
+            ParserExpressionTreeData::BooleanOperation { left, right, .. } => {
+                left.tree.visit(f)?;
+                right.tree.visit(f)?;
+            }
             ParserExpressionTreeData::UnaryOperator { operand, .. } => {
                 operand.tree.visit(f)?;
             }
             ParserExpressionTreeData::Invert { operand } => {
                 operand.tree.visit(f)?;
             }
-            ParserExpressionTreeData::Is { left, right } => {
-                left.tree.visit(f)?;
-                right.tree.visit(f)?;
-            }
-            ParserExpressionTreeData::IsNot { left, right } => {
-                left.tree.visit(f)?;
-                right.tree.visit(f)?;
-            }
-            ParserExpressionTreeData::And { left, right } => {
-                left.tree.visit(f)?;
-                right.tree.visit(f)?;
-            }
-            ParserExpressionTreeData::Or { left, right } => {
+            ParserExpressionTreeData::NullableCompare { left, right, .. } => {
                 left.tree.visit(f)?;
                 right.tree.visit(f)?;
             }
@@ -686,16 +676,28 @@ impl<'a> Parser<'a> {
                     lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) });
                 }
                 Token::Keyword(Keyword::Is) => {
-                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::Is { left: Box::new(lhs), right: Box::new(rhs) });
+                    lhs = ParserExpressionTree::new(
+                        op_location,
+                        ParserExpressionTreeData::NullableCompare { operator: NullableCompareOperator::Equal, left: Box::new(lhs), right: Box::new(rhs) }
+                    );
                 }
                 Token::Keyword(Keyword::IsNot) => {
-                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::IsNot { left: Box::new(lhs), right: Box::new(rhs) });
+                    lhs = ParserExpressionTree::new(
+                        op_location,
+                        ParserExpressionTreeData::NullableCompare { operator: NullableCompareOperator::NotEqual, left: Box::new(lhs), right: Box::new(rhs) }
+                    );
                 }
                 Token::Keyword(Keyword::And) => {
-                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::And { left: Box::new(lhs), right: Box::new(rhs) });
+                    lhs = ParserExpressionTree::new(
+                        op_location,
+                        ParserExpressionTreeData::BooleanOperation { operator: BooleanOperator::And, left: Box::new(lhs), right: Box::new(rhs) }
+                    );
                 }
                 Token::Keyword(Keyword::Or) => {
-                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::Or { left: Box::new(lhs), right: Box::new(rhs) });
+                    lhs = ParserExpressionTree::new(
+                        op_location,
+                        ParserExpressionTreeData::BooleanOperation { operator: BooleanOperator::Or, left: Box::new(lhs), right: Box::new(rhs) }
+                    );
                 }
                 Token::LeftSquareParentheses => {
                     lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::ArrayElementAccess { array: Box::new(lhs), index: Box::new(rhs) });
@@ -1167,7 +1169,8 @@ fn test_parse_expression5() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParserExpressionTreeData::And {
+        ParserExpressionTreeData::BooleanOperation {
+            operator: BooleanOperator::And,
             left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
             right: Box::new(ParserExpressionTreeData::Value(Value::Bool(false)).with_location(Default::default()))
         },
@@ -1242,7 +1245,8 @@ fn test_parse_expression8() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParserExpressionTreeData::Is {
+        ParserExpressionTreeData::NullableCompare {
+            operator: NullableCompareOperator::Equal,
             left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
             right: Box::new(ParserExpressionTreeData::Value(Value::Null).with_location(Default::default()))
         },
@@ -1262,7 +1266,8 @@ fn test_parse_expression8() {
 
     let tree = parser.parse_expression().unwrap();
     assert_eq!(
-        ParserExpressionTreeData::IsNot {
+        ParserExpressionTreeData::NullableCompare {
+            operator: NullableCompareOperator::NotEqual,
             left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
             right: Box::new(ParserExpressionTreeData::Value(Value::Null).with_location(Default::default()))
         },
