@@ -11,6 +11,8 @@ use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
 use crate::execution::select_execution::SelectExecutionEngine;
 use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, JoinClause, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -206,6 +208,15 @@ impl<'a> ExecutionEngine<'a> {
 
     pub fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         self.aggregate_execution_engine.execute_result(aggregate_statement)
+    }
+
+    pub fn create_joined_data(&mut self, statement: &Statement, running: Arc<AtomicBool>) -> ExecutionResult<Option<JoinedTableData>> {
+        Ok(
+            match statement.join_clause() {
+                Some(join_clause) => Some(JoinedTableData::execute(self, running.clone(), join_clause)?),
+                None => None,
+            }
+        )
     }
 
     pub fn create_columns_mapping(table_definition: &'a TableDefinition,

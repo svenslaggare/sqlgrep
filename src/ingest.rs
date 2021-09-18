@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
-use crate::execution::join::{JoinedTableData};
 use crate::model::{Aggregate, AggregateStatement, CompareOperator, JoinClause, Statement, NullableCompareOperator, BooleanOperator};
 use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
@@ -96,10 +95,7 @@ impl<'a> FileIngester<'a> {
             config.result = false;
         }
 
-        let joined_table_data = match statement.join_clause() {
-            Some(join_clause) => Some(JoinedTableData::execute(&mut self.execution_engine, self.running.clone(), join_clause)?),
-            None => None,
-        };
+        let joined_table_data = self.execution_engine.create_joined_data(&statement, self.running.clone())?;
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
