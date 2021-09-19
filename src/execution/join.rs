@@ -58,8 +58,8 @@ impl JoinedTableData {
             }
 
             if let Ok(line) = line {
-                let (result, _) = execution_engine.execute(&join_statement, line.clone(), &config, None);
-                if let Some(result) = result? {
+                let (result, _) = execution_engine.execute(&join_statement, line.clone(), &config, None)?;
+                if let Some(result) = result {
                     for row in result.data {
                         joined_table_data.add_row(
                             row.columns[join_on_column_index].clone(),

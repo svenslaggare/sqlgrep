@@ -107,8 +107,8 @@ impl<'a> FileIngester<'a> {
                     self.statistics.total_lines += 1;
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
-                    let (result, _) = self.execution_engine.execute(&statement, line, &config, joined_table_data.as_ref());
-                    if let Some(result_row) = result? {
+                    let (result, _) = self.execution_engine.execute(&statement, line, &config, joined_table_data.as_ref())?;
+                    if let Some(result_row) = result {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
                             self.output_printer.print(&result_row, self.single_result);
@@ -124,9 +124,9 @@ impl<'a> FileIngester<'a> {
             config.result = true;
             config.update = false;
 
-            let (result, _) = self.execution_engine.execute(&statement, String::new(), &config, joined_table_data.as_ref());
+            let (result, _) = self.execution_engine.execute(&statement, String::new(), &config, joined_table_data.as_ref())?;
             if self.print_result {
-                if let Some(result_row) = result? {
+                if let Some(result_row) = result {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
                     self.output_printer.print(&result_row, true);
                 }
@@ -202,8 +202,8 @@ impl<'a> FollowFileIngester<'a> {
             let mut input_line = String::new();
             std::mem::swap(&mut input_line, &mut line);
 
-            let (result, refresh) = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default(), None);
-            if let Some(result_row) = result? {
+            let (result, refresh) = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default(), None)?;
+            if let Some(result_row) = result {
                 if refresh {
                     print!("\x1B[2J\x1B[1;1H");
                 }

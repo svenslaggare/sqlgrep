@@ -47,27 +47,27 @@ impl<'a> ExecutionEngine<'a> {
                    statement: &Statement,
                    line: String,
                    config: &ExecutionConfig,
-                   joined_table_data: Option<&JoinedTableData>) -> (ExecutionResult<Option<ResultRow>>, bool) {
+                   joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<(Option<ResultRow>, bool)> {
         match statement {
             Statement::Select(select_statement) => {
-                (self.execute_select(&select_statement, line, joined_table_data), false)
+                Ok((self.execute_select(&select_statement, line, joined_table_data)?, false))
             }
             Statement::Aggregate(aggregate_statement) => {
                 if config.update && config.result {
-                    (self.execute_aggregate(&aggregate_statement, line, joined_table_data), true)
+                    Ok((self.execute_aggregate(&aggregate_statement, line, joined_table_data)?, true))
                 } else if config.update && !config.result {
-                    (self.execute_aggregate_update(&aggregate_statement, line, joined_table_data).map(|_| None), false)
+                    Ok((self.execute_aggregate_update(&aggregate_statement, line, joined_table_data).map(|_| None)?, false))
                 } else if !config.update && config.result {
-                    (self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x)), true)
+                    Ok((self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?, true))
                 } else {
-                    (Err(ExecutionError::NotSupportedOperation), false)
+                    Err(ExecutionError::NotSupportedOperation)
                 }
             }
             Statement::CreateTable(_) => {
-                (Err(ExecutionError::NotSupportedOperation), false)
+                Err(ExecutionError::NotSupportedOperation)
             }
             Statement::Multiple(_) => {
-                (Err(ExecutionError::NotSupportedOperation), false)
+                Err(ExecutionError::NotSupportedOperation)
             }
         }
     }
@@ -304,9 +304,9 @@ fn test_regex_array1() {
             line.unwrap(),
             &ExecutionConfig::default(),
             None
-        );
+        ).unwrap();
 
-        if let Some(result) = result.unwrap() {
+        if let Some(result) = result {
             result_rows.extend(result.data);
         }
     }
@@ -381,9 +381,9 @@ fn test_timestamp1() {
             line.unwrap(),
             &ExecutionConfig::default(),
             None
-        );
+        ).unwrap();
 
-        if let Some(result) = result.unwrap() {
+        if let Some(result) = result {
             result_rows.extend(result.data);
         }
     }
@@ -454,9 +454,9 @@ fn test_json_array1() {
             line.unwrap(),
             &ExecutionConfig::default(),
             None
-        );
+        ).unwrap();
 
-        if let Some(result) = result.unwrap() {
+        if let Some(result) = result {
             result_rows.extend(result.data);
         }
     }
