@@ -39,65 +39,57 @@ struct CommandLineInput {
     format: String
 }
 
-#[derive(Helper, Highlighter, Hinter)]
-struct InputValidator {
-    completion_words: Vec<String>
-}
+fn main() {
+    let command_line_input: CommandLineInput = CommandLineInput::from_args();
 
-impl Validator for InputValidator {
-    fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
-        let input = ctx.input();
-        if !input.ends_with(';') {
-            Ok(ValidationResult::Incomplete)
-        } else {
-            Ok(ValidationResult::Valid(None))
+    let mut tables = Tables::new();
+    if let Some(table_definition_filename) = command_line_input.data_definition_file.clone() {
+        if !define_table(&mut tables, std::fs::read_to_string(table_definition_filename).unwrap()) {
+            return;
         }
     }
-}
 
-impl Completer for InputValidator {
-    type Candidate = Pair;
+    let running = Arc::new(AtomicBool::new(false));
+    let running_clone = running.clone();
+    ctrlc::set_handler(move || {
+        if !running_clone.load(Ordering::SeqCst) {
+            std::process::exit(0);
+        }
 
-    fn complete(
-        &self,
-        line: &str,
-        pos: usize,
-        ctx: &Context<'_>,
-    ) -> Result<(usize, Vec<Pair>), ReadlineError> {
-        let mut current_word = Vec::new();
-        for char in line.chars().rev() {
-            if char.is_whitespace() {
+        running_clone.store(false, Ordering::SeqCst);
+    }).expect("Error setting Ctrl-C handler");
+
+    if let Some(command) = command_line_input.command.clone() {
+        execute(&command_line_input, &mut tables, running.clone(), command, true);
+    } else {
+        let mut line_editor = Editor::new();
+        let validator = InputValidator {
+            completion_words: keywords_list(true)
+        };
+
+        line_editor.set_helper(Some(validator));
+
+        while let Ok(mut line) = line_editor.readline("> ") {
+            if line.ends_with('\n') {
+                line.pop();
+            }
+
+            line_editor.add_history_entry(line.clone());
+            if execute(&command_line_input, &mut tables, running.clone(), line, false) {
                 break;
             }
-
-            current_word.push(char);
         }
-
-        let current_word_length = current_word.len();
-        let current_word = String::from_iter(current_word.into_iter().rev()).to_uppercase();
-
-        let mut results = Vec::new();
-        for completion in &self.completion_words {
-            if completion.starts_with(&current_word) {
-                results.push(Pair { display: completion.to_owned(), replacement: completion.to_owned() });
-            }
-        }
-
-        Ok((pos - current_word_length, results))
     }
 }
-
 
 fn define_table(tables: &mut Tables, text: String) -> bool {
     let create_table_statement = parsing::parse(&text);
     if let Err(err) = create_table_statement {
-        println!("Failed to create table: {}", err);
+        println!("Failed to create table: {}.", err);
         return false;
     }
 
-    let create_table_statement = create_table_statement.unwrap();
-
-    match create_table_statement {
+    match create_table_statement.unwrap() {
         Statement::CreateTable(table_definition) => {
             let table_name = table_definition.name.clone();
             tables.add_table(&table_name, table_definition);
@@ -110,36 +102,19 @@ fn define_table(tables: &mut Tables, text: String) -> bool {
                         tables.add_table(&table_name, table_definition);
                     }
                     _ => {
-                        println!("Expected create table statement.");
+                        println!("Expected CREATE TABLE statement.");
                         return false;
                     }
                 }
             }
         }
         _ => {
-            println!("Expected create table statement.");
+            println!("Expected CREATE TABLE  statement.");
             return false;
         }
     }
 
     true
-}
-
-fn parse_statement(line: &str) -> Option<Statement> {
-    match parsing::parse(line) {
-        Ok(statement) => Some(statement),
-        Err(err) => {
-            let near_text = err.location().extract_near(line);
-
-            if !near_text.is_empty() {
-                println!("Failed parsing input: {} (near `{}`).", err, near_text);
-            } else {
-                println!("Failed parsing input: {}.", err);
-            }
-
-            None
-        }
-    }
 }
 
 fn execute(command_line_input: &CommandLineInput,
@@ -254,45 +229,67 @@ fn execute(command_line_input: &CommandLineInput,
     false
 }
 
-fn main() {
-    let command_line_input: CommandLineInput = CommandLineInput::from_args();
+fn parse_statement(line: &str) -> Option<Statement> {
+    match parsing::parse(line) {
+        Ok(statement) => Some(statement),
+        Err(err) => {
+            let near_text = err.location().extract_near(line);
 
-    let mut tables = Tables::new();
-    if let Some(table_definition_filename) = command_line_input.data_definition_file.clone() {
-        if !define_table(&mut tables, std::fs::read_to_string(table_definition_filename).unwrap()) {
-            return;
+            if !near_text.is_empty() {
+                println!("Failed parsing input: {} (near `{}`).", err, near_text);
+            } else {
+                println!("Failed parsing input: {}.", err);
+            }
+
+            None
         }
     }
+}
 
-    let running = Arc::new(AtomicBool::new(false));
-    let running_clone = running.clone();
-    ctrlc::set_handler(move || {
-        if !running_clone.load(Ordering::SeqCst) {
-            std::process::exit(0);
+#[derive(Helper, Highlighter, Hinter)]
+struct InputValidator {
+    completion_words: Vec<String>
+}
+
+impl Validator for InputValidator {
+    fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
+        let input = ctx.input();
+        if !input.ends_with(';') {
+            Ok(ValidationResult::Incomplete)
+        } else {
+            Ok(ValidationResult::Valid(None))
         }
+    }
+}
 
-        running_clone.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+impl Completer for InputValidator {
+    type Candidate = Pair;
 
-    if let Some(command) = command_line_input.command.clone() {
-        execute(&command_line_input, &mut tables, running.clone(), command, true);
-    } else {
-        let mut line_editor = Editor::new();
-        let validator = InputValidator {
-            completion_words: keywords_list(true)
-        };
-        
-        line_editor.set_helper(Some(validator));
-
-        while let Ok(mut line) = line_editor.readline("> ") {
-            if line.ends_with('\n') {
-                line.pop();
-            }
-
-            line_editor.add_history_entry(line.clone());
-            if execute(&command_line_input, &mut tables, running.clone(), line, false) {
+    fn complete(
+        &self,
+        line: &str,
+        pos: usize,
+        ctx: &Context<'_>,
+    ) -> Result<(usize, Vec<Pair>), ReadlineError> {
+        let mut current_word = Vec::new();
+        for char in line.chars().rev() {
+            if char.is_whitespace() {
                 break;
             }
+
+            current_word.push(char);
         }
+
+        let current_word_length = current_word.len();
+        let current_word = String::from_iter(current_word.into_iter().rev()).to_uppercase();
+
+        let mut results = Vec::new();
+        for completion in &self.completion_words {
+            if completion.starts_with(&current_word) {
+                results.push(Pair { display: completion.to_owned(), replacement: completion.to_owned() });
+            }
+        }
+
+        Ok((pos - current_word_length, results))
     }
 }
