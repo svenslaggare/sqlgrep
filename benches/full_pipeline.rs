@@ -1,19 +1,19 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::fs::File;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables};
+use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables, RegexMode};
 use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate};
-use sqlgrep::ingest::FileIngester;
+use sqlgrep::ingest::{FileIngester, DisplayOptions};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
-use std::fs::File;
 
 fn filtering() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -32,8 +32,9 @@ fn filtering() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data_large.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
         false,
+        DisplayOptions::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
     ingester.print_result = false;
@@ -55,7 +56,8 @@ fn filtering() {
             left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
-        })
+        }),
+        join: None
     }));
 
     if let Err(err) = result {
@@ -68,7 +70,7 @@ fn aggregate() {
     let table_definition = TableDefinition::new(
         "connections",
         vec![
-            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)")
+            ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
         ],
         vec![
             ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
@@ -87,17 +89,18 @@ fn aggregate() {
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
-        File::open("testdata/ftpd_data_large.txt").unwrap(),
+        vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
         false,
+        DisplayOptions::default(),
         ExecutionEngine::new(&tables)
     ).unwrap();
     ingester.print_result = false;
 
     let result = ingester.process(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned())),
-            ("count".to_owned(), Aggregate::Count(None)),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned()))),
+            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
+            ("count".to_owned(), Aggregate::Count(None), None),
+            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
         ],
         from: "connections".to_string(),
         filename: None,
@@ -107,7 +110,8 @@ fn aggregate() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         group_by: Some(vec!["hour".to_owned()]),
-        having: None
+        having: None,
+        join: None
     }));
 
     if let Err(err) = result {
