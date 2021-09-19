@@ -2,6 +2,8 @@ use std::collections::{HashMap};
 use std::hash::{Hash, Hasher};
 use std::io::{BufReader, BufRead};
 use std::fs::File;
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use fnv::FnvHasher;
 
@@ -11,8 +13,6 @@ use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
 use crate::execution::select_execution::SelectExecutionEngine;
 use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, JoinClause, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
 
 pub struct ExecutionConfig {
     pub result: bool,

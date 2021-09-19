@@ -11,7 +11,7 @@ use crate::data_model::{ColumnDefinition, TableDefinition, ColumnParsing, RegexR
 use crate::parsing::operator::Operator;
 use crate::parsing::tokenizer::TokenLocation;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ConvertParserTreeError {
     pub location: TokenLocation,
     pub error: ConvertParserTreeErrorType
@@ -26,7 +26,7 @@ impl ConvertParserTreeError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ConvertParserTreeErrorType {
     UndefinedOperator(Operator),
     ExpectedArgument,
@@ -1334,6 +1334,39 @@ fn test_aggregate_statement9() {
         }),
         statement.aggregates[0].2
     );
+}
+
+#[test]
+fn test_aggregate_statement10() {
+    let tree = ParserOperationTree::Select {
+        location: Default::default(),
+        projections: vec![
+            (
+                None,
+                ParserExpressionTreeData::Call {
+                    name: "GREATEST".to_owned(),
+                    arguments: vec![
+                        ParserExpressionTreeData::Call {
+                            name: "MAX".to_owned(),
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                        }.with_location(Default::default()),
+                        ParserExpressionTreeData::Call {
+                            name: "MAX".to_owned(),
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                        }.with_location(Default::default())
+                    ]
+                }.with_location(Default::default())
+            ),
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: None,
+        having: None,
+        join: None,
+    };
+
+    let statement = transform_statement(tree);
+    assert_eq!(Some(ConvertParserTreeErrorType::TooManyAggregates.with_location(Default::default())), statement.err());
 }
 
 #[test]
