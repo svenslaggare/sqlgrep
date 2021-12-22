@@ -195,7 +195,11 @@ pub enum ParserErrorType {
     NotDefinedType(String),
     TrimOnlyForString,
     ExpectedValueForDefaultValue,
-    ExpectedDefaultValueOfType(ValueType)
+    ExpectedDefaultValueOfType(ValueType),
+    AlreadyHaveWhere,
+    AlreadyHaveJoin,
+    AlreadyHaveGroupBy,
+    AlreadyHaveHaving
 }
 
 impl std::fmt::Display for ParserErrorType {
@@ -235,6 +239,10 @@ impl std::fmt::Display for ParserErrorType {
             ParserErrorType::TrimOnlyForString => { write!(f, "The 'TRIM' modifier is only available for 'TEXT' columns") }
             ParserErrorType::ExpectedValueForDefaultValue => { write!(f, "Expected a value expression for the default value") }
             ParserErrorType::ExpectedDefaultValueOfType(value_type) => { write!(f, "Expected default value be of type '{}'", value_type) }
+            ParserErrorType::AlreadyHaveWhere => { write!(f, "This statement already have a 'WHERE' clause") }
+            ParserErrorType::AlreadyHaveJoin => { write!(f, "This statement already have a 'JOIN' clause") }
+            ParserErrorType::AlreadyHaveGroupBy => { write!(f, "This statement already have a 'GROUP BY' clause") }
+            ParserErrorType::AlreadyHaveHaving => { write!(f, "This statement already have a 'HAVING' clause") }
         }
     }
 }

@@ -261,12 +261,24 @@ impl<'a> Parser<'a> {
                 match self.current() {
                     Token::Keyword(Keyword::Where) => {
                         self.next()?;
+                        if filter.is_some() {
+                            return Err(self.create_error(ParserErrorType::AlreadyHaveWhere));
+                        }
+
                         filter = Some(self.parse_expression_internal()?);
                     }
                     Token::Keyword(Keyword::Inner) => {
+                        if join.is_some() {
+                            return Err(self.create_error(ParserErrorType::AlreadyHaveJoin));
+                        }
+
                         join = Some(self.parse_join(false)?);
                     }
                     Token::Keyword(Keyword::Outer) => {
+                        if join.is_some() {
+                            return Err(self.create_error(ParserErrorType::AlreadyHaveJoin));
+                        }
+
                         join = Some(self.parse_join(true)?);
                     }
                     Token::Keyword(Keyword::Group) => {
@@ -276,6 +288,10 @@ impl<'a> Parser<'a> {
                             Token::Keyword(Keyword::By),
                             ParserErrorType::ExpectedKeyword(Keyword::By)
                         )?;
+
+                        if group_by.is_some() {
+                            return Err(self.create_error(ParserErrorType::AlreadyHaveGroupBy));
+                        }
 
                         let mut group_by_keys = Vec::new();
                         group_by_keys.push(self.consume_identifier()?);
@@ -287,6 +303,10 @@ impl<'a> Parser<'a> {
                         group_by = Some(group_by_keys);
                     }
                     Token::Keyword(Keyword::Having) => {
+                        if having.is_some() {
+                            return Err(self.create_error(ParserErrorType::AlreadyHaveHaving));
+                        }
+
                         self.next()?;
                         having = Some(self.parse_expression_internal()?);
                     }
@@ -1835,6 +1855,40 @@ fn test_parse_select_group_by2() {
             join: None
         },
         tree
+    );
+}
+
+#[test]
+fn test_parse_select_group_by3() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::from_plain_tokens(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Keyword(Keyword::Select),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::From),
+            Token::Identifier("test".to_string()),
+            Token::Keyword(Keyword::Where),
+            Token::Identifier("x".to_string()),
+            Token::Operator(Operator::Single('>')),
+            Token::Int(4),
+            Token::Keyword(Keyword::Group),
+            Token::Keyword(Keyword::By),
+            Token::Identifier("x".to_string()),
+            Token::Keyword(Keyword::Group),
+            Token::Keyword(Keyword::By),
+            Token::Identifier("x".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse();
+    assert_eq!(
+        Err(ParserError::new(TokenLocation::new(0, 0), ParserErrorType::AlreadyHaveGroupBy)),
+        tree,
     );
 }
 
