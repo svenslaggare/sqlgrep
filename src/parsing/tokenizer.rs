@@ -85,7 +85,7 @@ impl TokenLocation {
             let mut word_length: usize = 0;
             let mut index = 0;
 
-            let mut line_chars = line.chars().collect::<Vec<_>>();
+            let line_chars = line.chars().collect::<Vec<_>>();
             for current in &line_chars {
                 if current.is_whitespace() {
                     words.push((word_start, word_length));

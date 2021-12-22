@@ -373,7 +373,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
         }
         ParserExpressionTreeData::Call { name, arguments, distinct } => {
             if state.allow_aggregates {
-                match transform_call_aggregate(tree.location.clone(), &name, arguments.clone(), 0, distinct) {
+                match transform_call_aggregate(tree.location.clone(), &name, arguments.clone(), distinct, 0) {
                     Ok((_, aggregate, _)) => {
                         let aggregate_index = state.next_aggregate_index;
                         state.next_aggregate_index += 1;
@@ -416,12 +416,14 @@ fn transform_aggregate(mut tree: ParserExpressionTree, aggregate_index: usize) -
             Ok((Some(name.clone()), Aggregate::GroupKey(name), None))
         }
         Some(ParserExpressionTreeData::Call { name, arguments, distinct }) => {
-            let mut result = transform_call_aggregate(tree.location.clone(), &name, arguments, aggregate_index, distinct)?;
+            let mut result = transform_call_aggregate(tree.location.clone(), &name, arguments, distinct, aggregate_index)?;
             if !not_transformed {
-                result.2 = Some(transform_expression(
-                    tree,
-                    &mut TransformExpressionState::default()
-                )?);
+                result.2 = Some(
+                    transform_expression(
+                        tree,
+                        &mut TransformExpressionState::default()
+                    )?
+                );
             }
 
             Ok(result)
@@ -558,8 +560,8 @@ fn extract_aggregate(tree: &mut ParserExpressionTree) -> (Option<ParserExpressio
 fn transform_call_aggregate(location: TokenLocation,
                             name: &str,
                             mut arguments: Vec<ParserExpressionTree>,
-                            index: usize,
-                            distinct: Option<bool>) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
+                            distinct: Option<bool>,
+                            index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
     let name_lowercase = name.to_lowercase();
     if name_lowercase == "count" {
         let distinct = distinct.unwrap_or(false);

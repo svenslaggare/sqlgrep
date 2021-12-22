@@ -18,21 +18,21 @@ enum SummaryGroupValue {
 }
 
 pub struct AggregateExecutionEngine {
-    groups: Groups<Value>,
-    summary_statistics: Groups<SummaryGroupValue>
+    group_values: Groups<Value>,
+    groups: Groups<SummaryGroupValue>
 }
 
 impl AggregateExecutionEngine {
     pub fn new() -> AggregateExecutionEngine {
         AggregateExecutionEngine {
-            groups: BTreeMap::new(),
-            summary_statistics: BTreeMap::new()
+            group_values: BTreeMap::new(),
+            groups: BTreeMap::new()
         }
     }
 
     pub fn clear(&mut self) {
+        self.group_values.clear();
         self.groups.clear();
-        self.summary_statistics.clear();
     }
 
     pub fn execute<TColumnProvider: ColumnProvider>(&mut self,
@@ -111,7 +111,7 @@ impl AggregateExecutionEngine {
                     };
 
                     if valid && *distinct {
-                        let count_distinct_entry = self.get_summary_group(
+                        let count_distinct_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
                             SummaryGroupValue::CountDistinct(HashSet::new())
@@ -123,7 +123,7 @@ impl AggregateExecutionEngine {
                     }
 
                     if valid {
-                        self.get_group(group_key.clone(), aggregate_index, || Ok(Value::Int(0)))?.modify(
+                        self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Int(0)))?.modify(
                             |group_value| { *group_value += 1; },
                             |_| {},
                             |_| {},
@@ -135,7 +135,7 @@ impl AggregateExecutionEngine {
                 }
                 Aggregate::Min(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
+                    let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
                     group_value.modify_same_type(
                         &column_value,
                         |x, y| { *x = (*x).min(y) },
@@ -148,7 +148,7 @@ impl AggregateExecutionEngine {
                 }
                 Aggregate::Max(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
+                    let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
                     group_value.modify_same_type(
                         &column_value,
                         |x, y| { *x = (*x).max(y) },
@@ -163,7 +163,7 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let average_entry = self.get_summary_group(
+                    let average_entry = self.get_group(
                         group_key.clone(),
                         aggregate_index,
                         SummaryGroupValue::Average(value_type.default_value(), 0)
@@ -192,7 +192,7 @@ impl AggregateExecutionEngine {
                         );
 
                         if let Some(average) = average {
-                            *self.get_group(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
+                            *self.get_group_value(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
                         }
                     }
                 }
@@ -200,7 +200,7 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let sum_entry = self.get_summary_group(
+                    let sum_entry = self.get_group(
                         group_key.clone(),
                         aggregate_index,
                         SummaryGroupValue::Sum(value_type.default_value())
@@ -218,12 +218,12 @@ impl AggregateExecutionEngine {
                         );
 
                         let sum = sum.clone();
-                        *self.get_group(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                        *self.get_group_value(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
                     }
                 }
                 Aggregate::CollectArray(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group(
+                    let group_value = self.get_group_value(
                         group_key.clone(),
                         aggregate_index,
                         || {
@@ -275,21 +275,21 @@ impl AggregateExecutionEngine {
         Ok(())
     }
 
-    fn get_group<F: Fn() -> ExecutionResult<Value>>(&mut self, group_key: GroupKey, aggregate_index: usize, default_value_fn: F) -> ExecutionResult<&mut Value> {
+    fn get_group_value<F: Fn() -> ExecutionResult<Value>>(&mut self, group_key: GroupKey, aggregate_index: usize, default_value_fn: F) -> ExecutionResult<&mut Value> {
         AggregateExecutionEngine::get_generic_group(
-            &mut self.groups,
+            &mut self.group_values,
             group_key,
             aggregate_index,
             default_value_fn
         )
     }
 
-    fn get_summary_group(&mut self,
-                         group_key: GroupKey,
-                         aggregate_index: usize,
-                         default_value: SummaryGroupValue) -> ExecutionResult<&mut SummaryGroupValue> {
+    fn get_group(&mut self,
+                 group_key: GroupKey,
+                 aggregate_index: usize,
+                 default_value: SummaryGroupValue) -> ExecutionResult<&mut SummaryGroupValue> {
         AggregateExecutionEngine::get_generic_group(
-            &mut self.summary_statistics,
+            &mut self.groups,
             group_key,
             aggregate_index,
             move || Ok(default_value)
@@ -334,19 +334,19 @@ impl AggregateExecutionEngine {
 
             match aggregate.1 {
                 Aggregate::GroupKey(ref column) => {
-                    for group_key in self.groups.keys() {
+                    for group_key in self.group_values.keys() {
                         result_column.push(group_key[group_key_mapping[&column]].clone());
                     }
                 }
                 Aggregate::Count(_, _) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
-                    for subgroups in self.groups.values() {
+                    for subgroups in self.group_values.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_column.push(transform_value(group_value.clone())?);
                         }
                     }
                 }
                 Aggregate::CollectArray(_) => {
-                    for subgroups in self.groups.values() {
+                    for subgroups in self.group_values.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_column.push(transform_value(group_value.clone())?);
                         }
@@ -361,8 +361,8 @@ impl AggregateExecutionEngine {
         let num_rows = result_rows_by_column[0].len();
 
         let mut result_rows = Vec::new();
-        let mut group_key_iterator = self.groups.keys();
-        let mut group_value_iterator = self.groups.values();
+        let mut group_key_iterator = self.group_values.keys();
+        let mut group_value_iterator = self.group_values.values();
 
         let having_aggregates = extract_having_aggregates(aggregate_statement)?;
 
