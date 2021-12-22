@@ -1461,8 +1461,6 @@ fn test_group_by_array_agg1() {
     let result = result.unwrap();
     assert!(result.is_some());
 
-    println!("{:?}", result);
-
     let result = result.unwrap();
 
     assert_eq!(2, result.data.len());
@@ -1543,8 +1541,6 @@ fn test_group_by_array_agg2() {
     let result = result.unwrap();
     assert!(result.is_some());
 
-    println!("{:?}", result);
-
     let result = result.unwrap();
 
     assert_eq!(2, result.data.len());
@@ -1621,6 +1617,4 @@ fn test_count_distinct() {
 
     assert_eq!(1, result.data.len());
     assert_eq!(Value::Int(5), result.data[0].columns[0]);
-
-    println!("{:?}", result);
 }

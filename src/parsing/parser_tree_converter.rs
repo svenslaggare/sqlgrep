@@ -405,125 +405,153 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
     }
 }
 
-fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
+fn transform_aggregate(mut tree: ParserExpressionTree, aggregate_index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
     if count_aggregates_in_expression(&tree) > 1 {
         return Err(ConvertParserTreeErrorType::TooManyAggregates.with_location(tree.location));
     }
 
-    let mut aggregate = Box::new(ParserExpressionTreeData::ColumnAccess("$agg".to_owned()).with_location(tree.location.clone()));
-    match tree.tree {
-        ParserExpressionTreeData::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name), None)),
-        ParserExpressionTreeData::Call { name, mut arguments, distinct } => {
-            let mut aggregate = *aggregate;
-
-            let mut aggregate_in_argument = false;
-            for argument in &mut arguments {
-                if any_aggregates_in_expression(argument) {
-                    std::mem::swap(&mut aggregate, argument);
-                    aggregate_in_argument = true;
-                    break;
-                }
-            }
-
-            if aggregate_in_argument {
-                let (aggregate_name, aggregate, _) = transform_aggregate(aggregate, aggregate_index)?;
-                let transform = transform_expression(
-                    ParserExpressionTreeData::Call { name, arguments, distinct }.with_location(tree.location),
+    let (aggregate, not_transformed) = extract_aggregate(&mut tree);
+    match aggregate {
+        Some(ParserExpressionTreeData::ColumnAccess(name)) => {
+            Ok((Some(name.clone()), Aggregate::GroupKey(name), None))
+        }
+        Some(ParserExpressionTreeData::Call { name, arguments, distinct }) => {
+            let mut result = transform_call_aggregate(tree.location.clone(), &name, arguments, aggregate_index, distinct)?;
+            if !not_transformed {
+                result.2 = Some(transform_expression(
+                    tree,
                     &mut TransformExpressionState::default()
-                )?;
+                )?);
+            }
 
-                Ok((aggregate_name, aggregate, Some(transform)))
+            Ok(result)
+        }
+        _ => { Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(tree.location)) }
+    }
+}
+
+fn extract_aggregate(tree: &mut ParserExpressionTree) -> (Option<ParserExpressionTreeData>, bool) {
+    let tree_location = tree.location.clone();
+    let create_agg_access = || {
+        ParserExpressionTreeData::ColumnAccess("$agg".to_owned()).with_location(tree_location.clone())
+    };
+
+    match &mut tree.tree {
+        ParserExpressionTreeData::ColumnAccess(name) => (Some(ParserExpressionTreeData::ColumnAccess(name.clone())), true),
+        ParserExpressionTreeData::Call { name, arguments, distinct } => {
+            let name_lowercase = name.to_lowercase();
+            if AGGREGATE_FUNCTIONS.contains(&name_lowercase) {
+                (Some(ParserExpressionTreeData::Call { name: name.clone(), arguments: arguments.clone(), distinct: *distinct }), true)
             } else {
-                transform_call_aggregate(tree.location, &name, arguments, aggregate_index, distinct)
+                let mut aggregate = None;
+
+                for argument in arguments {
+                    let (extracted_aggregate, found) = extract_aggregate(argument);
+                    if extracted_aggregate.is_some() {
+                        aggregate = extracted_aggregate;
+                    }
+
+                    if found {
+                        std::mem::swap(&mut create_agg_access(), argument);
+                    }
+                }
+
+                (aggregate, false)
             }
         }
-        ParserExpressionTreeData::BinaryOperator { operator, mut left, mut right } => {
-            if any_aggregates_in_expression(&left) {
-                std::mem::swap(&mut aggregate, &mut left);
-            } else if any_aggregates_in_expression(&right) {
-                std::mem::swap(&mut aggregate, &mut right);
+        ParserExpressionTreeData::BinaryOperator { left, right, .. } => {
+            let (left_aggregate, left_found) = extract_aggregate(left.as_mut());
+            let (right_aggregate, right_found) = extract_aggregate(right.as_mut());
+
+            if left_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), left);
             }
 
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::BinaryOperator { operator, left, right }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
-        }
-        ParserExpressionTreeData::BooleanOperation { operator, mut left, mut right } => {
-            if any_aggregates_in_expression(&left) {
-                std::mem::swap(&mut aggregate, &mut left);
-            } else if any_aggregates_in_expression(&right) {
-                std::mem::swap(&mut aggregate, &mut right);
+            if right_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), right);
             }
 
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::BooleanOperation { operator, left, right }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
+            if left_aggregate.is_some() {
+                (left_aggregate, false)
+            } else {
+                (right_aggregate, false)
+            }
         }
-        ParserExpressionTreeData::UnaryOperator { operator, mut operand } => {
-            if any_aggregates_in_expression(&operand) {
-                std::mem::swap(&mut aggregate, &mut operand);
+        ParserExpressionTreeData::BooleanOperation { left, right, .. } => {
+            let (left_aggregate, left_found) = extract_aggregate(left.as_mut());
+            let (right_aggregate, right_found) = extract_aggregate(right.as_mut());
+
+            if left_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), left);
             }
 
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::UnaryOperator { operator, operand }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
-        }
-        ParserExpressionTreeData::ArrayElementAccess { mut array, mut index } => {
-            if any_aggregates_in_expression(&array) {
-                std::mem::swap(&mut aggregate, &mut array);
-            } else if any_aggregates_in_expression(&index) {
-                std::mem::swap(&mut aggregate, &mut index);
+            if right_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), right);
             }
 
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::ArrayElementAccess { array, index }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
+            if left_aggregate.is_some() {
+                (left_aggregate, false)
+            } else {
+                (right_aggregate, false)
+            }
         }
-        ParserExpressionTreeData::NullableCompare { operator, mut left, mut right } => {
-            if any_aggregates_in_expression(&left) {
-                std::mem::swap(&mut aggregate, &mut left);
-            } else if any_aggregates_in_expression(&right) {
-                std::mem::swap(&mut aggregate, &mut right);
+        ParserExpressionTreeData::UnaryOperator { operand, .. } => {
+            let (aggregate, found) = extract_aggregate(operand.as_mut());
+
+            if found {
+                std::mem::swap(&mut Box::new(create_agg_access()), operand);
             }
 
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::NullableCompare { operator, left, right }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
-
-            Ok((aggregate_name, aggregate, Some(transform)))
+            (aggregate, false)
         }
-        ParserExpressionTreeData::Invert { mut operand } => {
-            if any_aggregates_in_expression(&operand) {
-                std::mem::swap(&mut aggregate, &mut operand);
+        ParserExpressionTreeData::ArrayElementAccess { array, index, .. } => {
+            let (array_aggregate, array_found) = extract_aggregate(array.as_mut());
+            let (index_aggregate, index_found) = extract_aggregate(index.as_mut());
+
+            if array_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), array);
             }
 
-            let (aggregate_name, aggregate, _) = transform_aggregate(*aggregate, aggregate_index)?;
-            let transform = transform_expression(
-                ParserExpressionTreeData::Invert { operand }.with_location(tree.location),
-                &mut TransformExpressionState::default()
-            )?;
+            if index_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), index);
+            }
 
-            Ok((aggregate_name, aggregate, Some(transform)))
+            if array_aggregate.is_some() {
+                (array_aggregate, false)
+            } else {
+                (index_aggregate, false)
+            }
         }
-        _ => { return Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(tree.location)); }
+        ParserExpressionTreeData::NullableCompare { left, right, .. } => {
+            let (left_aggregate, left_found) = extract_aggregate(left.as_mut());
+            let (right_aggregate, right_found) = extract_aggregate(right.as_mut());
+
+            if left_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), left);
+            }
+
+            if right_found {
+                std::mem::swap(&mut Box::new(create_agg_access()), right);
+            }
+
+            if left_aggregate.is_some() {
+                (left_aggregate, false)
+            } else {
+                (right_aggregate, false)
+            }
+        }
+        ParserExpressionTreeData::Invert { operand, .. } => {
+            let (aggregate, found) = extract_aggregate(operand.as_mut());
+
+            if found {
+                std::mem::swap(&mut Box::new(create_agg_access()), operand);
+            }
+
+            (aggregate, false)
+        }
+        _ => {
+            (None, false)
+        }
     }
 }
 
