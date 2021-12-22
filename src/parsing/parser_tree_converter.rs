@@ -370,9 +370,9 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
 
             Ok(ExpressionTree::NullableCompare { operator, left, right })
         }
-        ParserExpressionTreeData::Call { name, arguments } => {
+        ParserExpressionTreeData::Call { name, arguments, distinct } => {
             if state.allow_aggregates {
-                match transform_call_aggregate(tree.location.clone(), &name, arguments.clone(), 0) {
+                match transform_call_aggregate(tree.location.clone(), &name, arguments.clone(), 0, distinct) {
                     Ok((_, aggregate, _)) => {
                         let aggregate_index = state.next_aggregate_index;
                         state.next_aggregate_index += 1;
@@ -412,7 +412,7 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
     let mut aggregate = Box::new(ParserExpressionTreeData::ColumnAccess("$agg".to_owned()).with_location(tree.location.clone()));
     match tree.tree {
         ParserExpressionTreeData::ColumnAccess(name) => Ok((Some(name.clone()), Aggregate::GroupKey(name), None)),
-        ParserExpressionTreeData::Call { name, mut arguments } => {
+        ParserExpressionTreeData::Call { name, mut arguments, distinct } => {
             let mut aggregate = *aggregate;
 
             let mut aggregate_in_argument = false;
@@ -427,13 +427,13 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
             if aggregate_in_argument {
                 let (aggregate_name, aggregate, _) = transform_aggregate(aggregate, aggregate_index)?;
                 let transform = transform_expression(
-                    ParserExpressionTreeData::Call { name, arguments }.with_location(tree.location),
+                    ParserExpressionTreeData::Call { name, arguments, distinct }.with_location(tree.location),
                     &mut TransformExpressionState::default()
                 )?;
 
                 Ok((aggregate_name, aggregate, Some(transform)))
             } else {
-                transform_call_aggregate(tree.location, &name, arguments, aggregate_index)
+                transform_call_aggregate(tree.location, &name, arguments, aggregate_index, distinct)
             }
         }
         ParserExpressionTreeData::BinaryOperator { operator, mut left, mut right } => {
@@ -529,19 +529,22 @@ fn transform_aggregate(tree: ParserExpressionTree, aggregate_index: usize) -> Re
 fn transform_call_aggregate(location: TokenLocation,
                             name: &str,
                             mut arguments: Vec<ParserExpressionTree>,
-                            index: usize) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
+                            index: usize,
+                            distinct: Option<bool>) -> Result<(Option<String>, Aggregate, Option<ExpressionTree>), ConvertParserTreeError> {
     let name_lowercase = name.to_lowercase();
     if name_lowercase == "count" {
+        let distinct = distinct.unwrap_or(false);
+
         let default_name = Some(format!("count{}", index));
         if arguments.is_empty() {
-            Ok((default_name, Aggregate::Count(None), None))
+            Ok((default_name, Aggregate::Count(None, distinct), None))
         } else if arguments.len() == 1 {
             let argument = arguments.remove(0);
             let location = argument.location.clone();
             let expression = transform_expression(argument, &mut TransformExpressionState::default())?;
             match expression {
-                ExpressionTree::Wildcard => Ok((default_name, Aggregate::Count(None), None)),
-                ExpressionTree::ColumnAccess(column) => Ok((default_name, Aggregate::Count(Some(column)), None)),
+                ExpressionTree::Wildcard => Ok((default_name, Aggregate::Count(None, distinct), None)),
+                ExpressionTree::ColumnAccess(column) => Ok((default_name, Aggregate::Count(Some(column), distinct), None)),
                 _ => { Err(ConvertParserTreeErrorType::ExpectedColumnAccess.with_location(location)) }
             }
         } else {
@@ -582,7 +585,7 @@ fn count_aggregates_in_expression(expression: &ParserExpressionTree) -> usize {
     let mut num_aggregates = 0;
     expression.tree.visit::<(), _>(&mut |expr| {
         match expr {
-            ParserExpressionTreeData::Call { name, arguments: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => {
+            ParserExpressionTreeData::Call { name, arguments: _, distinct: _ } if AGGREGATE_FUNCTIONS.contains(&name.to_lowercase()) => {
                 num_aggregates += 1;
             }
             _ => {}
@@ -825,7 +828,8 @@ fn test_select_statement7() {
                     arguments: vec![
                         ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()),
                         ParserExpressionTreeData::ColumnAccess("y".to_owned()).with_location(Default::default())
-                    ]
+                    ],
+                    distinct: None
                 }.with_location(Default::default())
             )
         ],
@@ -961,7 +965,8 @@ fn test_aggregate_statement1() {
                 None,
                 ParserExpressionTreeData::Call {
                     name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                    distinct: None
                 }.with_location(Default::default())
             )
         ],
@@ -987,7 +992,6 @@ fn test_aggregate_statement1() {
     assert_eq!("max1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
 
-
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
 }
@@ -1002,7 +1006,8 @@ fn test_aggregate_statement2() {
                 None,
                 ParserExpressionTreeData::Call {
                     name: "SUM".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                    distinct: None
                 }.with_location(Default::default())
             ),
         ],
@@ -1039,7 +1044,7 @@ fn test_aggregate_statement3() {
         location: Default::default(),
         projections: vec![
             (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-            (None, ParserExpressionTreeData::Call { name: "COUNT".to_owned(), arguments: vec![] }.with_location(Default::default()) ),
+            (None, ParserExpressionTreeData::Call { name: "COUNT".to_owned(), arguments: vec![], distinct: None }.with_location(Default::default()) ),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -1061,7 +1066,7 @@ fn test_aggregate_statement3() {
     assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
 
     assert_eq!("count1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Count(None), statement.aggregates[1].1);
+    assert_eq!(Aggregate::Count(None, false), statement.aggregates[1].1);
 
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
@@ -1072,7 +1077,7 @@ fn test_aggregate_statement4() {
     let tree = ParserOperationTree::Select {
         location: Default::default(),
         projections: vec![
-            (None, ParserExpressionTreeData::Call { name: "COUNT".to_owned(), arguments: vec![] }.with_location(Default::default()) ),
+            (None, ParserExpressionTreeData::Call { name: "COUNT".to_owned(), arguments: vec![], distinct: None }.with_location(Default::default()) ),
         ],
         from: ("test".to_string(), None),
         filter: None,
@@ -1091,7 +1096,7 @@ fn test_aggregate_statement4() {
 
     assert_eq!(1, statement.aggregates.len());
     assert_eq!("count0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Count(None), statement.aggregates[0].1);
+    assert_eq!(Aggregate::Count(None, false), statement.aggregates[0].1);
 }
 
 #[test]
@@ -1103,7 +1108,8 @@ fn test_aggregate_statement5() {
                 None,
                 ParserExpressionTreeData::Call {
                     name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                    distinct: None
                 }.with_location(Default::default())
             ),
         ],
@@ -1136,7 +1142,8 @@ fn test_aggregate_statement6() {
                 None,
                 ParserExpressionTreeData::Call {
                     name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                    distinct: None
                 }.with_location(Default::default())
             ),
         ],
@@ -1158,7 +1165,8 @@ fn test_aggregate_statement6() {
                         operator: Operator::Single('>'),
                         left: Box::new(ParserExpressionTreeData::Call {
                             name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                            distinct: None
                         }.with_location(Default::default())),
                         right: Box::new(ParserExpressionTreeData::Value(Value::Int(2000)).with_location(Default::default())),
                     }.with_location(Default::default())
@@ -1211,7 +1219,8 @@ fn test_aggregate_statement7() {
                     left: Box::new(
                         ParserExpressionTreeData::Call {
                             name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                            distinct: None
                         }.with_location(Default::default())
                     ),
                     right: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default()))
@@ -1258,7 +1267,8 @@ fn test_aggregate_statement8() {
                     left: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default())),
                     right: Box::new(ParserExpressionTreeData::Call {
                         name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                        distinct: None
                     }.with_location(Default::default())),
                 }.with_location(Default::default())
             ),
@@ -1303,9 +1313,11 @@ fn test_aggregate_statement9() {
                     arguments: vec![
                         ParserExpressionTreeData::Call {
                             name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                            distinct: None
                         }.with_location(Default::default())
-                    ]
+                    ],
+                    distinct: None
                 }.with_location(Default::default())
             ),
         ],
@@ -1348,13 +1360,16 @@ fn test_aggregate_statement10() {
                     arguments: vec![
                         ParserExpressionTreeData::Call {
                             name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                            distinct: None
                         }.with_location(Default::default()),
                         ParserExpressionTreeData::Call {
                             name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                            distinct: None
                         }.with_location(Default::default())
-                    ]
+                    ],
+                    distinct: None
                 }.with_location(Default::default())
             ),
         ],
@@ -1367,6 +1382,47 @@ fn test_aggregate_statement10() {
 
     let statement = transform_statement(tree);
     assert_eq!(Some(ConvertParserTreeErrorType::TooManyAggregates.with_location(Default::default())), statement.err());
+}
+
+#[test]
+fn test_aggregate_statement11() {
+    let tree = ParserOperationTree::Select {
+        location: Default::default(),
+        projections: vec![
+            (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
+            (
+                None,
+                ParserExpressionTreeData::Call {
+                    name: "COUNT".to_owned(),
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                    distinct: Some(true)
+                }.with_location(Default::default())
+            )
+        ],
+        from: ("test".to_string(), None),
+        filter: None,
+        group_by: Some(vec!["x".to_owned()]),
+        having: None,
+        join: None
+    };
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(2, statement.aggregates.len());
+    assert_eq!("x", statement.aggregates[0].0);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
+
+    assert_eq!("count1", statement.aggregates[1].0);
+    assert_eq!(Aggregate::Count(Some("x".to_owned()), true), statement.aggregates[1].1);
+
+    assert_eq!("test", statement.from);
+    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
 }
 
 #[test]

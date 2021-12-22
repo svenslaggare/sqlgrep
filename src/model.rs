@@ -359,7 +359,7 @@ pub enum Function {
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum Aggregate {
     GroupKey(String),
-    Count(Option<String>),
+    Count(Option<String>, bool),
     Min(ExpressionTree),
     Max(ExpressionTree),
     Average(ExpressionTree),
@@ -418,7 +418,7 @@ impl ExpressionTree {
             }
             ExpressionTree::Aggregate(_, aggregate) => {
                 match aggregate.as_ref() {
-                    Aggregate::GroupKey(_) | Aggregate::Count(_) => {}
+                    Aggregate::GroupKey(_) | Aggregate::Count(_, _) => {}
                     Aggregate::Min(expression) => {
                         expression.visit(f)?;
                     }

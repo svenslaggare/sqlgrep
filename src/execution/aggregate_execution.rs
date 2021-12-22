@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 use fnv::FnvHasher;
@@ -11,9 +11,15 @@ use crate::model::{Aggregate, AggregateStatement, CompareOperator, ExpressionTre
 type GroupKey = Vec<Value>;
 type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
 
+enum SummaryGroupValue {
+    Sum(Value),
+    Average(Value, i64),
+    CountDistinct(HashSet<Value>)
+}
+
 pub struct AggregateExecutionEngine {
     groups: Groups<Value>,
-    summary_statistics: Groups<(Value, i64)>
+    summary_statistics: Groups<SummaryGroupValue>
 }
 
 impl AggregateExecutionEngine {
@@ -92,12 +98,29 @@ impl AggregateExecutionEngine {
                 Aggregate::GroupKey(group_column) => {
                     validate_group_key(group_column)?;
                 }
-                Aggregate::Count(column) => {
-                    let valid = if let Some(column) = column{
-                        row.get(column).ok_or_else(|| ExecutionError::ColumnNotFound(column.clone()))?.is_not_null()
+                Aggregate::Count(column, distinct) => {
+                    if column.is_none() && *distinct {
+                        return Err(ExecutionError::DistinctRequiresColumn);
+                    }
+
+                    let (mut valid, column_value) = if let Some(column) = column {
+                        let column_value = row.get(column).ok_or_else(|| ExecutionError::ColumnNotFound(column.clone()))?;
+                        (column_value.is_not_null(), Some(column_value))
                     } else {
-                        true
+                        (true, None)
                     };
+
+                    if valid && *distinct {
+                        let count_distinct_entry = self.get_summary_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::CountDistinct(HashSet::new())
+                        )?;
+
+                        if let SummaryGroupValue::CountDistinct(values) = count_distinct_entry {
+                            valid = values.insert(column_value.cloned().unwrap());
+                        }
+                    }
 
                     if valid {
                         self.get_group(group_key.clone(), aggregate_index, || Ok(Value::Int(0)))?.modify(
@@ -140,50 +163,63 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let average_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type)?;
-                    average_entry.0.modify_same_type(
-                        &column_value,
-                        |x, y| { *x += y },
-                        |x, y| { *x += y },
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                    );
-                    average_entry.1 += 1;
+                    let average_entry = self.get_summary_group(
+                        group_key.clone(),
+                        aggregate_index,
+                        SummaryGroupValue::Average(value_type.default_value(), 0)
+                    )?;
 
-                    let average = average_entry.0.map(
-                        || None,
-                        |x| Some(x / average_entry.1),
-                        |x| Some(x / average_entry.1 as f64),
-                        |_| None,
-                        |_| None,
-                        |_| None,
-                        |_| None,
-                    );
+                    if let SummaryGroupValue::Average(sum, count) = average_entry {
+                        sum.modify_same_type(
+                            &column_value,
+                            |x, y| { *x += y },
+                            |x, y| { *x += y },
+                            |_, _| {},
+                            |_, _| {},
+                            |_, _| {},
+                            |_, _| {},
+                        );
+                        *count += 1;
 
-                    if let Some(average) = average {
-                        *self.get_group(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
+                        let average = sum.map(
+                            || None,
+                            |x| Some(x / *count),
+                            |x| Some(x / *count as f64),
+                            |_| None,
+                            |_| None,
+                            |_| None,
+                            |_| None,
+                        );
+
+                        if let Some(average) = average {
+                            *self.get_group(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
+                        }
                     }
                 }
                 Aggregate::Sum(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let sum_entry = self.get_summary_group(group_key.clone(), aggregate_index, value_type)?;
-                    sum_entry.0.modify_same_type(
-                        &column_value,
-                        |x, y| { *x += y },
-                        |x, y| { *x += y },
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                    );
-                    sum_entry.1 += 1;
+                    let sum_entry = self.get_summary_group(
+                        group_key.clone(),
+                        aggregate_index,
+                        SummaryGroupValue::Sum(value_type.default_value())
+                    )?;
 
-                    let sum = sum_entry.0.clone();
-                    *self.get_group(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                    if let SummaryGroupValue::Sum(sum) = sum_entry {
+                        sum.modify_same_type(
+                            &column_value,
+                            |x, y| { *x += y },
+                            |x, y| { *x += y },
+                            |_, _| {},
+                            |_, _| {},
+                            |_, _| {},
+                            |_, _| {},
+                        );
+
+                        let sum = sum.clone();
+                        *self.get_group(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                    }
                 }
                 Aggregate::CollectArray(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
@@ -248,19 +284,22 @@ impl AggregateExecutionEngine {
         )
     }
 
-    fn get_summary_group(&mut self, group_key: GroupKey, aggregate_index: usize, value_type: ValueType) -> ExecutionResult<&mut (Value, i64)> {
+    fn get_summary_group(&mut self,
+                         group_key: GroupKey,
+                         aggregate_index: usize,
+                         default_value: SummaryGroupValue) -> ExecutionResult<&mut SummaryGroupValue> {
         AggregateExecutionEngine::get_generic_group(
             &mut self.summary_statistics,
             group_key,
             aggregate_index,
-            || Ok((value_type.default_value(), 0))
+            move || Ok(default_value)
         )
     }
 
-    fn get_generic_group<T, F: Fn() -> ExecutionResult<T>>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
-                                                           group_key: GroupKey,
-                                                           aggregate_index: usize,
-                                                           default_value_fn: F) -> ExecutionResult<&mut T> {
+    fn get_generic_group<T, F: FnOnce() -> ExecutionResult<T>>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
+                                                               group_key: GroupKey,
+                                                               aggregate_index: usize,
+                                                               default_value_fn: F) -> ExecutionResult<&mut T> {
         let group_map = groups.entry(group_key).or_insert_with(|| HashMap::new());
         if !group_map.contains_key(&aggregate_index) {
             group_map.insert(aggregate_index, default_value_fn()?);
@@ -299,7 +338,7 @@ impl AggregateExecutionEngine {
                         result_column.push(group_key[group_key_mapping[&column]].clone());
                     }
                 }
-                Aggregate::Count(_) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
+                Aggregate::Count(_, _) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
                     for subgroups in self.groups.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_column.push(transform_value(group_value.clone())?);
@@ -430,7 +469,7 @@ fn test_group_by_and_count() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -498,7 +537,7 @@ fn test_group_by_and_count2() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(Some("x".to_owned())), None)
+            ("count".to_owned(), Aggregate::Count(Some("x".to_owned()), false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -548,7 +587,7 @@ fn test_group_by_and_count3() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -602,7 +641,7 @@ fn test_group_by_and_count_and_filter() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -771,7 +810,7 @@ fn test_group_by_and_count_and_max() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None),
+            ("count".to_owned(), Aggregate::Count(None, false), None),
             ("max".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), None)
         ],
         from: "test".to_owned(),
@@ -1010,7 +1049,7 @@ fn test_count() {
 
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1056,7 +1095,7 @@ fn test_group_by_and_count_and_having1() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1121,7 +1160,7 @@ fn test_group_by_and_count_and_having2() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1186,7 +1225,7 @@ fn test_group_by_and_count_and_having3() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1195,7 +1234,7 @@ fn test_group_by_and_count_and_having3() {
         having: Some(
             ExpressionTree::Compare {
                 operator: CompareOperator::GreaterThan,
-                left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count(None)))),
+                left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count(None, false)))),
                 right: Box::new(ExpressionTree::Value(Value::Int(1)))
             }
         ),
@@ -1277,7 +1316,7 @@ fn test_group_by_and_count_and_having4() {
     let aggregate_statement = AggregateStatement {
         aggregates: vec![
             ("x".to_owned(), Aggregate::GroupKey("x".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None)
+            ("count".to_owned(), Aggregate::Count(None, false), None)
         ],
         from: "test".to_owned(),
         filename: None,
@@ -1288,7 +1327,7 @@ fn test_group_by_and_count_and_having4() {
                 operator: BooleanOperator::And,
                 left: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::GreaterThan,
-                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count(None)))),
+                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::Count(None, false)))),
                     right: Box::new(ExpressionTree::Value(Value::Int(1)))
                 }),
                 right: Box::new(ExpressionTree::Compare {
@@ -1520,4 +1559,68 @@ fn test_group_by_array_agg2() {
         Value::Array(ValueType::Int, vec![Value::Int(300), Value::Int(301), Value::Int(302), Value::Int(303), Value::Int(304)]),
         result.data[1].columns[1]
     );
+}
+
+#[test]
+fn test_count_distinct() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("count".to_owned(), Aggregate::Count(Some("x".to_owned()), true), None)
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: None,
+        having: None,
+        join: None,
+    };
+
+    for i in 1..6 {
+        let column_values = vec![Value::Int(i * 1000)];
+        let columns = create_test_columns(vec!["x"], &column_values);
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(columns.clone()),
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    for i in 1..3 {
+        let column_values = vec![Value::Int(i * 1000)];
+        let columns = create_test_columns(vec!["x"], &column_values);
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(columns.clone()),
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![Value::Int(1000)];
+    let columns = create_test_columns(vec!["x"], &column_values);
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(columns.clone()),
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(1, result.data.len());
+    assert_eq!(Value::Int(5), result.data[0].columns[0]);
+
+    println!("{:?}", result);
 }

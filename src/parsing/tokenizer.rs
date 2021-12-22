@@ -30,7 +30,8 @@ pub enum Keyword {
     Join,
     On,
     Extract,
-    Default
+    Default,
+    Distinct
 }
 
 impl std::fmt::Display for Keyword {
@@ -260,6 +261,7 @@ lazy_static! {
             ("on".to_owned(), Keyword::On),
             ("extract".to_owned(), Keyword::Extract),
             ("default".to_owned(), Keyword::Default),
+            ("distinct".to_owned(), Keyword::Distinct),
         ].into_iter()
     );
 

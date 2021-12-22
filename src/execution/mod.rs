@@ -138,7 +138,8 @@ pub enum ExecutionError {
     NotSupportedOperation,
     JoinNotSupported,
     FailOpenFile(String),
-    CannotCreateArrayOfNullType
+    CannotCreateArrayOfNullType,
+    DistinctRequiresColumn
 }
 
 impl From<EvaluationError> for ExecutionError {
@@ -169,6 +170,7 @@ impl std::fmt::Display for ExecutionError {
             ExecutionError::JoinNotSupported => { write!(f, "Join clause not supported") },
             ExecutionError::FailOpenFile(err) => { write!(f, "Failed open file due to: {}", err) },
             ExecutionError::CannotCreateArrayOfNullType => { write!(f, "Cannot create array of null type") },
+            ExecutionError::DistinctRequiresColumn => { write!(f, "COUNT(DISTINCT) requires a column") },
         }
     }
 }

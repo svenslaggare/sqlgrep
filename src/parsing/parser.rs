@@ -39,7 +39,7 @@ pub enum ParserExpressionTreeData {
     UnaryOperator { operator: Operator, operand: Box<ParserExpressionTree>},
     Invert { operand: Box<ParserExpressionTree> },
     NullableCompare { operator: NullableCompareOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
-    Call { name: String, arguments: Vec<ParserExpressionTree> },
+    Call { name: String, arguments: Vec<ParserExpressionTree>, distinct: Option<bool> },
     ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> }
 }
 
@@ -781,6 +781,16 @@ impl<'a> Parser<'a> {
         }
 
         self.next()?;
+
+        let mut distinct = None;
+        if identifier.to_lowercase() == "count" {
+            distinct = Some(false);
+            if let Token::Keyword(Keyword::Distinct) = self.current() {
+                distinct = Some(true);
+                self.next()?;
+            }
+        }
+
         let mut arguments = Vec::<ParserExpressionTree>::new();
 
         match self.current() {
@@ -800,7 +810,13 @@ impl<'a> Parser<'a> {
         }
 
         self.next()?;
-        return Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Call {name: identifier, arguments }));
+
+        Ok(
+            ParserExpressionTree::new(
+                token_location,
+                ParserExpressionTreeData::Call { name: identifier, arguments, distinct }
+            )
+        )
     }
 
     fn parse_unary_operator(&mut self) -> ParserResult<ParserExpressionTree> {
@@ -853,7 +869,8 @@ impl<'a> Parser<'a> {
                 token_location,
                 ParserExpressionTreeData::Call {
                     name: format!("timestamp_extract_{}", identifier.to_lowercase()),
-                    arguments: vec![from_expression]
+                    arguments: vec![from_expression],
+                    distinct: None
                 }
             )
         )
@@ -1145,7 +1162,8 @@ fn test_parse_expression4() {
             arguments: vec![
                 ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()),
                 ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default()),
-            ]
+            ],
+            distinct: None
         },
         tree.tree
     );
@@ -1381,7 +1399,37 @@ fn test_parse_expression12() {
     assert_eq!(
         ParserExpressionTreeData::Call {
             name: "timestamp_extract_epoch".to_string(),
-            arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())]
+            arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())],
+            distinct: None
+        },
+        tree.tree
+    );
+}
+
+#[test]
+fn test_parse_expression13() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::from_plain_tokens(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Identifier("COUNT".to_owned()),
+            Token::LeftParentheses,
+            Token::Keyword(Keyword::Distinct),
+            Token::Identifier("timestamp".to_string()),
+            Token::RightParentheses,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParserExpressionTreeData::Call {
+            name: "COUNT".to_string(),
+            arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())],
+            distinct: Some(true)
         },
         tree.tree
     );
@@ -1579,7 +1627,8 @@ fn test_parse_select_and_filter3() {
                 None,
                 ParserExpressionTreeData::Call {
                     name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                    distinct: None
                 }.with_location(Default::default())
             )],
             from: ("test".to_string(), None),
@@ -1636,7 +1685,8 @@ fn test_parse_select_and_filter4() {
                         operator: Operator::Single('*'),
                         left: Box::new(ParserExpressionTreeData::Call {
                             name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())]
+                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
+                            distinct: None
                         }.with_location(Default::default())),
                         right: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default()))
                     }.with_location(Default::default())
@@ -2610,7 +2660,8 @@ fn test_parse_str1() {
                     None,
                     ParserExpressionTreeData::Call {
                         name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))]
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))],
+                        distinct: None
                     }.with_location(TokenLocation::new(0, 13))
                 )
             ],
@@ -2643,7 +2694,8 @@ fn test_parse_str2() {
                     None,
                     ParserExpressionTreeData::Call {
                         name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))]
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))],
+                        distinct: None
                     }.with_location(TokenLocation::new(0, 13))
                 )
                 ],
@@ -2751,7 +2803,8 @@ fn test_parse_str4() {
                     None,
                     ParserExpressionTreeData::Call {
                         name: "MAX".to_string(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))]
+                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))],
+                        distinct: None
                     }.with_location(TokenLocation::new(0, 13))
                 )
             ],
