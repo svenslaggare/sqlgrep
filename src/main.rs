@@ -17,6 +17,7 @@ use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFo
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 use sqlgrep::parsing;
 use sqlgrep::parsing::tokenizer::keywords_list;
+use sqlgrep::helpers::TablePrinter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -125,6 +126,35 @@ fn execute(command_line_input: &CommandLineInput,
            single_result: bool) -> bool {
     if query_line == "exit" {
         return true;
+    }
+
+    if query_line.starts_with("\\d") {
+        let parts = query_line.split(" ").collect::<Vec<_>>();
+        if let Some(table) = parts.get(1) {
+            let table = tables.get(table).unwrap();
+            let mut table_printer = TablePrinter::new(vec!["Column".to_owned(), "Type".to_owned(), "Nullable".to_owned(), "Default value".to_owned()]);
+            for column in &table.columns {
+                table_printer.add_row(vec![
+                    column.name.clone(),
+                    column.column_type.to_string(),
+                    column.options.nullable.to_string(),
+                    column.default_value().to_string()
+                ])
+            }
+
+            table_printer.print();
+        } else {
+            let mut table_printer = TablePrinter::new(vec!["Table".to_owned()]);
+            for table in tables.tables() {
+                table_printer.add_row(vec![
+                    table.name.clone()
+                ])
+            }
+
+            table_printer.print();
+        }
+
+        return false;
     }
 
     running.store(true, Ordering::SeqCst);
@@ -274,6 +304,10 @@ struct InputValidator {
 impl Validator for InputValidator {
     fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
         let input = ctx.input();
+        if input == "exit" || input.starts_with("\\d") {
+            return Ok(ValidationResult::Valid(None));
+        }
+
         if !input.ends_with(';') {
             Ok(ValidationResult::Incomplete)
         } else {
