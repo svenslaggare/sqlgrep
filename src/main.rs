@@ -63,8 +63,9 @@ fn main() {
         execute(&command_line_input, &mut tables, running.clone(), command, true);
     } else {
         let mut line_editor = Editor::new();
+
         let validator = InputValidator {
-            completion_words: keywords_list(true)
+            completion_words: create_completion_words(&tables)
         };
 
         line_editor.set_helper(Some(validator));
@@ -246,6 +247,25 @@ fn parse_statement(line: &str) -> Option<Statement> {
     }
 }
 
+fn create_completion_words(tables: &Tables) -> Vec<String> {
+    let mut completion_words = keywords_list(true);
+    completion_words.push("COUNT".to_owned());
+    completion_words.push("SUM".to_owned());
+    completion_words.push("MAX".to_owned());
+    completion_words.push("MIN".to_owned());
+    completion_words.push("ARRAY_AGG".to_owned());
+
+    for table in tables.tables() {
+        completion_words.push(table.name.clone());
+
+        for column in &table.columns {
+            completion_words.push(column.name.clone());
+        }
+    }
+
+    completion_words
+}
+
 #[derive(Helper, Highlighter, Hinter)]
 struct InputValidator {
     completion_words: Vec<String>
@@ -281,11 +301,14 @@ impl Completer for InputValidator {
         }
 
         let current_word_length = current_word.len();
-        let current_word = String::from_iter(current_word.into_iter().rev()).to_uppercase();
+        let current_word = String::from_iter(current_word.into_iter().rev());
+        let current_word_uppercase = current_word.to_uppercase();
 
         let mut results = Vec::new();
         for completion in &self.completion_words {
-            if completion.starts_with(&current_word) {
+            if completion.starts_with(&current_word_uppercase) {
+                results.push(Pair { display: completion.to_owned(), replacement: completion.to_owned() });
+            } else if completion.starts_with(&current_word) {
                 results.push(Pair { display: completion.to_owned(), replacement: completion.to_owned() });
             }
         }

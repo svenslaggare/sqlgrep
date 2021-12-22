@@ -480,6 +480,10 @@ impl Tables {
     pub fn get(&self, name: &str) -> Option<&TableDefinition> {
         self.tables.get(name)
     }
+
+    pub fn tables(&self) -> impl Iterator<Item=&TableDefinition> {
+        self.tables.values()
+    }
 }
 
 #[test]
