@@ -795,8 +795,10 @@ impl<'a> Parser<'a> {
         self.next()?;
 
         let token_location = self.current_location();
+        let mut is_create_array = false;
         match self.current() {
             Token::LeftParentheses => (),
+            Token::LeftSquareParentheses if identifier.to_lowercase() == "array" => { is_create_array = true; },
             _ => return Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::ColumnAccess(identifier)))
         }
 
@@ -813,30 +815,57 @@ impl<'a> Parser<'a> {
 
         let mut arguments = Vec::<ParserExpressionTree>::new();
 
-        match self.current() {
-            Token::RightParentheses => (),
-            _ => {
-                loop {
-                    arguments.push(self.parse_expression_internal()?);
-                    match self.current() {
-                        Token::RightParentheses => { break; }
-                        Token::Comma => {}
-                        _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
-                    }
+        if !is_create_array {
+            match self.current() {
+                Token::RightParentheses => (),
+                _ => {
+                    loop {
+                        arguments.push(self.parse_expression_internal()?);
+                        match self.current() {
+                            Token::RightParentheses => { break; }
+                            Token::Comma => {}
+                            _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
+                        }
 
-                    self.next()?;
+                        self.next()?;
+                    }
                 }
             }
-        }
 
-        self.next()?;
+            self.next()?;
 
-        Ok(
-            ParserExpressionTree::new(
-                token_location,
-                ParserExpressionTreeData::Call { name: identifier, arguments, distinct }
+            Ok(
+                ParserExpressionTree::new(
+                    token_location,
+                    ParserExpressionTreeData::Call { name: identifier, arguments, distinct }
+                )
             )
-        )
+        } else {
+            match self.current() {
+                Token::RightSquareParentheses => (),
+                _ => {
+                    loop {
+                        arguments.push(self.parse_expression_internal()?);
+                        match self.current() {
+                            Token::RightSquareParentheses => { break; }
+                            Token::Comma => {}
+                            _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
+                        }
+
+                        self.next()?;
+                    }
+                }
+            }
+
+            self.next()?;
+
+            Ok(
+                ParserExpressionTree::new(
+                    token_location,
+                    ParserExpressionTreeData::Call { name: "create_array".to_owned(), arguments, distinct }
+                )
+            )
+        }
     }
 
     fn parse_unary_operator(&mut self) -> ParserResult<ParserExpressionTree> {
@@ -1450,6 +1479,40 @@ fn test_parse_expression13() {
             name: "COUNT".to_string(),
             arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())],
             distinct: Some(true)
+        },
+        tree.tree
+    );
+}
+
+#[test]
+fn test_parse_expression14() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+
+    let mut parser = Parser::from_plain_tokens(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::Identifier("array".to_string()),
+            Token::LeftSquareParentheses,
+            Token::Int(1337),
+            Token::Comma,
+            Token::Int(4711),
+            Token::RightSquareParentheses,
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParserExpressionTreeData::Call {
+            name: "create_array".to_string(),
+            arguments: vec![
+                ParserExpressionTreeData::Value(Value::Int(1337)).with_location(Default::default()),
+                ParserExpressionTreeData::Value(Value::Int(4711)).with_location(Default::default())
+            ],
+            distinct: None
         },
         tree.tree
     );

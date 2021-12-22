@@ -289,7 +289,7 @@ impl Completer for InputValidator {
         &self,
         line: &str,
         pos: usize,
-        ctx: &Context<'_>,
+        _ctx: &Context<'_>,
     ) -> Result<(usize, Vec<Pair>), ReadlineError> {
         let mut current_word = Vec::new();
         for char in line.chars().rev() {

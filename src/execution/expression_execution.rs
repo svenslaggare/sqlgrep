@@ -17,19 +17,22 @@ use crate::execution::{ColumnProvider};
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
     ColumnNotFound(String),
+    TypeError(ValueType, ValueType),
     GroupKeyNotFound,
     GroupValueNotFound,
     UndefinedOperation,
     UndefinedFunction(Function, Vec<Option<ValueType>>),
     InvalidRegex(String),
     ExpectedArray(Option<ValueType>),
-    ExpectedArrayIndexingToBeInt(Option<ValueType>)
+    ExpectedArrayIndexingToBeInt(Option<ValueType>),
+    ExpectedArrayElementType
 }
 
 impl std::fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EvaluationError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name)  }
+            EvaluationError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name) }
+            EvaluationError::TypeError(expected, actual) => { write!(f, "Expected type '{}' but got type {}", expected, actual) }
             EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
             EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
             EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
@@ -44,6 +47,7 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
             EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
             EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
+            EvaluationError::ExpectedArrayElementType => { write!(f, "Expected an element with type") }
         }
     }
 }
@@ -285,6 +289,21 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             (Value::Null, Value::String(_)) => Ok(Value::Bool(false)),
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
+                    }
+                    Function::CreateArray => {
+                        let possible_types = executed_arguments.iter().map(|item| item.value_type()).flatten().collect::<Vec<_>>();
+                        if possible_types.is_empty() {
+                            return Err(EvaluationError::ExpectedArrayElementType);
+                        }
+
+                        let array_type = possible_types[0].clone();
+                        for element_type in possible_types {
+                            if array_type != element_type {
+                                return Err(EvaluationError::TypeError(array_type.clone(), element_type));
+                            }
+                        }
+
+                        Ok(Value::Array(array_type, executed_arguments))
                     }
                     Function::ArrayUnique if arguments.len() == 1 => {
                         let arg = executed_arguments.remove(0);
@@ -762,6 +781,51 @@ fn test_array_access2() {
         expression_execution_engine.evaluate(&ExpressionTree::ArrayElementAccess {
             array: Box::new(ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(10), Value::Int(20), Value::Int(30), Value::Int(40)]))),
             index: Box::new(ExpressionTree::Value(Value::Int(24)))
+        })
+    );
+}
+
+#[test]
+fn test_create_array1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Array(ValueType::Int, vec![Value::Int(1337), Value::Int(4711)])),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::CreateArray,
+            arguments: vec![ExpressionTree::Value(Value::Int(1337)), ExpressionTree::Value(Value::Int(4711))]
+        })
+    );
+}
+
+#[test]
+fn test_create_array2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Array(ValueType::Int, vec![Value::Int(1337), Value::Null])),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::CreateArray,
+            arguments: vec![ExpressionTree::Value(Value::Int(1337)), ExpressionTree::Value(Value::Null)]
+        })
+    );
+}
+
+#[test]
+fn test_create_array3() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Err(EvaluationError::ExpectedArrayElementType),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::CreateArray,
+            arguments: vec![ExpressionTree::Value(Value::Null)]
         })
     );
 }

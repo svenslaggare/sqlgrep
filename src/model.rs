@@ -343,6 +343,7 @@ pub enum Function {
     StringToUpper,
     StringToLower,
     RegexMatches,
+    CreateArray,
     ArrayUnique,
     ArrayLength,
     TimestampNow,
@@ -353,7 +354,7 @@ pub enum Function {
     TimestampExtractDay,
     TimestampExtractHour,
     TimestampExtractSecond,
-    TimestampExtractMinute
+    TimestampExtractMinute,
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
