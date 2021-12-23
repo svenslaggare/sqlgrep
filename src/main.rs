@@ -22,19 +22,19 @@ use sqlgrep::helpers::TablePrinter;
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
 struct CommandLineInput {
-    #[structopt(name="input_filename", help="The input file")]
+    #[structopt(name="input_filename", help="The input file.")]
     input_file: Vec<String>,
-    #[structopt(short, long("data-file"), help="The data definition file")]
+    #[structopt(short, long("data-file"), help="The data definition file.")]
     data_definition_file: Option<String>,
-    #[structopt(short("f"), long("follow"), help="Follows the input file")]
+    #[structopt(short("f"), long("follow"), help="Follows the input file.")]
     follow: bool,
-    #[structopt(long, help="Starts following the file from the start instead of the end")]
+    #[structopt(long, help="Starts following the file from the start instead of the end.")]
     head: bool,
-    #[structopt(short, long, help="Executes the given query")]
+    #[structopt(short, long, help="Executes the given query.")]
     command: Option<String>,
-    #[structopt(long, help="Displays the execution statistics of queries")]
+    #[structopt(long, help="Displays the execution statistics of queries.")]
     show_run_stats: bool,
-    #[structopt(long, help="The input data is given on stdin")]
+    #[structopt(long, help="The input data is given on stdin.")]
     stdin: bool,
     #[structopt(long, help="The output format. Supported values: text, json, csv.", default_value="text")]
     format: String
