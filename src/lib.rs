@@ -5,3 +5,7 @@ pub mod execution;
 pub mod ingest;
 pub mod integration_tests;
 pub mod helpers;
+
+pub use model::Statement;
+pub use execution::execution_engine::ExecutionEngine;
+pub use data_model::Tables;

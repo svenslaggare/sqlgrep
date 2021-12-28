@@ -1,7 +1,9 @@
 pub mod tokenizer;
 pub mod operator;
 pub mod parser;
+pub mod parser_tests;
 pub mod parser_tree_converter;
+pub mod parser_tree_converter_tests;
 
 use crate::model::Statement;
 use crate::parsing::parser_tree_converter::{ConvertParserTreeErrorType, ConvertParserTreeError};

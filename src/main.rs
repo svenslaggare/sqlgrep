@@ -11,11 +11,8 @@ use rustyline::error::ReadlineError;
 use rustyline_derive::{Helper, Highlighter, Hinter};
 use rustyline::completion::{Completer, Pair};
 
-use sqlgrep::data_model::{Tables};
-use sqlgrep::model::{Statement};
+use sqlgrep::{parsing, Tables, Statement, ExecutionEngine};
 use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFormat};
-use sqlgrep::execution::execution_engine::ExecutionEngine;
-use sqlgrep::parsing;
 use sqlgrep::parsing::tokenizer::keywords_list;
 use sqlgrep::helpers::TablePrinter;
 
