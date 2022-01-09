@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use itertools::Itertools;
 
-use regex::{Regex, Captures, Split};
+use regex::{Regex, Captures};
 
 use serde_json::json;
 

@@ -13,17 +13,14 @@ use crate::model::{JoinClause, Value, SelectStatement, ExpressionTree, Statement
 pub struct JoinedTableData {
     pub column_names: Vec<String>,
     pub fully_qualified_column_names: Vec<String>,
-    join_on_column_index: usize,
     rows: HashMap<Value, Vec<Row>>
 }
 
 impl JoinedTableData {
-    pub fn new(table: &TableDefinition,
-               join_on_column_index: usize) -> JoinedTableData {
+    pub fn new(table: &TableDefinition) -> JoinedTableData {
         JoinedTableData {
             column_names: table.columns.iter().map(|column| column.name.clone()).collect(),
             fully_qualified_column_names: table.fully_qualified_column_names.clone(),
-            join_on_column_index,
             rows: HashMap::new()
         }
     }
@@ -43,7 +40,7 @@ impl JoinedTableData {
         let join_on_column_index = joined_table.index_for(&join.joined_column)
             .ok_or(ExecutionError::ColumnNotFound(join.joiner_column.clone()))?;
 
-        let mut joined_table_data = JoinedTableData::new(&joined_table, join_on_column_index);
+        let mut joined_table_data = JoinedTableData::new(&joined_table);
 
         let config = ExecutionConfig::default();
 

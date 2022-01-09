@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::iter::FromIterator;
@@ -8,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, JoinClause, Statement, NullableCompareOperator, BooleanOperator};
+use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, NullableCompareOperator, BooleanOperator};
 use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct ExecutionStatistics {
@@ -63,7 +62,6 @@ pub struct FileIngester<'a> {
     execution_engine: ExecutionEngine<'a>,
     pub statistics: ExecutionStatistics,
     pub print_result: bool,
-    display_options: DisplayOptions,
     output_printer: OutputPrinter
 }
 
@@ -83,7 +81,6 @@ impl<'a> FileIngester<'a> {
                 execution_engine,
                 print_result: true,
                 statistics: ExecutionStatistics::new(),
-                display_options,
                 output_printer
             }
         )
@@ -141,7 +138,6 @@ pub struct FollowFileIngester<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
-    display_options: DisplayOptions,
     output_printer: OutputPrinter
 }
 
@@ -166,7 +162,6 @@ impl<'a> FollowFileIngester<'a> {
                 running,
                 reader: Some(reader),
                 execution_engine,
-                display_options,
                 output_printer
             }
         )
@@ -260,7 +255,7 @@ impl OutputPrinter {
                             let column_names = result_row.columns
                                 .iter()
                                 .enumerate()
-                                .map(|(projection_index, projection_name)| format!("{}", projection_name))
+                                .map(|(_, projection_name)| format!("{}", projection_name))
                                 .collect::<Vec<_>>();
 
                             println!("{}", column_names.join(&delimiter));
@@ -269,7 +264,7 @@ impl OutputPrinter {
                         let columns = result_row.columns
                             .iter()
                             .enumerate()
-                            .map(|(projection_index, projection_name)| format!("{}", row.columns[projection_index]))
+                            .map(|(projection_index, _)| format!("{}", row.columns[projection_index]))
                             .collect::<Vec<_>>();
 
                         println!("{}", columns.join(&delimiter));

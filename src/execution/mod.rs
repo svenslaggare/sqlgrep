@@ -4,6 +4,9 @@ pub mod aggregate_execution;
 pub mod join;
 pub mod execution_engine;
 
+#[cfg(test)]
+pub mod aggregate_execution_tests;
+
 use std::collections::HashMap;
 
 use crate::data_model::{Row, TableDefinition};

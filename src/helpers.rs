@@ -35,7 +35,7 @@ impl TablePrinter {
         };
 
         for (column_index, column) in self.column_names.iter().enumerate() {
-            let length = (column_lengths[column_index] - (column.len() + 2));
+            let length = column_lengths[column_index] - (column.len() + 2);
 
             print_chars(' ', length / 2);
             print!(" {} ", column);

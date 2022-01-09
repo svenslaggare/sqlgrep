@@ -8,11 +8,11 @@ use std::sync::Arc;
 use fnv::FnvHasher;
 
 use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, RegexResultReference, Row, TableDefinition, Tables, RegexMode};
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
 use crate::execution::select_execution::SelectExecutionEngine;
-use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, JoinClause, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
+use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
 
 pub struct ExecutionConfig {
     pub result: bool,

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::{ColumnProvider, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::expression_execution::ExpressionExecutionEngine;
 use crate::model::{ArithmeticOperator, CompareOperator, ExpressionTree, SelectStatement, Value, ValueType};
 use crate::data_model::{TableDefinition, Tables, Row, ColumnDefinition};

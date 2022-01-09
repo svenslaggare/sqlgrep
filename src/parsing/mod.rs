@@ -1,13 +1,17 @@
 pub mod tokenizer;
 pub mod operator;
 pub mod parser;
-pub mod parser_tests;
 pub mod parser_tree_converter;
+
+#[cfg(test)]
+pub mod parser_tests;
+
+#[cfg(test)]
 pub mod parser_tree_converter_tests;
 
 use crate::model::Statement;
-use crate::parsing::parser_tree_converter::{ConvertParserTreeErrorType, ConvertParserTreeError};
-use crate::parsing::tokenizer::{ParserErrorType, ParserError, TokenLocation};
+use crate::parsing::parser_tree_converter::{ConvertParserTreeError};
+use crate::parsing::tokenizer::{ParserError, TokenLocation};
 
 #[derive(Debug)]
 pub enum CommonParserError {

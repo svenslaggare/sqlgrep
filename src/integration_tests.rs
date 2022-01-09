@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::fs::File;
 
-use crate::data_model::{TableDefinition, Tables};
+use crate::data_model::{Tables};
 use crate::execution::execution_engine::ExecutionEngine;
 use crate::ingest::FileIngester;
 use crate::model::Statement;
