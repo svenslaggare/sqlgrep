@@ -77,7 +77,7 @@ Supported functions:
 * `array_unique(ARRAY) => ARRAY`
 * `array_length(ARRAY) => INT`
 * `now() => TIMESTAMP`
-* `make_timestamp(INT, INT, INT, INT, INT, INT) => TIMESTAMP`
+* `make_timestamp(INT, INT, INT, INT, INT, INT, INT) => TIMESTAMP`
 * `date_trunc(TEXT, TIMESTAMP) => TIMESTAMP`
 
 ## Special features
@@ -123,8 +123,8 @@ Multiple tables can be defined in the same file.
 * `INTERVAL`: Interval type.
 
 ### Modifiers
-Placed after the column type and add additional constraints/transforms.
-* `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is _not_ inserted.
+Placed after the column type and add additional constraints/transforms when creating a row.
+* `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is skipped.
 * `TRIM`: Trim string types for whitespaces.
 * `CONVERT`: Tries to convert a string value into the value type.
 * `DEFAULT <value>`: Use this as default value instead of NULL.
