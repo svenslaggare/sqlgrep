@@ -2,10 +2,11 @@ use std::str::FromStr;
 
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
+use std::ops::Add;
 
 use itertools::Itertools;
 
-use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Local, TimeZone};
+use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Local, TimeZone, Duration};
 
 use crate::data_model::TableDefinition;
 
@@ -45,6 +46,7 @@ impl From<f64> for Float {
 }
 
 pub type TimestampType = DateTime<Local>;
+pub type IntervalType = Duration;
 
 #[derive(Debug, PartialEq, PartialOrd, Clone, Eq, Hash, Ord)]
 pub enum Value {
@@ -54,7 +56,8 @@ pub enum Value {
     Bool(bool),
     String(String),
     Array(ValueType, Vec<Value>),
-    Timestamp(TimestampType)
+    Timestamp(TimestampType),
+    Interval(IntervalType)
 }
 
 impl Value {
@@ -91,28 +94,31 @@ impl Value {
             Value::Bool(_) => Some(ValueType::Bool),
             Value::String(_) => Some(ValueType::String),
             Value::Array(element, _) => Some(ValueType::Array(Box::new(element.clone()))),
-            Value::Timestamp(_) => Some(ValueType::Timestamp)
+            Value::Timestamp(_) => Some(ValueType::Timestamp),
+            Value::Interval(_) => Some(ValueType::Interval)
         }
     }
 
     pub fn map_same_type<
         F1: Fn() -> Option<Value>,
-        F2: Fn(i64, i64) -> Option<i64>,
-        F3: Fn(f64, f64) -> Option<f64>,
-        F4: Fn(bool, bool) -> Option<bool>,
-        F5: Fn(&str, &str) -> Option<String>,
-        F6: Fn(&Vec<Value>, &Vec<Value>) -> Option<Vec<Value>>,
-        F7: Fn(TimestampType, TimestampType) -> Option<TimestampType>,
-    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6, timestamp_f: F7) -> Option<Value> {
+        F2: Fn(i64, i64) -> Option<Value>,
+        F3: Fn(f64, f64) -> Option<Value>,
+        F4: Fn(bool, bool) -> Option<Value>,
+        F5: Fn(&str, &str) -> Option<Value>,
+        F6: Fn(&Vec<Value>, &Vec<Value>) -> Option<Value>,
+        F7: Fn(TimestampType, TimestampType) -> Option<Value>,
+        F8: Fn(IntervalType, IntervalType) -> Option<Value>
+    >(&self, other: &Value, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6, timestamp_f: F7, interval_f: F8) -> Option<Value> {
         match (self, other) {
             (Value::Null, _) => null_f(),
             (_, Value::Null) => null_f(),
-            (Value::Int(x), Value::Int(y)) => int_f(*x, *y).map(|x| Value::Int(x)),
-            (Value::Float(x), Value::Float(y)) => float_f(x.0, y.0).map(|x| Value::Float(Float(x))),
-            (Value::Bool(x), Value::Bool(y)) => bool_f(*x, *y).map(|x| Value::Bool(x)),
-            (Value::String(x), Value::String(y)) => string_f(x, y).map(|x| Value::String(x)),
-            (Value::Array(element, x), Value::Array(_, y)) => array_f(x, y).map(|x| Value::Array(element.clone(), x)),
-            (Value::Timestamp(x), Value::Timestamp(y)) => timestamp_f(*x, *y).map(|x| Value::Timestamp(x)),
+            (Value::Int(x), Value::Int(y)) => int_f(*x, *y),
+            (Value::Float(x), Value::Float(y)) => float_f(x.0, y.0),
+            (Value::Bool(x), Value::Bool(y)) => bool_f(*x, *y),
+            (Value::String(x), Value::String(y)) => string_f(x, y),
+            (Value::Array(_, x), Value::Array(_, y)) => array_f(x, y),
+            (Value::Timestamp(x), Value::Timestamp(y)) => timestamp_f(*x, *y),
+            (Value::Interval(x), Value::Interval(y)) => interval_f(*x, *y),
             _ => None
         }
     }
@@ -125,7 +131,8 @@ impl Value {
         F5: Fn(&str) -> Option<String>,
         F6: Fn(&Vec<Value>) -> Option<Vec<Value>>,
         F7: Fn(TimestampType) -> Option<TimestampType>,
-    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6, timestamp_f: F7) -> Option<Value> {
+        F8: Fn(IntervalType) -> Option<IntervalType>
+    >(&self, null_f: F1, int_f: F2, float_f: F3, bool_f: F4, string_f: F5, array_f: F6, timestamp_f: F7, interval_f: F8) -> Option<Value> {
         match self {
             Value::Null => null_f(),
             Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
@@ -134,6 +141,7 @@ impl Value {
             Value::String(x) => string_f(x).map(|x| Value::String(x)),
             Value::Array(element, x) => array_f(x).map(|x| Value::Array(element.clone(), x)),
             Value::Timestamp(x) => timestamp_f(*x).map(|x| Value::Timestamp(x)),
+            Value::Interval(x) => interval_f(*x).map(|x| Value::Interval(x)),
         }
     }
 
@@ -144,7 +152,8 @@ impl Value {
         F4: Fn(&mut String),
         F5: Fn(&mut Vec<Value>),
         F6: Fn(&mut TimestampType),
-    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5, timestamp_f: F6) {
+        F7: Fn(&mut IntervalType)
+    >(&mut self, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5, timestamp_f: F6, interval_f: F7) {
         match self {
             Value::Null => {},
             Value::Int(x) => int_f(x),
@@ -153,6 +162,7 @@ impl Value {
             Value::String(x) => string_f(x),
             Value::Array(_, x) => array_f(x),
             Value::Timestamp(x) => timestamp_f(x),
+            Value::Interval(x) => interval_f(x)
         }
     }
 
@@ -183,7 +193,8 @@ impl Value {
             Value::Bool(value) => serde_json::Value::Bool(*value),
             Value::String(value) => serde_json::Value::String(value.clone()),
             Value::Array(_, value) => serde_json::Value::Array(value.iter().map(|x| x.json_value()).collect()),
-            Value::Timestamp(value) => serde_json::Value::String(value.to_string())
+            Value::Timestamp(value) => serde_json::Value::String(value.to_string()),
+            Value::Interval(value) => serde_json::Value::String(value.to_string())
         }
     }
 }
@@ -198,6 +209,12 @@ impl std::fmt::Display for Value {
             Value::String(x) => write!(f, "{}", x),
             Value::Array(_, x) => write!(f, "{{{}}}", x.iter().map(|x| format!("{}", x)).join(", ")),
             Value::Timestamp(x) => write!(f, "{}", x),
+            Value::Interval(x) => {
+                let seconds = x.num_seconds() % 60;
+                let minutes = (x.num_seconds() / 60) % 60;
+                let hours = (x.num_seconds() / 60) / 60;
+                write!(f, "{}:{}:{}", hours, minutes, seconds)
+            }
         }
     }
 }
@@ -209,7 +226,8 @@ pub enum ValueType {
     Bool,
     String,
     Array(Box<ValueType>),
-    Timestamp
+    Timestamp,
+    Interval
 }
 
 impl ValueType {
@@ -224,6 +242,20 @@ impl ValueType {
                 NaiveDateTime::parse_from_str(value_str, "%Y-%m-%d %H:%M:%S")
                     .map(|x| Value::Timestamp(Local {}.from_local_datetime(&x).unwrap()))
                     .ok()
+            }
+            ValueType::Interval => {
+                let parts = value_str.split(":").collect::<Vec<_>>();
+                if parts.len() == 3 {
+                    let hours = i64::from_str(parts[0]).ok()?;
+                    let minutes = i64::from_str(parts[1]).ok()?;
+                    let seconds = i64::from_str(parts[2]).ok()?;
+                    let duration = IntervalType::hours(hours)
+                        .add(IntervalType::minutes(minutes))
+                        .add(IntervalType::seconds(seconds));
+                    Some(Value::Interval(duration))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -240,6 +272,7 @@ impl ValueType {
             "text" => Some(ValueType::String),
             "boolean" => Some(ValueType::Bool),
             "timestamp" => Some(ValueType::Timestamp),
+            "interval" => Some(ValueType::Interval),
             _ => None
         }
     }
@@ -261,6 +294,7 @@ impl ValueType {
                     )
             }
             ValueType::Timestamp => None,
+            ValueType::Interval => None
         }.unwrap_or(Value::Null)
     }
 
@@ -271,7 +305,8 @@ impl ValueType {
             ValueType::Bool => Value::Bool(false),
             ValueType::String => Value::String(String::new()),
             ValueType::Array(element) => Value::Array(*element.clone(), Vec::new()),
-            ValueType::Timestamp => Value::Timestamp(create_timestamp(2000, 1, 1, 0, 0, 0, 0).unwrap())
+            ValueType::Timestamp => Value::Timestamp(create_timestamp(2000, 1, 1, 0, 0, 0, 0).unwrap()),
+            ValueType::Interval => Value::Interval(IntervalType::seconds(0))
         }
     }
 }
@@ -285,6 +320,7 @@ impl std::fmt::Display for ValueType {
             ValueType::String => write!(f, "text"),
             ValueType::Array(element) => write!(f, "{}[]", element),
             ValueType::Timestamp => write!(f, "timestamp"),
+            ValueType::Interval => write!(f, "interval")
         }
     }
 }

@@ -1,6 +1,7 @@
 use std::hash::{Hasher, Hash};
 use std::collections::{HashMap, BTreeSet};
 use std::iter::FromIterator;
+use std::ops::Add;
 
 use regex::Regex;
 
@@ -10,7 +11,7 @@ use chrono::{Local, Datelike, Timelike, DurationRound, Duration};
 
 use itertools::Itertools;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator};
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator, IntervalType};
 use crate::execution::{ColumnProvider};
 
 
@@ -125,33 +126,62 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 let left_value = self.evaluate(left)?;
                 let right_value = self.evaluate(right)?;
 
+                match (&left_value, &right_value) {
+                    (Value::Timestamp(left), Value::Interval(right)) => {
+                        return Ok(Value::Timestamp(left.add(right.clone())));
+                    }
+                    (Value::Interval(left), Value::Timestamp(right)) => {
+                        return Ok(Value::Timestamp(right.add(left.clone())));
+                    }
+                    _ => {}
+                }
+
                 left_value.map_same_type(
                     &right_value,
                     || Some(Value::Null),
                     |x, y| {
                         Some(
-                            match operator {
-                                ArithmeticOperator::Add => x + y,
-                                ArithmeticOperator::Subtract => x - y,
-                                ArithmeticOperator::Multiply => x * y,
-                                ArithmeticOperator::Divide => x / y
-                            }
+                            Value::Int(
+                                match operator {
+                                    ArithmeticOperator::Add => x + y,
+                                    ArithmeticOperator::Subtract => x - y,
+                                    ArithmeticOperator::Multiply => x * y,
+                                    ArithmeticOperator::Divide => x / y
+                                }
+                            )
                         )
                     },
                     |x, y| {
                         Some(
-                            match operator {
-                                ArithmeticOperator::Add => x + y,
-                                ArithmeticOperator::Subtract => x - y,
-                                ArithmeticOperator::Multiply => x * y,
-                                ArithmeticOperator::Divide => x / y
-                            }
+                            Value::Float(
+                                Float(
+                                    match operator {
+                                        ArithmeticOperator::Add => x + y,
+                                        ArithmeticOperator::Subtract => x - y,
+                                        ArithmeticOperator::Multiply => x * y,
+                                        ArithmeticOperator::Divide => x / y
+                                    }
+                                )
+                            )
                         )
                     },
                     |_, _| None,
                     |_, _| None,
                     |_, _| None,
-                    |_, _| None,
+                    |x, y| {
+                        match operator {
+                            ArithmeticOperator::Subtract => { Some(Value::Interval(x - y)) },
+                            _ => { None }
+                        }
+                    },
+                    |x, y| {
+                        match operator {
+                            ArithmeticOperator::Add => { Some(Value::Interval(x + y)) }
+                            ArithmeticOperator::Subtract => { Some(Value::Interval(x - y)) }
+                            ArithmeticOperator::Multiply => { None }
+                            ArithmeticOperator::Divide => { None }
+                        }
+                    }
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
             ExpressionTree::UnaryArithmetic { operand, operator } => {
@@ -180,6 +210,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     |_| None,
                     |_| None,
                     |_| None,
+                    |_| None,
                 ).ok_or(EvaluationError::UndefinedOperation)
             }
             ExpressionTree::BooleanOperation { operator, left, right } => {
@@ -203,8 +234,9 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         arg0.map_same_type(
                             &arg1,
                             || Some(Value::Null),
-                            |x, y| Some(x.max(y)),
-                            |x, y| Some(x.max(y)),
+                            |x, y| Some(Value::Int(x.max(y))),
+                            |x, y| Some(Value::Float(Float(x.max(y)))),
+                            |_, _| None,
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
@@ -218,8 +250,9 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         arg0.map_same_type(
                             &arg1,
                             || Some(Value::Null),
-                            |x, y| Some(x.min(y)),
-                            |x, y| Some(x.min(y)),
+                            |x, y| Some(Value::Int(x.min(y))),
+                            |x, y| Some(Value::Float(Float(x.min(y)))),
+                            |_, _| None,
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
@@ -237,6 +270,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None,
                             |_| None,
                             |_| None,
+                            |_| None,
                         ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Sqrt if arguments.len() == 1 => {
@@ -246,6 +280,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             || Some(Value::Null),
                             |_| None,
                             |x| Some(x.sqrt()),
+                            |_| None,
                             |_| None,
                             |_| None,
                             |_| None,
@@ -261,12 +296,13 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             || Some(Value::Null),
                             |x, y| {
                                 if y >= 0 {
-                                    Some(x.pow(y as u32))
+                                    Some(Value::Int(x.pow(y as u32)))
                                 } else {
                                     None
                                 }
                             },
-                            |x, y| Some(x.powf(y)),
+                            |x, y| Some(Value::Float(Float(x.powf(y)))),
+                            |_, _| None,
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
@@ -354,8 +390,8 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             (Value::Int(year), Value::Int(month), Value::Int(day), Value::Int(hour), Value::Int(minute), Value::Int(second), Value::Int(microsecond)) => {
                                 Ok(
                                     create_timestamp(*year as i32, *month as u32, *day as u32, *hour as u32, *minute as u32, *second as u32, *microsecond as u32)
-                                    .map(|timestamp| Value::Timestamp(timestamp))
-                                    .unwrap_or(Value::Null)
+                                        .map(|timestamp| Value::Timestamp(timestamp))
+                                        .unwrap_or(Value::Null)
                                 )
                             }
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
@@ -484,10 +520,10 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         convert_to_type.parse(&value).ok_or(EvaluationError::FailedToConvert)
                     }
                     _ => {
-                        if let Some(operand_type) = operand.value_type() {
-                            return Err(EvaluationError::TypeError(ValueType::String, operand_type));
+                        return if let Some(operand_type) = operand.value_type() {
+                            Err(EvaluationError::TypeError(ValueType::String, operand_type))
                         } else {
-                            return Err(EvaluationError::ExpectedNonNull);
+                            Err(EvaluationError::ExpectedNonNull)
                         }
                     }
                 }
@@ -720,7 +756,7 @@ fn test_evaluate_or() {
 }
 
 #[test]
-fn test_arithmetic() {
+fn test_arithmetic1() {
     let column_provider = TestColumnProvider::new();
 
     let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
@@ -730,6 +766,22 @@ fn test_arithmetic() {
         expression_execution_engine.evaluate(&ExpressionTree::Arithmetic {
             left: Box::new(ExpressionTree::Value(Value::Int(4000))),
             right: Box::new(ExpressionTree::Value(Value::Int(1000))),
+            operator: ArithmeticOperator::Add
+        })
+    );
+}
+
+#[test]
+fn test_arithmetic2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Timestamp(create_timestamp(2022, 1, 1, 10, 0, 0, 0).unwrap())),
+        expression_execution_engine.evaluate(&ExpressionTree::Arithmetic {
+            left: Box::new(ExpressionTree::Value(Value::Timestamp(create_timestamp(2022, 1, 1, 0, 0, 0, 0).unwrap()))),
+            right: Box::new(ExpressionTree::Value(Value::Interval(IntervalType::hours(10)))),
             operator: ArithmeticOperator::Add
         })
     );

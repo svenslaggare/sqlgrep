@@ -87,6 +87,7 @@ impl TableDefinition {
                     |_| {},
                     |x| *x = x.trim().to_owned(),
                     |_| {},
+                    |_| {},
                     |_| {}
                 )
             }

@@ -130,6 +130,7 @@ impl AggregateExecutionEngine {
                             |_| {},
                             |_| {},
                             |_| {},
+                            |_| {}
                         );
                     }
                 }
@@ -209,6 +210,7 @@ impl AggregateExecutionEngine {
                                 || None,
                                 |x| Some(x / *count),
                                 |x| Some(x / *count as f64),
+                                |_| None,
                                 |_| None,
                                 |_| None,
                                 |_| None,
@@ -294,6 +296,7 @@ impl AggregateExecutionEngine {
                         |_| {},
                         |array| { array.push(column_value.clone()) },
                         |_| {},
+                        |_| {}
                     );
                 }
             }

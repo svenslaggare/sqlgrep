@@ -119,6 +119,7 @@ Multiple tables can be defined in the same file.
 * `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
 * `<element type>[]`: Array types such as `real[]`.
 * `TIMESTAMP`: Timestamp type.
+* `INTERVAL`: Interval type.
 
 ### Modifiers
 Placed after the column type and add additional constraints/transforms.
