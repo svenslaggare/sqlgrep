@@ -6,8 +6,8 @@ use std::fmt::Formatter;
 
 use lazy_static::lazy_static;
 
-use crate::parsing::operator::Operator;
 use crate::model::ValueType;
+use crate::parsing::operator::Operator;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Keyword {
@@ -60,6 +60,7 @@ pub enum Token {
     Comma,
     SemiColon,
     Colon,
+    DoubleColon,
     RightArrow,
     End
 }
@@ -186,6 +187,7 @@ pub enum ParserErrorType {
     ExpectedOperator,
     ExpectedSpecificOperator(Operator),
     ExpectedColon,
+    ExpectedDoubleColon,
     ExpectedRightArrow,
     ExpectedSemiColon,
     ExpectedNull,
@@ -229,6 +231,7 @@ impl std::fmt::Display for ParserErrorType {
             ParserErrorType::ExpectedOperator => { write!(f, "Expected an operator") }
             ParserErrorType::ExpectedSpecificOperator(operator) => { write!(f, "Expected '{}' operator", operator) }
             ParserErrorType::ExpectedColon => { write!(f, "Expected ':'") }
+            ParserErrorType::ExpectedDoubleColon => { write!(f, "Expected '::'") }
             ParserErrorType::ExpectedRightArrow => { write!(f, "Expected '=>'") }
             ParserErrorType::ExpectedSemiColon => { write!(f, "Expected ';'") }
             ParserErrorType::ExpectedNull => { write!(f, "Expected NULL") }
@@ -441,7 +444,20 @@ pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
         } else if current == ';' {
             state.add(Token::SemiColon);
         } else if current == ':' {
-            state.add(Token::Colon);
+            let mut is_dual = false;
+            if let Some(last) = state.tokens.last().map(|t| &t.token) {
+                match last {
+                    Token::Colon => {
+                        state.tokens.last_mut().unwrap().token = Token::DoubleColon;
+                        is_dual = true;
+                    },
+                    _ => {}
+                }
+            }
+
+            if !is_dual {
+                state.add(Token::Colon);
+            }
         } else if current.is_whitespace() {
             // Skip
         } else {

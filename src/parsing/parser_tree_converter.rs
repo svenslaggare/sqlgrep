@@ -400,14 +400,20 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
                 transformed_arguments.push(transform_expression(argument, state)?);
             }
 
-            FUNCTIONS.get(&name.to_lowercase()).map(|function| {
-                ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
-            }).ok_or(ConvertParserTreeErrorType::UndefinedFunction(name).with_location(tree.location.clone()))
+            FUNCTIONS.get(&name.to_lowercase())
+                .map(|function| {
+                    ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
+                })
+                .ok_or(ConvertParserTreeErrorType::UndefinedFunction(name).with_location(tree.location.clone()))
         }
         ParserExpressionTreeData::ArrayElementAccess { array, index } => {
             let array = Box::new(transform_expression(*array, state)?);
             let index = Box::new(transform_expression(*index, state)?);
             Ok(ExpressionTree::ArrayElementAccess { array, index })
+        }
+        ParserExpressionTreeData::TypeConversion { operand, convert_to_type } => {
+            let operand = Box::new(transform_expression(*operand, state)?);
+            Ok(ExpressionTree::TypeConversion { operand, convert_to_type })
         }
     }
 }

@@ -38,7 +38,8 @@ pub enum ParserExpressionTreeData {
     Invert { operand: Box<ParserExpressionTree> },
     NullableCompare { operator: NullableCompareOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     Call { name: String, arguments: Vec<ParserExpressionTree>, distinct: Option<bool> },
-    ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> }
+    ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> },
+    TypeConversion { operand: Box<ParserExpressionTree>, convert_to_type: ValueType }
 }
 
 impl ParserExpressionTreeData {
@@ -80,6 +81,9 @@ impl ParserExpressionTreeData {
             ParserExpressionTreeData::ArrayElementAccess { array, index } => {
                 array.tree.visit(f)?;
                 index.tree.visit(f)?;
+            }
+            ParserExpressionTreeData::TypeConversion { operand, .. } => {
+                operand.tree.visit(f)?;
             }
         }
 
@@ -240,14 +244,8 @@ impl<'a> Parser<'a> {
 
         let table_name = self.consume_identifier()?;
         let mut filename = None;
-        if self.current() == &Token::Colon {
+        if self.current() == &Token::DoubleColon {
             self.next()?;
-
-            self.expect_and_consume_token(
-                Token::Colon,
-                ParserErrorType::ExpectedColon
-            )?;
-
             filename = Some(self.consume_string()?);
         }
 
@@ -346,13 +344,8 @@ impl<'a> Parser<'a> {
 
         let joiner_table = self.consume_identifier()?;
         self.expect_and_consume_token(
-            Token::Colon,
-            ParserErrorType::ExpectedColon
-        )?;
-
-        self.expect_and_consume_token(
-            Token::Colon,
-            ParserErrorType::ExpectedColon
+            Token::DoubleColon,
+            ParserErrorType::ExpectedDoubleColon
         )?;
         let joiner_filename = self.consume_string()?;
 
@@ -698,6 +691,16 @@ impl<'a> Parser<'a> {
                         _ => { return Err(ParserError::new(op_location, ParserErrorType::ExpectedColumnAccess)); }
                     }
                 }
+                Token::DoubleColon => {
+                    let convert_to_type = match rhs.tree {
+                        ParserExpressionTreeData::ColumnAccess(typename) => {
+                            ValueType::from_str(&typename).ok_or_else(|| ParserError::new(op_location.clone(), ParserErrorType::NotDefinedType(typename)))?
+                        }
+                        _ => { return Err(ParserError::new(op_location, ParserErrorType::ExpectedIdentifier)); }
+                    };
+
+                    lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::TypeConversion { operand: Box::new(lhs), convert_to_type });
+                }
                 Token::Operator(op) => {
                     lhs = ParserExpressionTree::new(op_location, ParserExpressionTreeData::BinaryOperator { operator: op, left: Box::new(lhs), right: Box::new(rhs) });
                 }
@@ -742,6 +745,7 @@ impl<'a> Parser<'a> {
                     None => Err(self.create_error(ParserErrorType::NotDefinedBinaryOperator(op.clone())))
                 }
             }
+            Token::DoubleColon => Ok(7),
             Token::Keyword(Keyword::Is) => Ok(2),
             Token::Keyword(Keyword::IsNot) => Ok(2),
             Token::Keyword(Keyword::And) => Ok(1),

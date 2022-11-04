@@ -17,6 +17,7 @@ use crate::execution::{ColumnProvider};
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
     ColumnNotFound(String),
+    ExpectedNonNull,
     TypeError(ValueType, ValueType),
     GroupKeyNotFound,
     GroupValueNotFound,
@@ -28,13 +29,15 @@ pub enum EvaluationError {
     ExpectedArrayElementType,
     FailedToTruncate,
     InvalidTruncatePart,
-    FailedToParseTimestamp
+    FailedToParseTimestamp,
+    FailedToConvert
 }
 
 impl std::fmt::Display for EvaluationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EvaluationError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name) }
+            EvaluationError::ExpectedNonNull => { write!(f, "Expected non-null value") }
             EvaluationError::TypeError(expected, actual) => { write!(f, "Expected type '{}' but got type {}", expected, actual) }
             EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
             EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
@@ -53,7 +56,8 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::ExpectedArrayElementType => { write!(f, "Expected an element with type") }
             EvaluationError::FailedToTruncate => { write!(f, "Failed to truncate timestamp") }
             EvaluationError::InvalidTruncatePart => { write!(f, "Not a valid part to truncate") },
-            EvaluationError::FailedToParseTimestamp => { write!(f, "Failed to parse timestamp") }
+            EvaluationError::FailedToParseTimestamp => { write!(f, "Failed to parse timestamp") },
+            EvaluationError::FailedToConvert => { write!(f, "Failed to convert to type") }
         }
     }
 }
@@ -471,6 +475,21 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         }
                     }
                     _ => { Err(EvaluationError::ExpectedArray(array.value_type())) }
+                }
+            }
+            ExpressionTree::TypeConversion { operand, convert_to_type } => {
+                let operand = self.evaluate(operand)?;
+                match operand {
+                    Value::String(value) => {
+                        convert_to_type.parse(&value).ok_or(EvaluationError::FailedToConvert)
+                    }
+                    _ => {
+                        if let Some(operand_type) = operand.value_type() {
+                            return Err(EvaluationError::TypeError(ValueType::String, operand_type));
+                        } else {
+                            return Err(EvaluationError::ExpectedNonNull);
+                        }
+                    }
                 }
             }
             ExpressionTree::Aggregate(id, aggregate) => {
@@ -896,6 +915,21 @@ fn test_create_array3() {
         expression_execution_engine.evaluate(&ExpressionTree::Function {
             function: Function::CreateArray,
             arguments: vec![ExpressionTree::Value(Value::Null)]
+        })
+    );
+}
+
+#[test]
+fn test_type_convert1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Timestamp(create_timestamp(2022, 10, 14, 22, 11, 12, 0).unwrap())),
+        expression_execution_engine.evaluate(&ExpressionTree::TypeConversion {
+            operand: Box::new(ExpressionTree::Value(Value::String("2022-10-14 22:11:12".to_owned()))),
+            convert_to_type: ValueType::Timestamp
         })
     );
 }

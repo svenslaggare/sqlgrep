@@ -381,6 +381,7 @@ pub enum ExpressionTree {
     UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
     Function { function: Function, arguments: Vec<ExpressionTree> },
     ArrayElementAccess { array: Box<ExpressionTree>, index: Box<ExpressionTree> },
+    TypeConversion { operand: Box<ExpressionTree>, convert_to_type: ValueType },
     Aggregate(usize, Box<Aggregate>)
 }
 
@@ -417,6 +418,9 @@ impl ExpressionTree {
             ExpressionTree::ArrayElementAccess { array, index } => {
                 array.visit(f)?;
                 index.visit(f)?;
+            }
+            ExpressionTree::TypeConversion { operand, .. } => {
+                operand.visit(f)?;
             }
             ExpressionTree::Aggregate(_, aggregate) => {
                 match aggregate.as_ref() {

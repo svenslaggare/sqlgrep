@@ -525,6 +525,32 @@ fn test_parse_expression14() {
 }
 
 #[test]
+fn test_parse_type_convert1() {
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    let mut parser = Parser::from_plain_tokens(
+        &binary_operators,
+        &unary_operators,
+        vec![
+            Token::String("2022-10-11 22:00:00".to_string()),
+            Token::DoubleColon,
+            Token::Identifier("timestamp".to_string()),
+            Token::End
+        ]
+    );
+
+    let tree = parser.parse_expression().unwrap();
+    assert_eq!(
+        ParserExpressionTreeData::TypeConversion {
+            operand: Box::new(ParserExpressionTreeData::Value(Value::String("2022-10-11 22:00:00".to_owned())).with_location(Default::default())),
+            convert_to_type: ValueType::Timestamp
+        },
+        tree.tree
+    );
+}
+
+#[test]
 fn test_parse_select1() {
     let binary_operators = BinaryOperators::new();
     let unary_operators = UnaryOperators::new();
@@ -810,8 +836,7 @@ fn test_parse_with_filename() {
             Token::Identifier("x".to_string()),
             Token::Keyword(Keyword::From),
             Token::Identifier("test".to_string()),
-            Token::Colon,
-            Token::Colon,
+            Token::DoubleColon,
             Token::String("test.log".to_string()),
             Token::End
         ]
@@ -1034,8 +1059,7 @@ fn test_parse_inner_join1() {
             Token::Keyword(Keyword::Inner),
             Token::Keyword(Keyword::Join),
             Token::Identifier("table1".to_string()),
-            Token::Colon,
-            Token::Colon,
+            Token::DoubleColon,
             Token::String("file.log".to_string()),
             Token::Keyword(Keyword::On),
             Token::Identifier("table2".to_string()),
@@ -1101,8 +1125,7 @@ fn test_parse_outer_join1() {
             Token::Keyword(Keyword::Outer),
             Token::Keyword(Keyword::Join),
             Token::Identifier("table1".to_string()),
-            Token::Colon,
-            Token::Colon,
+            Token::DoubleColon,
             Token::String("file.log".to_string()),
             Token::Keyword(Keyword::On),
             Token::Identifier("table2".to_string()),
@@ -1984,6 +2007,39 @@ fn test_parse_str5() {
                     ValueType::Array(Box::new(ValueType::String))
                 )
             ]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_str6() {
+    let tree = parse_str("SELECT x FROM test WHERE x::int >= 0").unwrap();
+
+    assert_eq!(
+        ParserOperationTree::Select {
+            location: TokenLocation::new(0, 6),
+            projections: vec![
+                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
+            ],
+            from: ("test".to_string(), None),
+            filter: Some(
+                ParserExpressionTreeData::BinaryOperator {
+                    operator: Operator::Dual('>', '='),
+                    left: Box::new(
+                        ParserExpressionTreeData::TypeConversion {
+                            operand: Box::new(
+                                ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 26))
+                            ),
+                            convert_to_type: ValueType::Int
+                        }.with_location(TokenLocation::new(0, 26))
+                    ),
+                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(0)).with_location(TokenLocation::new(0, 33)))
+                }.with_location(TokenLocation::new(0, 31))
+            ),
+            group_by: None,
+            having: None,
+            join: None
         },
         tree
     );
