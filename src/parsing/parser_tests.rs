@@ -1466,6 +1466,7 @@ fn test_parse_create_table5() {
                 nullable: Some(false),
                 trim: None,
                 convert: None,
+                microseconds: None,
                 default_value: None
             }]
         },
@@ -1521,6 +1522,7 @@ fn test_parse_create_table6() {
                 nullable: None,
                 trim: Some(true),
                 convert: None,
+                microseconds: None,
                 default_value: None
             }]
         },
@@ -1590,6 +1592,7 @@ fn test_parse_create_table7() {
                     nullable: None,
                     trim: None,
                     convert: None,
+                    microseconds: None,
                     default_value: None
                 }
             ]
@@ -1699,6 +1702,7 @@ fn test_parse_create_table9() {
                 nullable: None,
                 trim: None,
                 convert: None,
+                microseconds: None,
                 default_value: Some(Value::Int(4711))
             }]
         },
@@ -1723,6 +1727,7 @@ fn test_parse_json_table1() {
                     nullable: None,
                     trim: None,
                     convert: None,
+                    microseconds: None,
                     default_value: None
                 }
             ]
@@ -1762,6 +1767,7 @@ fn test_parse_json_table2() {
                     nullable: None,
                     trim: None,
                     convert: None,
+                    microseconds: None,
                     default_value: None
                 }
             ]

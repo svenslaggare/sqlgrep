@@ -271,7 +271,7 @@ impl ValueType {
             ValueType::Bool => Value::Bool(false),
             ValueType::String => Value::String(String::new()),
             ValueType::Array(element) => Value::Array(*element.clone(), Vec::new()),
-            ValueType::Timestamp => Value::Timestamp(create_timestamp(2000, 1, 1, 0, 0, 0).unwrap())
+            ValueType::Timestamp => Value::Timestamp(create_timestamp(2000, 1, 1, 0, 0, 0, 0).unwrap())
         }
     }
 }
@@ -355,6 +355,7 @@ pub enum Function {
     TimestampExtractHour,
     TimestampExtractSecond,
     TimestampExtractMinute,
+    TruncateTimestamp
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
@@ -548,10 +549,10 @@ impl Statement {
     }
 }
 
-pub fn create_timestamp(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Option<TimestampType> {
+pub fn create_timestamp(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, microsecond: u32) -> Option<TimestampType> {
     let timestamp = NaiveDateTime::new(
         NaiveDate::from_ymd(year, month, day),
-        NaiveTime::from_hms(hour, minute, second)
+        NaiveTime::from_hms_micro(hour, minute, second, microsecond)
     );
 
     Local {}.from_local_datetime(&timestamp).latest()

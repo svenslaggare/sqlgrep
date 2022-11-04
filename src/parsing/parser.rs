@@ -96,6 +96,7 @@ pub struct ParserColumnDefinition {
     pub nullable: Option<bool>,
     pub trim: Option<bool>,
     pub convert: Option<bool>,
+    pub microseconds: Option<bool>,
     pub default_value: Option<Value>
 }
 
@@ -111,6 +112,7 @@ impl ParserColumnDefinition {
             nullable: None,
             trim: None,
             convert: None,
+            microseconds: None,
             default_value: None
         }
     }
@@ -587,6 +589,7 @@ impl<'a> Parser<'a> {
         let mut trim = None;
         let mut convert = None;
         let mut default_value = None;
+        let mut microseconds = None;
 
         match self.current().clone() {
             Token::Keyword(Keyword::Not) => {
@@ -609,6 +612,10 @@ impl<'a> Parser<'a> {
             Token::Identifier(identifier) if identifier.to_lowercase() == "convert" => {
                 self.next()?;
                 convert = Some(true);
+            }
+            Token::Identifier(identifier) if identifier.to_lowercase() == "microseconds" => {
+                self.next()?;
+                microseconds = Some(true);
             }
             Token::Keyword(Keyword::Default) => {
                 self.next()?;
@@ -636,7 +643,8 @@ impl<'a> Parser<'a> {
                 nullable,
                 trim,
                 convert,
-                default_value
+                microseconds,
+                default_value,
             }
         )
     }

@@ -6,7 +6,7 @@ use regex::Regex;
 
 use fnv::FnvHasher;
 
-use chrono::{Local, Datelike, Timelike};
+use chrono::{Local, Datelike, Timelike, DurationRound, Duration};
 
 use itertools::Itertools;
 
@@ -25,7 +25,10 @@ pub enum EvaluationError {
     InvalidRegex(String),
     ExpectedArray(Option<ValueType>),
     ExpectedArrayIndexingToBeInt(Option<ValueType>),
-    ExpectedArrayElementType
+    ExpectedArrayElementType,
+    FailedToTruncate,
+    InvalidTruncatePart,
+    FailedToParseTimestamp
 }
 
 impl std::fmt::Display for EvaluationError {
@@ -48,6 +51,9 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
             EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
             EvaluationError::ExpectedArrayElementType => { write!(f, "Expected an element with type") }
+            EvaluationError::FailedToTruncate => { write!(f, "Failed to truncate timestamp") }
+            EvaluationError::InvalidTruncatePart => { write!(f, "Not a valid part to truncate") },
+            EvaluationError::FailedToParseTimestamp => { write!(f, "Failed to parse timestamp") }
         }
     }
 }
@@ -76,8 +82,18 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
             }
             ExpressionTree::Wildcard => Err(EvaluationError::UndefinedOperation),
             ExpressionTree::Compare { left, right, operator } => {
-                let left_value = self.evaluate(left)?;
-                let right_value = self.evaluate(right)?;
+                let mut left_value = self.evaluate(left)?;
+                let mut right_value = self.evaluate(right)?;
+
+                match (&left_value, &right_value) {
+                    (Value::Timestamp(_), Value::String(value)) => {
+                        right_value = ValueType::Timestamp.parse(&value).ok_or(EvaluationError::FailedToParseTimestamp)?;
+                    }
+                    (Value::String(value), Value::Timestamp(_)) => {
+                        left_value = ValueType::Timestamp.parse(&value).ok_or(EvaluationError::FailedToParseTimestamp)?;
+                    }
+                    _ => {}
+                }
 
                 if !left_value.is_null() && !right_value.is_null() {
                     match operator {
@@ -329,11 +345,11 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     Function::TimestampNow if arguments.len() == 0 => {
                         Ok(Value::Timestamp(Local::now()))
                     }
-                    Function::MakeTimestamp if arguments.len() == 6 => {
-                        match (&executed_arguments[0], &executed_arguments[1], &executed_arguments[2], &executed_arguments[3], &executed_arguments[4], &executed_arguments[5]) {
-                            (Value::Int(year), Value::Int(month), Value::Int(day), Value::Int(hour), Value::Int(minute), Value::Int(second)) => {
+                    Function::MakeTimestamp if arguments.len() == 8 => {
+                        match (&executed_arguments[0], &executed_arguments[1], &executed_arguments[2], &executed_arguments[3], &executed_arguments[4], &executed_arguments[5], &executed_arguments[6]) {
+                            (Value::Int(year), Value::Int(month), Value::Int(day), Value::Int(hour), Value::Int(minute), Value::Int(second), Value::Int(microsecond)) => {
                                 Ok(
-                                    create_timestamp(*year as i32, *month as u32, *day as u32, *hour as u32, *minute as u32, *second as u32)
+                                    create_timestamp(*year as i32, *month as u32, *day as u32, *hour as u32, *minute as u32, *second as u32, *microsecond as u32)
                                     .map(|timestamp| Value::Timestamp(timestamp))
                                     .unwrap_or(Value::Null)
                                 )
@@ -380,6 +396,60 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     Function::TimestampExtractSecond if arguments.len() == 1 => {
                         match executed_arguments.remove(0) {
                             Value::Timestamp(timestamp) => Ok(Value::Int(timestamp.second() as i64)),
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                        }
+                    }
+                    Function::TruncateTimestamp if arguments.len() == 2 => {
+                        match (&executed_arguments[0], &executed_arguments[1]) {
+                            (Value::String(part), Value::Timestamp(timestamp)) => {
+                                enum NonDurationField { Year, Month, Day }
+
+                                let duration = match part.as_str() {
+                                    "year" => Err(NonDurationField::Year),
+                                    "month" => Err(NonDurationField::Month),
+                                    "day" => Err(NonDurationField::Day),
+                                    "hour" => Ok(Duration::hours(1)),
+                                    "minute" => Ok(Duration::minutes(1)),
+                                    "second" => Ok(Duration::seconds(1)),
+                                    "milliseconds" => Ok(Duration::milliseconds(1)),
+                                    "microseconds" => Ok(Duration::microseconds(1)),
+                                    _ => { return Err(EvaluationError::InvalidTruncatePart); }
+                                };
+
+                                match duration {
+                                    Ok(duration) => {
+                                        let trunc_timestamp = timestamp.duration_trunc(duration).map_err(|_| EvaluationError::FailedToTruncate)?;
+                                        Ok(Value::Timestamp(trunc_timestamp))
+                                    }
+                                    Err(NonDurationField::Year) => {
+                                        let trunc_timestamp = timestamp
+                                            .with_month(1).unwrap()
+                                            .with_day(1).unwrap()
+                                            .with_hour(0).unwrap()
+                                            .with_minute(0).unwrap()
+                                            .with_second(0).unwrap()
+                                            .with_nanosecond(0).unwrap();
+                                        Ok(Value::Timestamp(trunc_timestamp))
+                                    }
+                                    Err(NonDurationField::Month) => {
+                                        let trunc_timestamp = timestamp
+                                            .with_day(1).unwrap()
+                                            .with_hour(0).unwrap()
+                                            .with_minute(0).unwrap()
+                                            .with_second(0).unwrap()
+                                            .with_nanosecond(0).unwrap();
+                                        Ok(Value::Timestamp(trunc_timestamp))
+                                    }
+                                    Err(NonDurationField::Day) => {
+                                        let trunc_timestamp = timestamp
+                                            .with_hour(0).unwrap()
+                                            .with_minute(0).unwrap()
+                                            .with_second(0).unwrap()
+                                            .with_nanosecond(0).unwrap();
+                                        Ok(Value::Timestamp(trunc_timestamp))
+                                    }
+                                }
+                            }
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }

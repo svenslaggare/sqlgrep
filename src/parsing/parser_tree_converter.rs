@@ -250,6 +250,10 @@ fn create_create_table_statement(location: TokenLocation,
                 column_definition.options.convert = *convert;
             }
 
+            if let Some(microseconds) = column.microseconds.as_ref() {
+                column_definition.options.microseconds = *microseconds;
+            }
+
             column_definition.options.default_value = column.default_value.clone();
 
             column_definition
@@ -299,7 +303,8 @@ lazy_static! {
             ("timestamp_extract_day".to_owned(), Function::TimestampExtractDay),
             ("timestamp_extract_hour".to_owned(), Function::TimestampExtractHour),
             ("timestamp_extract_minute".to_owned(), Function::TimestampExtractMinute),
-            ("timestamp_extract_second".to_owned(), Function::TimestampExtractSecond)
+            ("timestamp_extract_second".to_owned(), Function::TimestampExtractSecond),
+            ("date_trunc".to_owned(), Function::TruncateTimestamp)
         ].into_iter()
     );
 }

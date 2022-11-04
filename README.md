@@ -126,3 +126,4 @@ Placed after the column type and add additional constraints/transforms.
 * `TRIM`: Trim string types for whitespaces.
 * `CONVERT`: Tries to convert a string value into the value type.
 * `DEFAULT <value>`: Use this as default value instead of NULL.
+* `MICROSECONDS`: The decimal second part is in microseconds, not milliseconds.

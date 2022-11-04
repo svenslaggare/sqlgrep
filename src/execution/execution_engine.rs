@@ -393,14 +393,14 @@ fn test_timestamp1() {
     assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[0].columns[0]);
     assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[0].columns[1]);
     assert_eq!(
-        Value::Timestamp(create_timestamp(2005, 6, 17, 20, 55, 6).unwrap()),
+        Value::Timestamp(create_timestamp(2005, 6, 17, 20, 55, 6, 0).unwrap()),
         result_rows[0].columns[2]
     );
 
     assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[21].columns[0]);
     assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[21].columns[1]);
     assert_eq!(
-        Value::Timestamp(create_timestamp(2005, 6, 18, 2, 8, 12).unwrap()),
+        Value::Timestamp(create_timestamp(2005, 6, 18, 2, 8, 12, 0).unwrap()),
         result_rows[21].columns[2]
     );
 }

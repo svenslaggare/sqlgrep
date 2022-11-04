@@ -259,6 +259,7 @@ impl ColumnParsing {
                         let mut hour = 0u32;
                         let mut minute = 0u32;
                         let mut second = 0u32;
+                        let mut microsecond = 0u32;
 
                         for (index, pattern) in patterns.iter().enumerate() {
                             let value = ColumnParsing::extract_using_regex(&ValueType::Int, parsing_input, pattern, Value::Null);
@@ -267,10 +268,17 @@ impl ColumnParsing {
                                 match index {
                                     0 => { year = value_i64 as i32 },
                                     1 => { month = value_i64 as u32 },
-                                    2 => { day = value_i64 as u32  },
-                                    3 => { hour = value_i64 as u32  },
-                                    4 => { minute = value_i64 as u32  },
-                                    5 => { second = value_i64 as u32  }
+                                    2 => { day = value_i64 as u32 },
+                                    3 => { hour = value_i64 as u32 },
+                                    4 => { minute = value_i64 as u32 },
+                                    5 => { second = value_i64 as u32 }
+                                    6 => {
+                                        if column.options.microseconds {
+                                            microsecond = value_i64 as u32;
+                                        } else {
+                                            microsecond = value_i64 as u32 * 1000;
+                                        }
+                                    }
                                     _ => {}
                                 }
                             } else {
@@ -298,7 +306,7 @@ impl ColumnParsing {
                             }
                         }
 
-                        match create_timestamp(year, month, day, hour, minute, second) {
+                        match create_timestamp(year, month, day, hour, minute, second, microsecond) {
                             Some(timestamp) => Value::Timestamp(timestamp),
                             None => column.default_value()
                         }
@@ -422,6 +430,7 @@ pub struct ColumnOptions {
     pub nullable: bool,
     pub trim: bool,
     pub convert: bool,
+    pub microseconds: bool,
     pub default_value: Option<Value>
 }
 
@@ -431,6 +440,7 @@ impl ColumnOptions {
             nullable: true,
             trim: false,
             convert: false,
+            microseconds: false,
             default_value: None
         }
     }
@@ -684,7 +694,7 @@ fn test_table_extract_timestamp1() {
 
     let result = table_definition.extract("2021-06-01 16:55:11");
     assert_eq!(
-        Value::Timestamp(create_timestamp(2021, 6, 1, 16, 55, 11).unwrap()),
+        Value::Timestamp(create_timestamp(2021, 6, 1, 16, 55, 11, 0).unwrap()),
         result.columns[0]
     );
 }
@@ -713,7 +723,7 @@ fn test_table_extract_timestamp2() {
 
     let result = table_definition.extract("Jul 9 22:53:22 2005");
     assert_eq!(
-        Value::Timestamp(create_timestamp(2005, 7, 9, 22, 53, 22).unwrap()),
+        Value::Timestamp(create_timestamp(2005, 7, 9, 22, 53, 22, 0).unwrap()),
         result.columns[0]
     );
 }
