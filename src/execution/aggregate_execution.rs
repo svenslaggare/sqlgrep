@@ -135,90 +135,145 @@ impl AggregateExecutionEngine {
                 }
                 Aggregate::Min(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
-                    group_value.modify_same_type(
-                        &column_value,
-                        |x, y| { *x = (*x).min(y) },
-                        |x, y| { *x = (*x).min(y) },
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                    );
+                    if column_value.is_not_null() {
+                        let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
+
+                        if group_value.is_not_null() {
+                            group_value.modify_same_type(
+                                &column_value,
+                                |x, y| { *x = (*x).min(y) },
+                                |x, y| { *x = (*x).min(y) },
+                                |_, _| {},
+                                |_, _| {},
+                                |_, _| {},
+                                |_, _| {},
+                            );
+                        } else {
+                            *group_value = column_value;
+                        }
+                    } else {
+                        self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
+                    }
                 }
                 Aggregate::Max(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
-                    group_value.modify_same_type(
-                        &column_value,
-                        |x, y| { *x = (*x).max(y) },
-                        |x, y| { *x = (*x).max(y) },
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                        |_, _| {},
-                    );
+                    if column_value.is_not_null() {
+                        let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
+
+                        if group_value.is_not_null() {
+                            group_value.modify_same_type(
+                                &column_value,
+                                |x, y| { *x = (*x).max(y) },
+                                |x, y| { *x = (*x).max(y) },
+                                |_, _| {},
+                                |_, _| {},
+                                |_, _| {},
+                                |_, _| {},
+                            );
+                        } else {
+                            *group_value = column_value;
+                        }
+                    } else {
+                        self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
+                    }
                 }
                 Aggregate::Average(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
+                    if column_value.is_not_null() {
+                        let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let average_entry = self.get_group(
-                        group_key.clone(),
-                        aggregate_index,
-                        SummaryGroupValue::Average(value_type.default_value(), 0)
-                    )?;
+                        let average_entry = self.get_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::Average(value_type.default_value(), 0)
+                        )?;
 
-                    if let SummaryGroupValue::Average(sum, count) = average_entry {
-                        sum.modify_same_type(
-                            &column_value,
-                            |x, y| { *x += y },
-                            |x, y| { *x += y },
-                            |_, _| {},
-                            |_, _| {},
-                            |_, _| {},
-                            |_, _| {},
-                        );
-                        *count += 1;
+                        if let SummaryGroupValue::Average(sum, count) = average_entry {
+                            if sum.is_not_null() {
+                                sum.modify_same_type(
+                                    &column_value,
+                                    |x, y| { *x += y },
+                                    |x, y| { *x += y },
+                                    |_, _| {},
+                                    |_, _| {},
+                                    |_, _| {},
+                                    |_, _| {},
+                                );
+                            } else {
+                                *sum = column_value;
+                            }
 
-                        let average = sum.map(
-                            || None,
-                            |x| Some(x / *count),
-                            |x| Some(x / *count as f64),
-                            |_| None,
-                            |_| None,
-                            |_| None,
-                            |_| None,
-                        );
+                            *count += 1;
 
-                        if let Some(average) = average {
-                            *self.get_group_value(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
+                            let average = sum.map(
+                                || None,
+                                |x| Some(x / *count),
+                                |x| Some(x / *count as f64),
+                                |_| None,
+                                |_| None,
+                                |_| None,
+                                |_| None,
+                            );
+
+                            if let Some(average) = average {
+                                *self.get_group_value(group_key.clone(), aggregate_index, || Ok(average.clone()))? = average.clone();
+                            }
+                        }
+                    } else {
+                        let average_entry = self.get_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::Average(Value::Null, 0)
+                        )?;
+
+                        if let SummaryGroupValue::Average(sum, _) = average_entry {
+                            if sum.is_null() {
+                                *self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))? = Value::Null;
+                            }
                         }
                     }
                 }
                 Aggregate::Sum(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
-                    let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
+                    if column_value.is_not_null() {
+                        let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                    let sum_entry = self.get_group(
-                        group_key.clone(),
-                        aggregate_index,
-                        SummaryGroupValue::Sum(value_type.default_value())
-                    )?;
+                        let sum_entry = self.get_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::Sum(value_type.default_value())
+                        )?;
 
-                    if let SummaryGroupValue::Sum(sum) = sum_entry {
-                        sum.modify_same_type(
-                            &column_value,
-                            |x, y| { *x += y },
-                            |x, y| { *x += y },
-                            |_, _| {},
-                            |_, _| {},
-                            |_, _| {},
-                            |_, _| {},
-                        );
+                        if let SummaryGroupValue::Sum(sum) = sum_entry {
+                            if sum.is_not_null() {
+                                sum.modify_same_type(
+                                    &column_value,
+                                    |x, y| { *x += y },
+                                    |x, y| { *x += y },
+                                    |_, _| {},
+                                    |_, _| {},
+                                    |_, _| {},
+                                    |_, _| {},
+                                );
+                            } else {
+                                *sum = column_value;
+                            }
 
-                        let sum = sum.clone();
-                        *self.get_group_value(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                            let sum = sum.clone();
+                            *self.get_group_value(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                        }
+                    } else {
+                        let sum_entry = self.get_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::Sum(Value::Null)
+                        )?;
+
+                        if let SummaryGroupValue::Sum(sum) = sum_entry {
+                            if sum.is_null() {
+                                *self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))? = Value::Null;
+                            }
+                        }
                     }
                 }
                 Aggregate::CollectArray(ref expression) => {
