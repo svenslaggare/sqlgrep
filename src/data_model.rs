@@ -8,6 +8,7 @@ use serde_json::json;
 
 use crate::model::{Value, Float, create_timestamp};
 use crate::model::ValueType;
+use crate::Statement;
 
 #[derive(Debug)]
 pub struct Row {
@@ -477,15 +478,39 @@ impl Tables {
         let mut new_tables = Tables::new();
 
         for table in tables {
-            let name = table.name.clone();
-            new_tables.add_table(&name, table);
+            new_tables.add_table(table);
         }
 
         new_tables
     }
 
-    pub fn add_table(&mut self, name: &str, definition: TableDefinition) {
-        self.tables.insert(name.to_owned(), definition);
+    pub fn add_table(&mut self, definition: TableDefinition) {
+        self.tables.insert(definition.name.clone(), definition);
+    }
+
+    pub fn add_tables(&mut self, statement: Statement) -> bool {
+        match statement {
+            Statement::CreateTable(table_definition) => {
+                self.add_table(table_definition);
+            }
+            Statement::Multiple(table_definitions) => {
+                for table_definition in table_definitions {
+                    match table_definition {
+                        Statement::CreateTable(table_definition) => {
+                            self.add_table(table_definition);
+                        }
+                        _ => {
+                            return false;
+                        }
+                    }
+                }
+            }
+            _ => {
+                return false;
+            }
+        }
+
+        true
     }
 
     pub fn get(&self, name: &str) -> Option<&TableDefinition> {

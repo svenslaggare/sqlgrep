@@ -303,7 +303,7 @@ fn test_file_ingest1() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
@@ -360,7 +360,7 @@ fn test_file_ingest2() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
@@ -414,7 +414,7 @@ fn test_file_ingest3() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
@@ -467,7 +467,7 @@ fn test_file_ingest4() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
@@ -517,7 +517,7 @@ fn test_file_ingest5() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
@@ -572,7 +572,7 @@ fn test_file_ingest6() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),

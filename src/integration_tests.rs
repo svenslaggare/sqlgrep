@@ -17,14 +17,12 @@ fn create_tables(filename: &str) -> Tables {
             panic!("Expected CREATE TABLE.");
         }
         Statement::CreateTable(table_definition) => {
-            let table_name = table_definition.name.clone();
-            tables.add_table(&table_name, table_definition);
+            tables.add_table(table_definition);
         }
         Statement::Multiple(statements) => {
             for statement in statements {
                 if let Statement::CreateTable(table_definition) = statement {
-                    let table_name = table_definition.name.clone();
-                    tables.add_table(&table_name, table_definition);
+                    tables.add_table(table_definition);
                 }
             }
         }

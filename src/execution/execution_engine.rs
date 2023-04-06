@@ -255,7 +255,6 @@ impl<'a> ExecutionEngine<'a> {
 fn test_regex_array1() {
     let mut tables = Tables::new();
     tables.add_table(
-        "connections",
         TableDefinition::new(
             "connections",
             vec![
@@ -332,7 +331,6 @@ fn test_regex_array1() {
 fn test_timestamp1() {
     let mut tables = Tables::new();
     tables.add_table(
-        "connections",
         TableDefinition::new(
             "connections",
             vec![
@@ -409,7 +407,6 @@ fn test_timestamp1() {
 fn test_json_array1() {
     let mut tables = Tables::new();
     tables.add_table(
-        "clients",
         TableDefinition::new(
             "clients",
             vec![],

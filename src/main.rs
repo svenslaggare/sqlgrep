@@ -61,12 +61,7 @@ fn main() {
         execute(&command_line_input, &mut tables, running.clone(), command, true);
     } else {
         let mut line_editor = Editor::new();
-
-        let validator = InputValidator {
-            completion_words: create_completion_words(&tables)
-        };
-
-        line_editor.set_helper(Some(validator));
+        line_editor.set_helper(Some(InputValidator::new(&tables)));
 
         while let Ok(mut line) = line_editor.readline("> ") {
             if line.ends_with('\n') {
@@ -82,38 +77,20 @@ fn main() {
 }
 
 fn define_table(tables: &mut Tables, text: String) -> bool {
-    let create_table_statement = parsing::parse(&text);
-    if let Err(err) = create_table_statement {
-        println!("Failed to create table: {}.", err);
-        return false;
-    }
-
-    match create_table_statement.unwrap() {
-        Statement::CreateTable(table_definition) => {
-            let table_name = table_definition.name.clone();
-            tables.add_table(&table_name, table_definition);
-        }
-        Statement::Multiple(table_definitions) => {
-            for table_definition in table_definitions {
-                match table_definition {
-                    Statement::CreateTable(table_definition) => {
-                        let table_name = table_definition.name.clone();
-                        tables.add_table(&table_name, table_definition);
-                    }
-                    _ => {
-                        println!("Expected CREATE TABLE statement.");
-                        return false;
-                    }
-                }
+    match parsing::parse(&text) {
+        Ok(create_table_statement) => {
+            if tables.add_tables(create_table_statement) {
+                true
+            } else {
+                println!("Expected CREATE TABLE statement.");
+                false
             }
         }
-        _ => {
-            println!("Expected CREATE TABLE  statement.");
-            return false;
+        Err(err) => {
+            println!("Failed to create table: {}.", err);
+            false
         }
     }
-
-    true
 }
 
 fn execute(command_line_input: &CommandLineInput,
@@ -158,8 +135,7 @@ fn execute(command_line_input: &CommandLineInput,
 
     match parse_statement(&query_line) {
         Some(Statement::CreateTable(table_definition)) => {
-            let table_name = table_definition.name.clone();
-            tables.add_table(&table_name, table_definition);
+            tables.add_table(table_definition);
             return false;
         },
         Some(statement) => {
@@ -274,6 +250,19 @@ fn parse_statement(line: &str) -> Option<Statement> {
     }
 }
 
+#[derive(Helper, Highlighter, Hinter)]
+struct InputValidator {
+    completion_words: Vec<String>
+}
+
+impl InputValidator {
+    pub fn new(tables: &Tables) -> InputValidator {
+        InputValidator {
+            completion_words: create_completion_words(tables)
+        }
+    }
+}
+
 fn create_completion_words(tables: &Tables) -> Vec<String> {
     let mut completion_words = keywords_list(true);
     completion_words.push("COUNT".to_owned());
@@ -291,11 +280,6 @@ fn create_completion_words(tables: &Tables) -> Vec<String> {
     }
 
     completion_words
-}
-
-#[derive(Helper, Highlighter, Hinter)]
-struct InputValidator {
-    completion_words: Vec<String>
 }
 
 impl Validator for InputValidator {
@@ -316,12 +300,7 @@ impl Validator for InputValidator {
 impl Completer for InputValidator {
     type Candidate = Pair;
 
-    fn complete(
-        &self,
-        line: &str,
-        pos: usize,
-        _ctx: &Context<'_>,
-    ) -> Result<(usize, Vec<Pair>), ReadlineError> {
+    fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> Result<(usize, Vec<Pair>), ReadlineError> {
         let mut current_word = Vec::new();
         for char in line.chars().rev() {
             if char.is_whitespace() {
