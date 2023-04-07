@@ -28,18 +28,9 @@ fn filtering() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
-    let mut ingester = FileExecutor::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
-        false,
-        DisplayOptions::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-    ingester.print_result = false;
-
-    let result = ingester.execute(Statement::Select(SelectStatement {
+    let statement = Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
             ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
@@ -57,8 +48,19 @@ fn filtering() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        join: None
-    }));
+        join: None,
+        limit: None
+    });
+    
+    let mut executor = FileExecutor::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
+        DisplayOptions::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+    executor.print_result = false;
+
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -85,21 +87,12 @@ fn aggregate() {
     ).unwrap();
 
     let mut tables = Tables::new();
-    tables.add_table("connections", table_definition);
+    tables.add_table(table_definition);
 
-    let mut ingester = FileExecutor::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
-        false,
-        DisplayOptions::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-    ingester.print_result = false;
-
-    let result = ingester.execute(Statement::Aggregate(AggregateStatement {
+    let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None), None),
+            ("count".to_owned(), Aggregate::Count(None, false), None),
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
         ],
         from: "connections".to_string(),
@@ -111,8 +104,19 @@ fn aggregate() {
         }),
         group_by: Some(vec!["hour".to_owned()]),
         having: None,
-        join: None
-    }));
+        join: None,
+        limit: None
+    });
+    
+    let mut executor = FileExecutor::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
+        DisplayOptions::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+    executor.print_result = false;
+
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
