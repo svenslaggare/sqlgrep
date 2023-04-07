@@ -12,7 +12,7 @@ use rustyline_derive::{Helper, Highlighter, Hinter};
 use rustyline::completion::{Completer, Pair};
 
 use sqlgrep::{parsing, Tables, Statement, ExecutionEngine};
-use sqlgrep::ingest::{FileIngester, FollowFileIngester, DisplayOptions, OutputFormat};
+use sqlgrep::executer::{FileExecuter, FollowFileExecuter, DisplayOptions, OutputFormat};
 use sqlgrep::parsing::tokenizer::keywords_list;
 use sqlgrep::helpers::TablePrinter;
 
@@ -205,7 +205,7 @@ fn execute(command_line_input: &CommandLineInput,
             }
 
             let result = if command_line_input.follow {
-                let ingester = FollowFileIngester::new(
+                let executer = FollowFileExecuter::new(
                     running,
                     files.remove(0),
                     command_line_input.head,
@@ -213,9 +213,9 @@ fn execute(command_line_input: &CommandLineInput,
                     ExecutionEngine::new(&tables, &statement)
                 );
 
-                match ingester {
-                    Ok(mut ingester) => {
-                        ingester.process()
+                match executer {
+                    Ok(mut executer) => {
+                        executer.execute()
                     }
                     Err(err) => {
                         println!("{}", err);
@@ -223,25 +223,28 @@ fn execute(command_line_input: &CommandLineInput,
                     }
                 }
             } else {
-                let ingester = FileIngester::new(
+                display_options.single_result = single_result;
+
+                let executer = FileExecuter::new(
                     running,
                     files,
-                    single_result,
                     display_options,
                     ExecutionEngine::new(&tables, &statement),
                 );
 
-                match ingester {
-                    Ok(mut ingester) => {
-                        let result = ingester.process();
+                match executer {
+                    Ok(mut executer) => {
+                        let result = executer.execute();
+
                         if command_line_input.show_run_stats {
                             println!(
                                 "Executed query in {:.2} seconds, ingested {:.2} MB, processed {} lines.",
-                                ingester.statistics.execution_time(),
-                                ingester.statistics.ingested_megabytes(),
-                                ingester.statistics.total_lines
+                                executer.statistics.execution_time(),
+                                executer.statistics.ingested_megabytes(),
+                                executer.statistics.total_lines
                             );
                         }
+
                         result
                     }
                     Err(err) => {

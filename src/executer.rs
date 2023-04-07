@@ -4,11 +4,8 @@ use std::iter::FromIterator;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
-use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, NullableCompareOperator, BooleanOperator};
-use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
 
 pub struct ExecutionStatistics {
     execution_start: std::time::Instant,
@@ -44,41 +41,42 @@ pub enum OutputFormat {
 }
 
 pub struct DisplayOptions {
-    pub output_format: OutputFormat
+    pub output_format: OutputFormat,
+    pub single_result: bool,
 }
 
 impl Default for DisplayOptions {
     fn default() -> Self {
         DisplayOptions {
-            output_format: OutputFormat::Text
+            output_format: OutputFormat::Text,
+            single_result: false
         }
     }
 }
 
-pub struct FileIngester<'a> {
+pub struct FileExecuter<'a> {
     running: Arc<AtomicBool>,
     readers: Vec<BufReader<File>>,
-    single_result: bool,
     execution_engine: ExecutionEngine<'a>,
+    display_options: DisplayOptions,
     pub statistics: ExecutionStatistics,
     pub print_result: bool,
     output_printer: OutputPrinter
 }
 
-impl<'a> FileIngester<'a> {
+impl<'a> FileExecuter<'a> {
     pub fn new(running: Arc<AtomicBool>,
                files: Vec<File>,
-               single_result: bool,
                display_options: DisplayOptions,
-               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileIngester<'a>> {
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileExecuter<'a>> {
         let output_printer = OutputPrinter::new(display_options.output_format.clone());
 
         Ok(
-            FileIngester {
+            FileExecuter {
                 running,
                 readers: files.into_iter().map(|file| BufReader::new(file)).collect(),
-                single_result,
                 execution_engine,
+                display_options,
                 print_result: true,
                 statistics: ExecutionStatistics::new(),
                 output_printer
@@ -86,7 +84,7 @@ impl<'a> FileIngester<'a> {
         )
     }
 
-    pub fn process(&mut self) -> ExecutionResult<()> {
+    pub fn execute(&mut self) -> ExecutionResult<()> {
         let mut config = ExecutionConfig::default();
         if self.execution_engine.is_aggregate() {
             config.result = false;
@@ -108,7 +106,7 @@ impl<'a> FileIngester<'a> {
                     if let Some(result_row) = output.row {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
-                            self.output_printer.print(&result_row, self.single_result);
+                            self.output_printer.print(&result_row, self.display_options.single_result);
                         }
                     }
 
@@ -138,19 +136,19 @@ impl<'a> FileIngester<'a> {
     }
 }
 
-pub struct FollowFileIngester<'a> {
+pub struct FollowFileExecuter<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
     output_printer: OutputPrinter
 }
 
-impl<'a> FollowFileIngester<'a> {
+impl<'a> FollowFileExecuter<'a> {
     pub fn new(running: Arc<AtomicBool>,
                file: File,
                head: bool,
                display_options: DisplayOptions,
-               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileIngester<'a>> {
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileExecuter<'a>> {
         let output_printer = OutputPrinter::new(display_options.output_format.clone());
 
         let mut reader = BufReader::new(file);
@@ -162,7 +160,7 @@ impl<'a> FollowFileIngester<'a> {
         }
 
         Ok(
-            FollowFileIngester {
+            FollowFileExecuter {
                 running,
                 reader: Some(reader),
                 execution_engine,
@@ -171,7 +169,7 @@ impl<'a> FollowFileIngester<'a> {
         )
     }
 
-    pub fn process(&mut self) -> ExecutionResult<()> {
+    pub fn execute(&mut self) -> ExecutionResult<()> {
         let mut reader = self.reader.take().unwrap();
         let mut line = String::new();
 
@@ -292,7 +290,12 @@ impl OutputPrinter {
 }
 
 #[test]
-fn test_file_ingest1() {
+fn test_file_executer_select1() {
+    use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
+    use crate::execution::execution_engine::{ExecutionEngine};
+    use crate::model::{CompareOperator, Statement};
+    use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
+
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -335,15 +338,14 @@ fn test_file_ingest1() {
         limit: None
     });
 
-    let mut ingester = FileIngester::new(
+    let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process();
+    let result = executer.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -352,7 +354,12 @@ fn test_file_ingest1() {
 }
 
 #[test]
-fn test_file_ingest2() {
+fn test_file_executer_aggregate1() {
+    use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
+    use crate::execution::execution_engine::{ExecutionEngine};
+    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
+    use crate::model::{ExpressionTree, Value, ValueType};
+
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -392,15 +399,14 @@ fn test_file_ingest2() {
         limit: None
     });
 
-    let mut ingester = FileIngester::new(
+    let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process();
+    let result = executer.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -409,7 +415,12 @@ fn test_file_ingest2() {
 }
 
 #[test]
-fn test_file_ingest3() {
+fn test_file_executer_aggregate2() {
+    use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
+    use crate::execution::execution_engine::{ExecutionEngine};
+    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
+    use crate::model::{ExpressionTree, Value, ValueType};
+
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -448,15 +459,14 @@ fn test_file_ingest3() {
         limit: None
     });
 
-    let mut ingester = FileIngester::new(
+    let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process();
+    let result = executer.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -465,7 +475,12 @@ fn test_file_ingest3() {
 }
 
 #[test]
-fn test_file_ingest4() {
+fn test_file_executer_aggregate3() {
+    use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
+    use crate::execution::execution_engine::{ExecutionEngine};
+    use crate::model::{Aggregate, AggregateStatement, Statement};
+    use crate::model::{ExpressionTree, ValueType};
+
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -501,15 +516,14 @@ fn test_file_ingest4() {
         limit: None
     });
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process();
+    let result = ingester.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -518,7 +532,12 @@ fn test_file_ingest4() {
 }
 
 #[test]
-fn test_file_ingest5() {
+fn test_file_executer_aggregate4() {
+    use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
+    use crate::execution::execution_engine::{ExecutionEngine};
+    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
+    use crate::model::{ExpressionTree, Value, ValueType};
+
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -559,15 +578,14 @@ fn test_file_ingest5() {
         limit: None
     });
 
-    let mut ingester = FileIngester::new(
+    let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process();
+    let result = executer.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -576,7 +594,12 @@ fn test_file_ingest5() {
 }
 
 #[test]
-fn test_file_ingest6() {
+fn test_file_executer_aggregate5() {
+    use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
+    use crate::execution::execution_engine::{ExecutionEngine};
+    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, BooleanOperator, NullableCompareOperator};
+    use crate::model::{ExpressionTree, Value, ValueType};
+
     let table_definition = TableDefinition::new(
         "connections",
         vec![
@@ -626,15 +649,14 @@ fn test_file_ingest6() {
         limit: None
     });
 
-    let mut ingester = FileIngester::new(
+    let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process();
+    let result = executer.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);

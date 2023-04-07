@@ -1,15 +1,14 @@
 use std::collections::{HashMap};
-use std::io::{BufReader, BufRead};
-use std::fs::File;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use crate::data_model::{Row, TableDefinition};
 
-use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, RegexResultReference, Row, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
 use crate::execution::select_execution::SelectExecutionEngine;
-use crate::model::{AggregateStatement, CompareOperator, create_timestamp, ExpressionTree, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
+use crate::{Statement, Tables};
+use crate::model::{AggregateStatement, SelectStatement, Value};
 
 pub struct ExecutionConfig {
     pub result: bool,
@@ -328,6 +327,11 @@ impl<'a> ExecutionEngine<'a> {
 
 #[test]
 fn test_regex_array1() {
+    use std::io::{BufReader, BufRead};
+    use std::fs::File;
+    use crate::data_model::{ColumnDefinition, ColumnParsing, RegexResultReference, TableDefinition, Tables, RegexMode};
+    use crate::model::{CompareOperator, ExpressionTree, SelectStatement, Statement, Value, ValueType};
+
     let mut tables = Tables::new();
     tables.add_table(
         TableDefinition::new(
@@ -411,6 +415,11 @@ fn test_regex_array1() {
 
 #[test]
 fn test_timestamp1() {
+    use std::io::{BufReader, BufRead};
+    use std::fs::File;
+    use crate::data_model::{ColumnDefinition, ColumnParsing, RegexResultReference, TableDefinition, Tables, RegexMode};
+    use crate::model::{CompareOperator, create_timestamp, ExpressionTree, SelectStatement, Statement, Value, ValueType};
+
     let mut tables = Tables::new();
     tables.add_table(
         TableDefinition::new(
@@ -487,6 +496,11 @@ fn test_timestamp1() {
 
 #[test]
 fn test_json_array1() {
+    use std::io::{BufReader, BufRead};
+    use std::fs::File;
+    use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, TableDefinition, Tables};
+    use crate::model::{ExpressionTree, SelectStatement, Statement, Value, ValueType, NullableCompareOperator};
+
     let mut tables = Tables::new();
     tables.add_table(
         TableDefinition::new(
@@ -556,6 +570,11 @@ fn test_json_array1() {
 
 #[test]
 fn test_limit1() {
+    use std::io::{BufReader, BufRead};
+    use std::fs::File;
+    use crate::data_model::{ColumnDefinition, ColumnParsing, RegexResultReference, TableDefinition, Tables, RegexMode};
+    use crate::model::{CompareOperator, ExpressionTree, SelectStatement, Statement, Value, ValueType};
+
     let mut tables = Tables::new();
     tables.add_table(
         TableDefinition::new(

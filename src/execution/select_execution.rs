@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
-use crate::execution::{ColumnProvider, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::{ColumnProvider, ExecutionResult, ResultRow};
 use crate::execution::expression_execution::ExpressionExecutionEngine;
-use crate::model::{ArithmeticOperator, CompareOperator, ExpressionTree, SelectStatement, Value, ValueType};
-use crate::data_model::{TableDefinition, Tables, Row, ColumnDefinition};
+use crate::model::{ExpressionTree, SelectStatement};
+use crate::data_model::{Row};
 
 pub struct SelectExecutionEngine {
 
@@ -58,6 +56,10 @@ impl SelectExecutionEngine  {
 
 #[test]
 fn test_project1() {
+    use std::collections::HashMap;
+    use crate::execution::HashMapColumnProvider;
+    use crate::model::{ExpressionTree, SelectStatement, Value};
+
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -90,6 +92,10 @@ fn test_project1() {
 
 #[test]
 fn test_project2() {
+    use std::collections::HashMap;
+    use crate::execution::HashMapColumnProvider;
+    use crate::model::{ArithmeticOperator, ExpressionTree, SelectStatement, Value};
+
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -131,6 +137,10 @@ fn test_project2() {
 
 #[test]
 fn test_project3() {
+    use std::collections::HashMap;
+    use crate::execution::HashMapColumnProvider;
+    use crate::model::{ArithmeticOperator, ExpressionTree, SelectStatement, Value};
+
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -177,6 +187,11 @@ fn test_project3() {
 
 #[test]
 fn test_project4() {
+    use std::collections::HashMap;
+    use crate::execution::HashMapColumnProvider;
+    use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
+    use crate::data_model::{TableDefinition, Tables, ColumnDefinition};
+
     let table_definition = TableDefinition::new(
         "test",
         Vec::new(),
@@ -225,6 +240,10 @@ fn test_project4() {
 
 #[test]
 fn test_filter1() {
+    use std::collections::HashMap;
+    use crate::execution::HashMapColumnProvider;
+    use crate::model::{CompareOperator, ExpressionTree, SelectStatement, Value};
+
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![
@@ -260,6 +279,10 @@ fn test_filter1() {
 
 #[test]
 fn test_filter2() {
+    use std::collections::HashMap;
+    use crate::execution::HashMapColumnProvider;
+    use crate::model::{CompareOperator, ExpressionTree, SelectStatement, Value};
+
     let select_execution_engine = SelectExecutionEngine::new();
 
     let column_values = vec![

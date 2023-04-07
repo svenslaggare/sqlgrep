@@ -4,7 +4,7 @@ use std::fs::File;
 
 use crate::data_model::{Tables};
 use crate::execution::execution_engine::ExecutionEngine;
-use crate::ingest::FileIngester;
+use crate::executer::{DisplayOptions, FileExecuter};
 use crate::model::Statement;
 use crate::parsing;
 
@@ -37,15 +37,14 @@ fn test_ssh1() {
 
     let query = parsing::parse("SELECT * FROM ssh").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ssh_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(386, ingester.statistics.total_result_rows);
 }
 
@@ -55,15 +54,14 @@ fn test_ssh2() {
 
     let query = parsing::parse("SELECT hostname, COUNT() AS count FROM ssh GROUP BY hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ssh_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(14, ingester.statistics.total_result_rows);
 }
 
@@ -73,15 +71,14 @@ fn test_ftpd1() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -91,15 +88,14 @@ fn test_ftpd2() {
 
     let query = parsing::parse("SELECT hostname, COUNT() FROM connections WHERE hostname IS NOT NULL GROUP BY hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
 
@@ -109,15 +105,14 @@ fn test_ftpd3() {
 
     let query = parsing::parse("SELECT hostname, COUNT() FROM connections WHERE hostname IS NOT NULL HAVING COUNT() > 22 GROUP BY hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(6, ingester.statistics.total_result_rows);
 }
 
@@ -127,15 +122,14 @@ fn test_ftpd4() {
 
     let query = parsing::parse("SELECT hostname, COUNT(hostname) FROM connections GROUP BY hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
 
@@ -145,15 +139,14 @@ fn test_ftpd5() {
 
     let query = parsing::parse("SELECT hostname, COUNT(hostname) FROM connections WHERE regexp_matches(hostname, '.*in-addr.zen.co.uk') GROUP BY hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(2, ingester.statistics.total_result_rows);
 }
 
@@ -163,15 +156,14 @@ fn test_ftpd6() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -181,15 +173,14 @@ fn test_ftpd7() {
 
     let query = parsing::parse("SELECT ip, hostname, timestamp, EXTRACT(EPOCH FROM timestamp) FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -199,15 +190,14 @@ fn test_ftpd8() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE ip IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(653, ingester.statistics.total_result_rows);
 }
 
@@ -217,18 +207,16 @@ fn test_ftpd9() {
 
     let query = parsing::parse("SELECT hostname, array_unique(array_agg(ip)) AS ips FROM connections WHERE hostname IS NOT NULL GROUP BY hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
-
 
 #[test]
 fn test_ftpd_csv1() {
@@ -236,15 +224,14 @@ fn test_ftpd_csv1() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_csv.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -254,15 +241,14 @@ fn test_client1() {
 
     let query = parsing::parse("SELECT * FROM clients WHERE device_id >= 180;").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/clients_data.json").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(232, ingester.statistics.total_result_rows);
 }
 
@@ -272,15 +258,14 @@ fn test_client2() {
 
     let query = parsing::parse("SELECT * FROM clients WHERE events IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/clients_data.json").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(3, ingester.statistics.total_result_rows);
 }
 
@@ -290,15 +275,16 @@ fn test_client3() {
 
     let query = parsing::parse("SELECT timestamp, events[1] AS event FROM clients WHERE events IS NOT NULL").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut display_options = DisplayOptions::default();
+    display_options.single_result = true;
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/clients_data.json").unwrap()],
-        true,
-        Default::default(),
+        display_options,
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(3, ingester.statistics.total_result_rows);
 }
 
@@ -308,15 +294,14 @@ fn test_join1() {
 
     let query = parsing::parse("SELECT hostname, COUNT(*) FROM dummy1 INNER JOIN dummy2::'testdata/dummy2_data.txt' ON dummy1.hostname=dummy2.hostname GROUP BY hostname;").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/dummy1_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(2, ingester.statistics.total_result_rows);
 }
 
@@ -326,15 +311,14 @@ fn test_join2() {
 
     let query = parsing::parse("SELECT hostname, min, dummy2.max FROM dummy1 INNER JOIN dummy2::'testdata/dummy2_data.txt' ON dummy1.hostname=dummy2.hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/dummy1_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(3, ingester.statistics.total_result_rows);
 }
 
@@ -344,14 +328,13 @@ fn test_join3() {
 
     let query = parsing::parse("SELECT hostname, dummy1.min, max FROM dummy2 OUTER JOIN dummy1::'testdata/dummy1_data.txt' ON dummy2.hostname=dummy1.hostname").unwrap();
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/dummy2_data.txt").unwrap()],
-        false,
         Default::default(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process().unwrap();
+    ingester.execute().unwrap();
     assert_eq!(4, ingester.statistics.total_result_rows);
 }

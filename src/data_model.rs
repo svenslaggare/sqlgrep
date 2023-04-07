@@ -4,9 +4,7 @@ use itertools::Itertools;
 
 use regex::{Regex, Captures};
 
-use serde_json::json;
-
-use crate::model::{Value, Float, create_timestamp};
+use crate::model::{Value, create_timestamp};
 use crate::model::ValueType;
 use crate::Statement;
 
@@ -585,6 +583,8 @@ fn test_table_extract4() {
 
 #[test]
 fn test_table_extract5() {
+    use crate::model::{Float};
+
     let table_definition = TableDefinition::new(
         "test",
         vec![("line", "([0-9\\.]+)", RegexMode::Captures)],
@@ -977,6 +977,8 @@ fn test_table_extract_split2() {
 
 #[test]
 fn test_json_access1() {
+    use serde_json::json;
+
     let value = json!({
         "test1": 4711,
         "test2": {
@@ -997,6 +999,8 @@ fn test_json_access1() {
 
 #[test]
 fn test_json_access2() {
+    use serde_json::json;
+
     let value = json!({
         "test1": [1, 2],
         "test2": {

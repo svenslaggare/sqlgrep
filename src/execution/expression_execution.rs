@@ -1,5 +1,5 @@
 use std::hash::{Hasher, Hash};
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{BTreeSet};
 use std::iter::FromIterator;
 use std::ops::Add;
 
@@ -11,7 +11,7 @@ use chrono::{Local, Datelike, Timelike, DurationRound, Duration};
 
 use itertools::Itertools;
 
-use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator, IntervalType};
+use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator};
 use crate::execution::{ColumnProvider};
 
 #[derive(Debug, PartialEq)]
@@ -565,15 +565,17 @@ pub fn unique_values(values: &mut Vec<Value>) {
     *values = Vec::from_iter(BTreeSet::from_iter(unique_values.into_iter()).into_iter());
 }
 
+#[cfg(test)]
 struct TestColumnProvider {
-    columns: HashMap<String, Value>,
+    columns: std::collections::HashMap<String, Value>,
     keys: Vec<String>
 }
 
+#[cfg(test)]
 impl TestColumnProvider {
     fn new() -> TestColumnProvider {
         TestColumnProvider {
-            columns: HashMap::new(),
+            columns: std::collections::HashMap::new(),
             keys: Vec::new()
         }
     }
@@ -583,6 +585,7 @@ impl TestColumnProvider {
     }
 }
 
+#[cfg(test)]
 impl ColumnProvider for TestColumnProvider {
     fn get(&self, name: &str) -> Option<&Value> {
         self.columns.get(name)
@@ -781,6 +784,8 @@ fn test_arithmetic1() {
 
 #[test]
 fn test_arithmetic2() {
+    use crate::model::IntervalType;
+
     let column_provider = TestColumnProvider::new();
 
     let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);

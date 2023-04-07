@@ -6,7 +6,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables, RegexMode};
 use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate};
-use sqlgrep::ingest::{FileIngester, DisplayOptions};
+use sqlgrep::executer::{FileExecuter, DisplayOptions};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 
 fn filtering() {
@@ -30,7 +30,7 @@ fn filtering() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
         false,
@@ -39,7 +39,7 @@ fn filtering() {
     ).unwrap();
     ingester.print_result = false;
 
-    let result = ingester.process(Statement::Select(SelectStatement {
+    let result = ingester.execute(Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
             ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
@@ -87,7 +87,7 @@ fn aggregate() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileIngester::new(
+    let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
         false,
@@ -96,7 +96,7 @@ fn aggregate() {
     ).unwrap();
     ingester.print_result = false;
 
-    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+    let result = ingester.execute(Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
             ("count".to_owned(), Aggregate::Count(None), None),
