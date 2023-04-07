@@ -77,6 +77,9 @@ Supported functions:
 * `lower(TEXT) => TEXT`
 * `array_unique(ARRAY) => ARRAY`
 * `array_length(ARRAY) => INT`
+* `array_cat(ARRAY) => ARRAY`
+* `array_append(ARRAY, ANY) => ARRAY`
+* `array_prepend(ANY, ARRAY) => ARRAY`
 * `now() => TIMESTAMP`
 * `make_timestamp(INT, INT, INT, INT, INT, INT, INT) => TIMESTAMP`
 * `date_trunc(TEXT, TIMESTAMP) => TIMESTAMP`

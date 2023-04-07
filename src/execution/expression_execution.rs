@@ -381,6 +381,54 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                         }
                     }
+                    Function::ArrayCat if arguments.len() == 2 => {
+                        let arg1 = executed_arguments.remove(0);
+                        let arg2 = executed_arguments.remove(0);
+
+                        match (arg1, arg2) {
+                            (Value::Array(array_type1, mut values1), Value::Array(array_type2, mut values2)) => {
+                                if array_type1 == array_type2 {
+                                    values1.append(&mut values2);
+                                    Ok(Value::Array(array_type1, values1))
+                                } else {
+                                    Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                                }
+                            },
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                        }
+                    }
+                    Function::ArrayAppend if arguments.len() == 2 => {
+                        let arg1 = executed_arguments.remove(0);
+                        let arg2 = executed_arguments.remove(0);
+
+                        match (arg1, arg2) {
+                            (Value::Array(array_type, mut values), value) => {
+                                if Some(array_type.clone()) == value.value_type() {
+                                    values.push(value);
+                                    Ok(Value::Array(array_type, values))
+                                } else {
+                                    Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                                }
+                            },
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                        }
+                    }
+                    Function::ArrayPrepend if arguments.len() == 2 => {
+                        let arg1 = executed_arguments.remove(0);
+                        let arg2 = executed_arguments.remove(0);
+
+                        match (arg1, arg2) {
+                            (value, Value::Array(array_type, mut values)) => {
+                                if Some(array_type.clone()) == value.value_type() {
+                                    values.insert(0, value);
+                                    Ok(Value::Array(array_type, values))
+                                } else {
+                                    Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                                }
+                            },
+                            _ => Err(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
+                        }
+                    }
                     Function::TimestampNow if arguments.len() == 0 => {
                         Ok(Value::Timestamp(Local::now()))
                     }
@@ -980,6 +1028,24 @@ fn test_create_array3() {
         expression_execution_engine.evaluate(&ExpressionTree::Function {
             function: Function::CreateArray,
             arguments: vec![ExpressionTree::Value(Value::Null)]
+        })
+    );
+}
+
+#[test]
+fn test_array_cat() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Array(ValueType::Int, vec![Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4), Value::Int(5)])),
+        expression_execution_engine.evaluate(&ExpressionTree::Function {
+            function: Function::ArrayCat,
+            arguments: vec![
+                ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(1), Value::Int(2)])),
+                ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(3), Value::Int(4), Value::Int(5)]))
+            ]
         })
     );
 }
