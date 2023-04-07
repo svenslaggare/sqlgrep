@@ -200,623 +200,83 @@ fn test_parse_type_convert1() {
 
 #[test]
 fn test_parse_select1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: None,
-            group_by: None,
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test").unwrap();
+    assert_eq!("SELECT x FROM test", tree.to_string());
 }
 
 #[test]
 fn test_parse_select2() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Operator(Operator::Single('*')),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::Wildcard.with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: None,
-            group_by: None,
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT * FROM test").unwrap();
+    assert_eq!("SELECT * FROM test", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_and_filter1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: None,
-            join: None,
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test WHERE x > 4").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x > 4)", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_and_filter2() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::As),
-            Token::Identifier("xxx".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![
-                (
-                    Some("xxx".to_owned()),
-                    ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())
-                )
-            ],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x AS xxx FROM test WHERE x > 4").unwrap();
+    assert_eq!("SELECT x AS xxx FROM test WHERE (x > 4)", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_and_filter3() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("MAX".to_owned()),
-            Token::LeftParentheses,
-            Token::Identifier("x".to_string()),
-            Token::RightParentheses,
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                    distinct: None
-                }.with_location(Default::default())
-            )],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT MAX(x) FROM test WHERE x > 4").unwrap();
+    assert_eq!("SELECT MAX(x) FROM test WHERE (x > 4)", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_and_filter4() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("MAX".to_owned()),
-            Token::LeftParentheses,
-            Token::Identifier("x".to_string()),
-            Token::RightParentheses,
-            Token::Operator(Operator::Single('*')),
-            Token::Int(2),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![
-                (
-                    None,
-                    ParserExpressionTreeData::BinaryOperator {
-                        operator: Operator::Single('*'),
-                        left: Box::new(ParserExpressionTreeData::Call {
-                            name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                            distinct: None
-                        }.with_location(Default::default())),
-                        right: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default()))
-                    }.with_location(Default::default())
-                )
-            ],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT MAX(x) * 2 FROM test WHERE x > 4").unwrap();
+    assert_eq!("SELECT (MAX(x) * 2) FROM test WHERE (x > 4)", tree.to_string());
 }
 
 #[test]
 fn test_parse_with_filename() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::DoubleColon,
-            Token::String("test.log".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), Some("test.log".to_owned())),
-            filter: None,
-            group_by: None,
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test::'test.log'").unwrap();
+    assert_eq!("SELECT x FROM test::'test.log'", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_group_by1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::Keyword(Keyword::Group),
-            Token::Keyword(Keyword::By),
-            Token::Identifier("x".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: Some(vec!["x".to_owned()]),
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test WHERE x > 4 GROUP BY x").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x > 4) GROUP BY x", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_group_by2() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::Keyword(Keyword::Group),
-            Token::Keyword(Keyword::By),
-            Token::Identifier("x".to_string()),
-            Token::Comma,
-            Token::Identifier("y".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: Some(vec!["x".to_owned(), "y".to_owned()]),
-            having: None,
-            join: None
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test WHERE x > 4 GROUP BY x, y").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x > 4) GROUP BY x, y", tree.to_string());
 }
 
 #[test]
 fn test_parse_select_group_by3() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::Keyword(Keyword::Group),
-            Token::Keyword(Keyword::By),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::Group),
-            Token::Keyword(Keyword::By),
-            Token::Identifier("x".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse();
+    let tree = parse_str("SELECT x FROM test WHERE x > 4 GROUP BY x GROUP BY y");
     assert_eq!(
-        Err(ParserError::new(TokenLocation::new(0, 0), ParserErrorType::AlreadyHaveGroupBy)),
+        Err(ParserError::new(TokenLocation::new(0, 50), ParserErrorType::AlreadyHaveGroupBy)),
         tree,
     );
 }
 
 #[test]
 fn test_parse_select_having() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::Keyword(Keyword::Having),
-            Token::Identifier("y".to_string()),
-            Token::Operator(Operator::Single('<')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('<'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("y".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            join: None,
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test WHERE x > 4 GROUP BY x HAVING y < 4").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x > 4) GROUP BY x HAVING (y < 4)", tree.to_string());
 }
 
 #[test]
 fn test_parse_inner_join1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::Keyword(Keyword::Inner),
-            Token::Keyword(Keyword::Join),
-            Token::Identifier("table1".to_string()),
-            Token::DoubleColon,
-            Token::String("file.log".to_string()),
-            Token::Keyword(Keyword::On),
-            Token::Identifier("table2".to_string()),
-            Token::Operator(Operator::Single('.')),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::Identifier("table1".to_string()),
-            Token::Operator(Operator::Single('.')),
-            Token::Identifier("y".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: None,
-            join: Some(
-                ParserJoinClause {
-                    joiner_table: "table1".to_string(),
-                    joiner_filename: "file.log".to_string(),
-                    left_table: "table2".to_string(),
-                    left_column: "x".to_string(),
-                    right_table: "table1".to_string(),
-                    right_column: "y".to_string(),
-                    is_outer: false
-                }
-            ),
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test WHERE x > 4 INNER JOIN table1::'file.log' ON table2.x = table1.y").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x > 4) INNER JOIN table1::'file.log' ON table2.x = table1.y", tree.to_string());
 }
 
 #[test]
 fn test_parse_outer_join1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Select),
-            Token::Identifier("x".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("test".to_string()),
-            Token::Keyword(Keyword::Where),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('>')),
-            Token::Int(4),
-            Token::Keyword(Keyword::Outer),
-            Token::Keyword(Keyword::Join),
-            Token::Identifier("table1".to_string()),
-            Token::DoubleColon,
-            Token::String("file.log".to_string()),
-            Token::Keyword(Keyword::On),
-            Token::Identifier("table2".to_string()),
-            Token::Operator(Operator::Single('.')),
-            Token::Identifier("x".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::Identifier("table1".to_string()),
-            Token::Operator(Operator::Single('.')),
-            Token::Identifier("y".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: Default::default(),
-            projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('>'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            group_by: None,
-            having: None,
-            join: Some(
-                ParserJoinClause {
-                    joiner_table: "table1".to_string(),
-                    joiner_filename: "file.log".to_string(),
-                    left_table: "table2".to_string(),
-                    left_column: "x".to_string(),
-                    right_table: "table1".to_string(),
-                    right_column: "y".to_string(),
-                    is_outer: true
-                }
-            ),
-        },
-        tree
-    );
+    let tree = parse_str("SELECT x FROM test WHERE x > 4 OUTER JOIN table1::'file.log' ON table2.x = table1.y").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x > 4) OUTER JOIN table1::'file.log' ON table2.x = table1.y", tree.to_string());
 }
 
 #[test]

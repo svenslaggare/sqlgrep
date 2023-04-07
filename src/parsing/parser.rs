@@ -1008,6 +1008,63 @@ impl<'a> Parser<'a> {
     }
 }
 
+impl std::fmt::Display for ParserOperationTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParserOperationTree::Select { projections, from, filter, group_by, having, join, .. } => {
+                let projection_str = projections
+                    .iter()
+                    .map(|(name, expression)| {
+                        if let Some(name) = name {
+                            format!("{} AS {}", expression.tree, name)
+                        } else {
+                            expression.tree.to_string()
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                write!(f, "SELECT {} FROM {}", projection_str, from.0)?;
+                if let Some(from_file) = &from.1 {
+                    write!(f, "::'{}'", from_file)?;
+                }
+
+                if let Some(filter) = filter {
+                    write!(f, " WHERE {}", filter.tree)?;
+                }
+
+                if let Some(group_by) = group_by {
+                    write!(f, " GROUP BY {}", group_by.join(", "))?;
+                }
+
+                if let Some(having) = having {
+                    write!(f, " HAVING {}", having.tree)?;
+                }
+
+                if let Some(join) = join {
+                    if join.is_outer {
+                        write!(f, " OUTER JOIN ")?;
+                    } else {
+                        write!(f, " INNER JOIN ")?;
+                    }
+
+                    write!(f, "{}::'{}'", join.joiner_table, join.joiner_filename)?;
+                    write!(f, " ON {}.{} = {}.{}", join.left_table, join.left_column, join.right_table, join.right_column)?;
+                }
+
+                Ok(())
+            }
+            ParserOperationTree::CreateTable { .. } => {
+                unimplemented!();
+            }
+            ParserOperationTree::Multiple(_) => {
+                unimplemented!();
+            }
+        }
+    }
+}
+
+
 impl std::fmt::Display for ParserExpressionTreeData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         ParserExpressionTreeDataVisualizer {}.fmt(self, f)
