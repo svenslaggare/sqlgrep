@@ -1,20 +1,12 @@
-use crate::data_model::{ColumnParsing, RegexMode, RegexResultReference};
+use crate::data_model::{ColumnParsing, RegexResultReference};
 use crate::model::{Aggregate, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Function, JoinClause, UnaryArithmeticOperator, Value, ValueType};
-use crate::parsing::operator::Operator;
-use crate::parsing::parser::{parse_str, ParserColumnDefinition, ParserExpressionTreeData, ParserJoinClause, ParserOperationTree};
+use crate::parsing::parser::{parse_str};
 use crate::parsing::parser_tree_converter::{ConvertParserTreeErrorType, transform_statement};
+use crate::parsing::tokenizer::TokenLocation;
 
 #[test]
 fn test_select_statement1() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None
-    };
+    let tree = parse_str("SELECT x FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -33,15 +25,7 @@ fn test_select_statement1() {
 
 #[test]
 fn test_select_statement2() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![(Some("x".to_owned()), ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None
-    };
+    let tree = parse_str("SELECT x AS X FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -52,7 +36,7 @@ fn test_select_statement2() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.projections.len());
-    assert_eq!("x", statement.projections[0].0.as_str());
+    assert_eq!("X", statement.projections[0].0.as_str());
     assert_eq!(&ExpressionTree::ColumnAccess("x".to_owned()), &statement.projections[0].1);
 
     assert_eq!("test", statement.from);
@@ -60,21 +44,7 @@ fn test_select_statement2() {
 
 #[test]
 fn test_select_statement3() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-        from: ("test".to_string(), None),
-        filter: Some(
-            ParserExpressionTreeData::BinaryOperator {
-                operator: Operator::Single('>'),
-                left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                right: Box::new(ParserExpressionTreeData::Value(Value::Int(10)).with_location(Default::default()))
-            }.with_location(Default::default())
-        ),
-        group_by: None,
-        having: None,
-        join: None
-    };
+    let tree = parse_str("SELECT x FROM test WHERE x > 10").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -102,30 +72,7 @@ fn test_select_statement3() {
 
 #[test]
 fn test_select_statement4() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('*'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default())),
-                }.with_location(Default::default())
-            )
-        ],
-        from: ("test".to_string(), None),
-        filter: Some(
-            ParserExpressionTreeData::BinaryOperator {
-                operator: Operator::Single('>'),
-                left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                right: Box::new(ParserExpressionTreeData::Value(Value::Int(10)).with_location(Default::default()))
-            }.with_location(Default::default())
-        ),
-        group_by: None,
-        having: None,
-        join: None
-    };
+    let tree = parse_str("SELECT x * 2 FROM test WHERE x > 10").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -160,15 +107,7 @@ fn test_select_statement4() {
 
 #[test]
 fn test_select_statement5() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-        from: ("test".to_string(), Some("test.log".to_owned())),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+    let tree = parse_str("SELECT x FROM test::'test.log'").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -188,23 +127,7 @@ fn test_select_statement5() {
 
 #[test]
 fn test_select_statement6() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::UnaryOperator {
-                    operator: Operator::Single('-'),
-                    operand: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))
-                }.with_location(Default::default())
-            )
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None
-    };
+    let tree = parse_str("SELECT -x FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -217,7 +140,10 @@ fn test_select_statement6() {
     assert_eq!(1, statement.projections.len());
     assert_eq!("p0", statement.projections[0].0.as_str());
     assert_eq!(
-        &ExpressionTree::UnaryArithmetic { operator: UnaryArithmeticOperator::Negative, operand: Box::new(ExpressionTree::ColumnAccess("x".to_owned())) },
+        &ExpressionTree::UnaryArithmetic {
+            operator: UnaryArithmeticOperator::Negative,
+            operand: Box::new(ExpressionTree::ColumnAccess("x".to_owned()))
+        },
         &statement.projections[0].1
     );
 
@@ -226,27 +152,7 @@ fn test_select_statement6() {
 
 #[test]
 fn test_select_statement7() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "GREATEST".to_owned(),
-                    arguments: vec![
-                        ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()),
-                        ParserExpressionTreeData::ColumnAccess("y".to_owned()).with_location(Default::default())
-                    ],
-                    distinct: None
-                }.with_location(Default::default())
-            )
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None
-    };
+    let tree = parse_str("SELECT GREATEST(x, y) FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -305,23 +211,7 @@ fn test_select_statement8() {
 
 #[test]
 fn test_select_inner_join1() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-        from: ("test".to_string(), Some("test.log".to_owned())),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: Some(ParserJoinClause {
-            joiner_table: "other".to_string(),
-            joiner_filename: "other.log".to_string(),
-            left_table: "test".to_string(),
-            left_column: "x".to_string(),
-            right_table: "other".to_string(),
-            right_column: "y".to_string(),
-            is_outer: false
-        }),
-    };
+    let tree = parse_str("SELECT x FROM test::'test.log' INNER JOIN other::'other.log' ON test.x = other.y").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -352,23 +242,7 @@ fn test_select_inner_join1() {
 
 #[test]
 fn test_select_inner_join2() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![(None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default()))],
-        from: ("test".to_string(), Some("test.log".to_owned())),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: Some(ParserJoinClause {
-            joiner_table: "other".to_string(),
-            joiner_filename: "other.log".to_string(),
-            right_table: "test".to_string(),
-            right_column: "x".to_string(),
-            left_table: "other".to_string(),
-            left_column: "y".to_string(),
-            is_outer: false
-        }),
-    };
+    let tree = parse_str("SELECT x FROM test::'test.log' INNER JOIN other::'other.log' ON other.y = test.x").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -398,32 +272,14 @@ fn test_select_inner_join2() {
 }
 
 #[test]
-fn test_aggregate_statement1() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                    distinct: None
-                }.with_location(Default::default())
-            )
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: Some(vec!["x".to_owned()]),
-        having: None,
-        join: None
-    };
+fn test_aggregate_group_by_statement1() {
+    let tree = parse_str("SELECT x, MAX(x) FROM test GROUP BY x").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
-    let statemnt = statement.unwrap();
+    let statement = statement.unwrap();
 
-    let statement = statemnt.extract_aggregate();
+    let statement = statement.extract_aggregate();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -439,32 +295,14 @@ fn test_aggregate_statement1() {
 }
 
 #[test]
-fn test_aggregate_statement2() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "SUM".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                    distinct: None
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: Some(vec!["x".to_owned()]),
-        having: None,
-        join: None,
-    };
+fn test_aggregate_group_by_statement2() {
+    let tree = parse_str("SELECT x, SUM(x) FROM test GROUP BY x").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
-    let statemnt = statement.unwrap();
+    let statement = statement.unwrap();
 
-    let statement = statemnt.extract_aggregate();
+    let statement = statement.extract_aggregate();
     assert!(statement.is_some());
     let statement = statement.unwrap();
 
@@ -475,25 +313,13 @@ fn test_aggregate_statement2() {
     assert_eq!("sum1", statement.aggregates[1].0);
     assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
 
-
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
 }
 
 #[test]
-fn test_aggregate_statement3() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-            (None, ParserExpressionTreeData::Call { name: "COUNT".to_owned(), arguments: vec![], distinct: None }.with_location(Default::default()) ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: Some(vec!["x".to_owned()]),
-        having: None,
-        join: None,
-    };
+fn test_aggregate_group_by_statement3() {
+    let tree = parse_str("SELECT x, COUNT(*) FROM test GROUP BY x").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -515,18 +341,8 @@ fn test_aggregate_statement3() {
 }
 
 #[test]
-fn test_aggregate_statement4() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (None, ParserExpressionTreeData::Call { name: "COUNT".to_owned(), arguments: vec![], distinct: None }.with_location(Default::default()) ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+fn test_aggregate_group_by_statement4() {
+    let tree = parse_str("SELECT COUNT(*) FROM test GROUP BY x").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -542,25 +358,31 @@ fn test_aggregate_statement4() {
 }
 
 #[test]
-fn test_aggregate_statement5() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                    distinct: None
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+fn test_aggregate_group_by_statement5() {
+    let tree = parse_str("SELECT x, COUNT(DISTINCT x) FROM test GROUP BY x").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(2, statement.aggregates.len());
+    assert_eq!("x", statement.aggregates[0].0);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
+
+    assert_eq!("count1", statement.aggregates[1].0);
+    assert_eq!(Aggregate::Count(Some("x".to_owned()), true), statement.aggregates[1].1);
+
+    assert_eq!("test", statement.from);
+    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
+}
+
+#[test]
+fn test_aggregate_statement1() {
+    let tree = parse_str("SELECT MAX(x) FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -576,47 +398,8 @@ fn test_aggregate_statement5() {
 }
 
 #[test]
-fn test_aggregate_statement6() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "MAX".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                    distinct: None
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: Some(
-            ParserExpressionTreeData::BooleanOperation {
-                operator: BooleanOperator::And,
-                left: Box::new(
-                    ParserExpressionTreeData::BinaryOperator {
-                        operator: Operator::Single('='),
-                        left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-                        right: Box::new(ParserExpressionTreeData::Value(Value::Int(1337)).with_location(Default::default())),
-                    }.with_location(Default::default())
-                ),
-                right: Box::new(
-                    ParserExpressionTreeData::BinaryOperator {
-                        operator: Operator::Single('>'),
-                        left: Box::new(ParserExpressionTreeData::Call {
-                            name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                            distinct: None
-                        }.with_location(Default::default())),
-                        right: Box::new(ParserExpressionTreeData::Value(Value::Int(2000)).with_location(Default::default())),
-                    }.with_location(Default::default())
-                )
-            }.with_location(Default::default())
-        ),
-        join: None,
-    };
+fn test_aggregate_statement2() {
+    let tree = parse_str("SELECT MAX(x) FROM test HAVING x = 1337 AND MAX(x) > 2000").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -650,31 +433,8 @@ fn test_aggregate_statement6() {
 }
 
 #[test]
-fn test_aggregate_statement7() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('*'),
-                    left: Box::new(
-                        ParserExpressionTreeData::Call {
-                            name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                            distinct: None
-                        }.with_location(Default::default())
-                    ),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+fn test_transform_aggregate_statement1() {
+    let tree = parse_str("SELECT MAX(x) * 2 FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -698,29 +458,8 @@ fn test_aggregate_statement7() {
 }
 
 #[test]
-fn test_aggregate_statement8() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('*'),
-                    left: Box::new(ParserExpressionTreeData::Value(Value::Int(2)).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Call {
-                        name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                        distinct: None
-                    }.with_location(Default::default())),
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+fn test_transform_aggregate_statement2() {
+    let tree = parse_str("SELECT 2 * MAX(x) FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -744,31 +483,8 @@ fn test_aggregate_statement8() {
 }
 
 #[test]
-fn test_aggregate_statement9() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "SQRT".to_owned(),
-                    arguments: vec![
-                        ParserExpressionTreeData::Call {
-                            name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                            distinct: None
-                        }.with_location(Default::default())
-                    ],
-                    distinct: None
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+fn test_transform_aggregate_statement3() {
+    let tree = parse_str("SELECT SQRT(MAX(x)) FROM test").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
@@ -791,97 +507,19 @@ fn test_aggregate_statement9() {
 }
 
 #[test]
-fn test_aggregate_statement10() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "GREATEST".to_owned(),
-                    arguments: vec![
-                        ParserExpressionTreeData::Call {
-                            name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                            distinct: None
-                        }.with_location(Default::default()),
-                        ParserExpressionTreeData::Call {
-                            name: "MAX".to_owned(),
-                            arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                            distinct: None
-                        }.with_location(Default::default())
-                    ],
-                    distinct: None
-                }.with_location(Default::default())
-            ),
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-    };
+fn test_transform_aggregate_statement4() {
+    let tree = parse_str("SELECT GREATEST(MAX(x), MAX(x)) FROM test").unwrap();
 
     let statement = transform_statement(tree);
-    assert_eq!(Some(ConvertParserTreeErrorType::TooManyAggregates.with_location(Default::default())), statement.err());
-}
-
-#[test]
-fn test_aggregate_statement11() {
-    let tree = ParserOperationTree::Select {
-        location: Default::default(),
-        projections: vec![
-            (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())),
-            (
-                None,
-                ParserExpressionTreeData::Call {
-                    name: "COUNT".to_owned(),
-                    arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(Default::default())],
-                    distinct: Some(true)
-                }.with_location(Default::default())
-            )
-        ],
-        from: ("test".to_string(), None),
-        filter: None,
-        group_by: Some(vec!["x".to_owned()]),
-        having: None,
-        join: None
-    };
-
-    let statement = transform_statement(tree);
-    assert!(statement.is_ok());
-    let statement = statement.unwrap();
-
-    let statement = statement.extract_aggregate();
-    assert!(statement.is_some());
-    let statement = statement.unwrap();
-
-    assert_eq!(2, statement.aggregates.len());
-    assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
-
-    assert_eq!("count1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Count(Some("x".to_owned()), true), statement.aggregates[1].1);
-
-    assert_eq!("test", statement.from);
-    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
+    assert_eq!(
+        Some(ConvertParserTreeErrorType::TooManyAggregates.with_location(TokenLocation::new(0, 15))),
+        statement.err()
+    );
 }
 
 #[test]
 fn test_create_table_statement1() {
-    let tree = ParserOperationTree::CreateTable {
-        location: Default::default(),
-        name: "test".to_string(),
-        patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-        columns: vec![
-            ParserColumnDefinition::new(
-                "line".to_string(),
-                1,
-                "x".to_string(),
-                ValueType::Int
-            )
-        ]
-    };
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+)', line[1] => x INT);").unwrap();
 
     let statement = transform_statement(tree);
     assert!(statement.is_ok());
