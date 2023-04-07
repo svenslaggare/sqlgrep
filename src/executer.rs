@@ -293,8 +293,8 @@ impl OutputPrinter {
 fn test_file_executer_select1() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
-    use crate::model::{CompareOperator, Statement};
-    use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
+    use crate::model::{ValueType};
+    use crate::parsing::parse;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -316,27 +316,7 @@ fn test_file_executer_select1() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let statement = Statement::Select(SelectStatement {
-        projections: vec![
-            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
-            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
-            ("year".to_owned(), ExpressionTree::ColumnAccess("year".to_owned())),
-            ("month".to_owned(), ExpressionTree::ColumnAccess("month".to_owned())),
-            ("day".to_owned(), ExpressionTree::ColumnAccess("day".to_owned())),
-            ("hour".to_owned(), ExpressionTree::ColumnAccess("hour".to_owned())),
-            ("minute".to_owned(), ExpressionTree::ColumnAccess("minute".to_owned())),
-            ("second".to_owned(), ExpressionTree::ColumnAccess("second".to_owned()))
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::Int(15))),
-            operator: CompareOperator::GreaterThanOrEqual
-        }),
-        join: None,
-        limit: None
-    });
+    let statement = parse("SELECT ip, hostname, year, month, day, hour, minute, second FROM connections WHERE day >= 15").unwrap();
 
     let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
@@ -357,8 +337,8 @@ fn test_file_executer_select1() {
 fn test_file_executer_aggregate1() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
-    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
-    use crate::model::{ExpressionTree, Value, ValueType};
+    use crate::model::{ValueType};
+    use crate::parsing::parse;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -380,24 +360,7 @@ fn test_file_executer_aggregate1() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let statement = Statement::Aggregate(AggregateStatement {
-        aggregates: vec![
-            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None, false), None),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::Int(15))),
-            operator: CompareOperator::GreaterThanOrEqual
-        }),
-        group_by: Some(vec!["hour".to_owned()]),
-        having: None,
-        join: None,
-        limit: None
-    });
+    let statement = parse("SELECT hour, COUNT(*) AS count, MAX(minute) AS max_minute FROM connections WHERE day >= 15 GROUP BY hour").unwrap();
 
     let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
@@ -418,8 +381,8 @@ fn test_file_executer_aggregate1() {
 fn test_file_executer_aggregate2() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
-    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
-    use crate::model::{ExpressionTree, Value, ValueType};
+    use crate::model::{ValueType};
+    use crate::parsing::parse;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -441,23 +404,7 @@ fn test_file_executer_aggregate2() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let statement = Statement::Aggregate(AggregateStatement {
-        aggregates: vec![
-            ("count".to_owned(), Aggregate::Count(None, false), None),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::Int(15))),
-            operator: CompareOperator::GreaterThanOrEqual
-        }),
-        group_by: None,
-        having: None,
-        join: None,
-        limit: None
-    });
+    let statement = parse("SELECT COUNT(*) AS count, MAX(minute) AS max_minute FROM connections WHERE day >= 15").unwrap();
 
     let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
@@ -478,8 +425,8 @@ fn test_file_executer_aggregate2() {
 fn test_file_executer_aggregate3() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
-    use crate::model::{Aggregate, AggregateStatement, Statement};
-    use crate::model::{ExpressionTree, ValueType};
+    use crate::model::{ValueType};
+    use crate::parsing::parse;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -501,20 +448,7 @@ fn test_file_executer_aggregate3() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let statement = Statement::Aggregate(AggregateStatement {
-        aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None, false), None),
-            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned())), None),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: None,
-        group_by: Some(vec!["hostname".to_owned()]),
-        having: None,
-        join: None,
-        limit: None
-    });
+    let statement = parse("SELECT hostname, COUNT(*) AS count, MAX(day) AS last_day FROM connections GROUP BY hostname").unwrap();
 
     let mut ingester = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
@@ -535,8 +469,8 @@ fn test_file_executer_aggregate3() {
 fn test_file_executer_aggregate4() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
-    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement};
-    use crate::model::{ExpressionTree, Value, ValueType};
+    use crate::model::{ValueType};
+    use crate::parsing::parse;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -558,25 +492,9 @@ fn test_file_executer_aggregate4() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let statement = Statement::Aggregate(AggregateStatement {
-        aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
-            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None, false), None),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::Int(15))),
-            operator: CompareOperator::GreaterThanOrEqual
-        }),
-        group_by: Some(vec!["hostname".to_owned(), "hour".to_owned()]),
-        having: None,
-        join: None,
-        limit: None
-    });
+    let statement = parse(
+        "SELECT hostname, hour, COUNT(*) AS count, MAX(minute) AS max_minute FROM connections GROUP BY hostname, hour WHERE day >= 15"
+    ).unwrap();
 
     let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
@@ -597,8 +515,8 @@ fn test_file_executer_aggregate4() {
 fn test_file_executer_aggregate5() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
-    use crate::model::{Aggregate, AggregateStatement, CompareOperator, Statement, BooleanOperator, NullableCompareOperator};
-    use crate::model::{ExpressionTree, Value, ValueType};
+    use crate::model::{ValueType};
+    use crate::parsing::parse;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -620,34 +538,9 @@ fn test_file_executer_aggregate5() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let statement = Statement::Aggregate(AggregateStatement {
-        aggregates: vec![
-            ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None, false), None),
-            ("last_day".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("day".to_owned())), None),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: None,
-        group_by: Some(vec!["hostname".to_owned()]),
-        having: Some(
-            ExpressionTree::BooleanOperation {
-                operator: BooleanOperator::And,
-                left: Box::new(ExpressionTree::NullableCompare {
-                    operator: NullableCompareOperator::NotEqual,
-                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("hostname".to_owned())))),
-                    right: Box::new(ExpressionTree::Value(Value::Null))
-                }),
-                right: Box::new(ExpressionTree::Compare {
-                    operator: CompareOperator::GreaterThan,
-                    left: Box::new(ExpressionTree::Aggregate(1, Box::new(Aggregate::Count(None, false)))),
-                    right: Box::new(ExpressionTree::Value(Value::Int(30)))
-                })
-            }
-        ),
-        join: None,
-        limit: None
-    });
+    let statement = parse(
+        "SELECT hostname, COUNT(*) AS count, MAX(day) AS last_day FROM connections GROUP BY hostname HAVING hostname IS NOT NULL AND COUNT(*) >= 30"
+    ).unwrap();
 
     let mut executer = FileExecuter::new(
         Arc::new(AtomicBool::new(true)),
