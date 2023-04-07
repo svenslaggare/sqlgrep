@@ -210,12 +210,12 @@ fn execute(command_line_input: &CommandLineInput,
                     files.remove(0),
                     command_line_input.head,
                     display_options,
-                    ExecutionEngine::new(&tables)
+                    ExecutionEngine::new(&tables, &statement)
                 );
 
                 match ingester {
                     Ok(mut ingester) => {
-                        ingester.process(statement)
+                        ingester.process()
                     }
                     Err(err) => {
                         println!("{}", err);
@@ -228,12 +228,12 @@ fn execute(command_line_input: &CommandLineInput,
                     files,
                     single_result,
                     display_options,
-                    ExecutionEngine::new(&tables),
+                    ExecutionEngine::new(&tables, &statement),
                 );
 
                 match ingester {
                     Ok(mut ingester) => {
-                        let result = ingester.process(statement);
+                        let result = ingester.process();
                         if command_line_input.show_run_stats {
                             println!(
                                 "Executed query in {:.2} seconds, ingested {:.2} MB, processed {} lines.",

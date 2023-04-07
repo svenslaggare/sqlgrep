@@ -86,13 +86,13 @@ impl<'a> FileIngester<'a> {
         )
     }
 
-    pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
+    pub fn process(&mut self) -> ExecutionResult<()> {
         let mut config = ExecutionConfig::default();
-        if statement.is_aggregate() {
+        if self.execution_engine.is_aggregate() {
             config.result = false;
         }
 
-        let joined_table_data = self.execution_engine.create_joined_data(&statement, self.running.clone())?;
+        let joined_table_data = self.execution_engine.create_joined_data(self.running.clone())?;
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
@@ -104,7 +104,7 @@ impl<'a> FileIngester<'a> {
                     self.statistics.total_lines += 1;
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
-                    let output = self.execution_engine.execute(&statement, line, &config, joined_table_data.as_ref())?;
+                    let output = self.execution_engine.execute(line, &config, joined_table_data.as_ref())?;
                     if let Some(result_row) = output.row {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -121,11 +121,11 @@ impl<'a> FileIngester<'a> {
             }
         }
 
-        if statement.is_aggregate() {
+        if self.execution_engine.is_aggregate() {
             config.result = true;
             config.update = false;
 
-            let result = self.execution_engine.execute(&statement, String::new(), &config, joined_table_data.as_ref())?.row;
+            let result = self.execution_engine.execute(String::new(), &config, joined_table_data.as_ref())?.row;
             if self.print_result {
                 if let Some(result_row) = result {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -171,11 +171,11 @@ impl<'a> FollowFileIngester<'a> {
         )
     }
 
-    pub fn process(&mut self, statement: Statement) -> ExecutionResult<()> {
+    pub fn process(&mut self) -> ExecutionResult<()> {
         let mut reader = self.reader.take().unwrap();
         let mut line = String::new();
 
-        if statement.join_clause().is_some() {
+        if self.execution_engine.is_join() {
             return Err(ExecutionError::JoinNotSupported);
         }
 
@@ -201,7 +201,7 @@ impl<'a> FollowFileIngester<'a> {
             let mut input_line = String::new();
             std::mem::swap(&mut input_line, &mut line);
 
-            let output = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default(), None)?;
+            let output = self.execution_engine.execute(input_line, &ExecutionConfig::default(), None)?;
             if let Some(result_row) = output.row {
                 if output.update {
                     print!("\x1B[2J\x1B[1;1H");
@@ -313,37 +313,37 @@ fn test_file_ingest1() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
+    let statement = Statement::Select(SelectStatement {
+        projections: vec![
+            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+            ("year".to_owned(), ExpressionTree::ColumnAccess("year".to_owned())),
+            ("month".to_owned(), ExpressionTree::ColumnAccess("month".to_owned())),
+            ("day".to_owned(), ExpressionTree::ColumnAccess("day".to_owned())),
+            ("hour".to_owned(), ExpressionTree::ColumnAccess("hour".to_owned())),
+            ("minute".to_owned(), ExpressionTree::ColumnAccess("minute".to_owned())),
+            ("second".to_owned(), ExpressionTree::ColumnAccess("second".to_owned()))
+        ],
+        from: "connections".to_string(),
+        filename: None,
+        filter: Some(ExpressionTree::Compare {
+            left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
+            right: Box::new(ExpressionTree::Value(Value::Int(15))),
+            operator: CompareOperator::GreaterThanOrEqual
+        }),
+        join: None,
+        limit: None
+    });
+
     let mut ingester = FileIngester::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.process(
-        Statement::Select(SelectStatement {
-            projections: vec![
-                ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
-                ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
-                ("year".to_owned(), ExpressionTree::ColumnAccess("year".to_owned())),
-                ("month".to_owned(), ExpressionTree::ColumnAccess("month".to_owned())),
-                ("day".to_owned(), ExpressionTree::ColumnAccess("day".to_owned())),
-                ("hour".to_owned(), ExpressionTree::ColumnAccess("hour".to_owned())),
-                ("minute".to_owned(), ExpressionTree::ColumnAccess("minute".to_owned())),
-                ("second".to_owned(), ExpressionTree::ColumnAccess("second".to_owned()))
-            ],
-            from: "connections".to_string(),
-            filename: None,
-            filter: Some(ExpressionTree::Compare {
-                left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
-                right: Box::new(ExpressionTree::Value(Value::Int(15))),
-                operator: CompareOperator::GreaterThanOrEqual
-            }),
-            join: None,
-            limit: None
-        })
-    );
+    let result = ingester.process();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -373,15 +373,7 @@ fn test_file_ingest2() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let mut ingester = FileIngester::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
-        Default::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-
-    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+    let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
             ("count".to_owned(), Aggregate::Count(None, false), None),
@@ -398,7 +390,17 @@ fn test_file_ingest2() {
         having: None,
         join: None,
         limit: None
-    }));
+    });
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+
+    let result = ingester.process();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -428,15 +430,7 @@ fn test_file_ingest3() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let mut ingester = FileIngester::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
-        Default::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-
-    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+    let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("count".to_owned(), Aggregate::Count(None, false), None),
             ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
@@ -452,7 +446,17 @@ fn test_file_ingest3() {
         having: None,
         join: None,
         limit: None
-    }));
+    });
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+
+    let result = ingester.process();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -482,15 +486,7 @@ fn test_file_ingest4() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let mut ingester = FileIngester::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
-        Default::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-
-    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+    let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
             ("count".to_owned(), Aggregate::Count(None, false), None),
@@ -503,7 +499,17 @@ fn test_file_ingest4() {
         having: None,
         join: None,
         limit: None
-    }));
+    });
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+
+    let result = ingester.process();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -533,15 +539,7 @@ fn test_file_ingest5() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let mut ingester = FileIngester::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
-        Default::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-
-    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+    let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
             ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
@@ -559,7 +557,17 @@ fn test_file_ingest5() {
         having: None,
         join: None,
         limit: None
-    }));
+    });
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+
+    let result = ingester.process();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -589,15 +597,7 @@ fn test_file_ingest6() {
     let mut tables = Tables::new();
     tables.add_table(table_definition);
 
-    let mut ingester = FileIngester::new(
-        Arc::new(AtomicBool::new(true)),
-        vec![File::open("testdata/ftpd_data.txt").unwrap()],
-        false,
-        Default::default(),
-        ExecutionEngine::new(&tables)
-    ).unwrap();
-
-    let result = ingester.process(Statement::Aggregate(AggregateStatement {
+    let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
             ("hostname".to_owned(), Aggregate::GroupKey("hostname".to_owned()), None),
             ("count".to_owned(), Aggregate::Count(None, false), None),
@@ -624,7 +624,17 @@ fn test_file_ingest6() {
         ),
         join: None,
         limit: None
-    }));
+    });
+
+    let mut ingester = FileIngester::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        false,
+        Default::default(),
+        ExecutionEngine::new(&tables, &statement)
+    ).unwrap();
+
+    let result = ingester.process();
 
     if let Err(err) = result {
         println!("{:?}", err);

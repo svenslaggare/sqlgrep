@@ -1,12 +1,8 @@
 use std::collections::{HashMap};
-use std::hash::{Hash, Hasher};
 use std::io::{BufReader, BufRead};
 use std::fs::File;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-
-use fnv::FnvHasher;
-use itertools::Either;
 
 use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, RegexResultReference, Row, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
@@ -80,49 +76,50 @@ impl ExecutionOutput {
 
 pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
-    aggregate_statement_hash: Option<u64>,
+    statement: &'a Statement,
     aggregate_execution_engine: AggregateExecutionEngine,
-    limit_statement_hash: Option<u64>,
     num_output_rows: usize
 }
 
 impl<'a> ExecutionEngine<'a> {
-    pub fn new(tables: &'a Tables) -> ExecutionEngine<'a> {
+    pub fn new(tables: &'a Tables, statement: &'a Statement) -> ExecutionEngine<'a> {
         ExecutionEngine {
             tables,
-            aggregate_statement_hash: None,
+            statement,
             aggregate_execution_engine: AggregateExecutionEngine::new(),
-            limit_statement_hash: None,
             num_output_rows: 0
         }
     }
 
+    pub fn is_aggregate(&self) -> bool {
+        self.statement.is_aggregate()
+    }
+
+    pub fn is_join(&self) -> bool {
+        self.statement.join_clause().is_some()
+    }
+
     pub fn execute(&mut self,
-                   statement: &Statement,
                    line: String,
                    config: &ExecutionConfig,
                    joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
-        match statement {
+        match self.statement {
             Statement::Select(select_statement) => {
-                self.try_clear_limit_state(Either::Left(select_statement));
-
                 let output = self.execute_select(&select_statement, line, joined_table_data)?;
                 let output = self.update_limit(select_statement.limit, output);
-
                 Ok(output)
             }
             Statement::Aggregate(aggregate_statement) => {
-                self.try_clear_limit_state(Either::Right(aggregate_statement));
-
                 if config.update && config.result {
                     let output = self.execute_aggregate(&aggregate_statement, line, joined_table_data)?.with_update();
                     let output = self.update_limit(aggregate_statement.limit, output);
-
                     Ok(output)
                 } else if config.update && !config.result {
                     self.execute_aggregate_update(&aggregate_statement, line, joined_table_data).map(|_| ExecutionOutput::empty())
                 } else if !config.update && config.result {
-                    let mut output = ExecutionOutput::new(self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?).with_update();
+                    let mut output = ExecutionOutput::new(
+                        self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?
+                    ).with_update();
 
                     if let Some(limit) = aggregate_statement.limit {
                         if let Some(row) = output.row.as_mut() {
@@ -193,8 +190,6 @@ impl<'a> ExecutionEngine<'a> {
                          aggregate_statement: &AggregateStatement,
                          line: String,
                          joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
-        self.try_clear_aggregate_state(aggregate_statement);
-
         let table_definition = self.tables.get(&aggregate_statement.from)
             .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
         let row = table_definition.extract(&line);
@@ -241,8 +236,6 @@ impl<'a> ExecutionEngine<'a> {
                                 aggregate_statement: &AggregateStatement,
                                 line: String,
                                 joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<bool> {
-        self.try_clear_aggregate_state(aggregate_statement);
-
         let table_definition = self.tables.get(&aggregate_statement.from)
             .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
 
@@ -306,10 +299,10 @@ impl<'a> ExecutionEngine<'a> {
         output
     }
 
-    pub fn create_joined_data(&mut self, statement: &Statement, running: Arc<AtomicBool>) -> ExecutionResult<Option<JoinedTableData>> {
+    pub fn create_joined_data(&mut self, running: Arc<AtomicBool>) -> ExecutionResult<Option<JoinedTableData>> {
         Ok(
-            match statement.join_clause() {
-                Some(join_clause) => Some(JoinedTableData::execute(self, running.clone(), join_clause)?),
+            match self.statement.join_clause() {
+                Some(join_clause) => Some(JoinedTableData::execute(self.tables, running.clone(), join_clause)?),
                 None => None,
             }
         )
@@ -330,41 +323,6 @@ impl<'a> ExecutionEngine<'a> {
 
     pub fn get_table(&self, name: &str) -> ExecutionResult<&TableDefinition> {
         self.tables.get(&name).ok_or_else(|| ExecutionError::TableNotFound(name.to_owned()))
-    }
-
-    fn try_clear_aggregate_state(&mut self, aggregate_statement: &AggregateStatement) {
-        let mut hasher = FnvHasher::default();
-        aggregate_statement.hash(&mut hasher);
-        let hash = hasher.finish();
-
-        if let Some(current_hash) = self.aggregate_statement_hash {
-            if current_hash != hash {
-                self.aggregate_execution_engine.clear();
-            }
-        }
-
-        self.aggregate_statement_hash = Some(hash);
-    }
-
-    fn try_clear_limit_state(&mut self, statement: Either<&SelectStatement, &AggregateStatement>) {
-        let mut hasher = FnvHasher::default();
-        match statement {
-            Either::Left(statement) => {
-                statement.hash(&mut hasher);
-            }
-            Either::Right(statement) => {
-                statement.hash(&mut hasher);
-            }
-        }
-        let hash = hasher.finish();
-
-        if let Some(current_hash) = self.limit_statement_hash {
-            if current_hash != hash {
-                self.num_output_rows = 0;
-            }
-        }
-
-        self.limit_statement_hash = Some(hash);
     }
 }
 
@@ -396,7 +354,6 @@ fn test_regex_array1() {
         ).unwrap()
     );
 
-    let mut execution_engine = ExecutionEngine::new(&tables);
     let statement = Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
@@ -414,10 +371,11 @@ fn test_regex_array1() {
         limit: None
     });
 
+    let mut execution_engine = ExecutionEngine::new(&tables, &statement);
+
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
         let result = execution_engine.execute(
-            &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
@@ -433,14 +391,20 @@ fn test_regex_array1() {
     assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[0].columns[0]);
     assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[0].columns[1]);
     assert_eq!(
-        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("17".to_owned()), Value::String("20".to_owned()), Value::String("55".to_owned()), Value::String("06".to_owned())]),
+        Value::Array(
+            ValueType::String,
+            vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("17".to_owned()), Value::String("20".to_owned()), Value::String("55".to_owned()), Value::String("06".to_owned())]
+        ),
         result_rows[0].columns[2]
     );
 
     assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[21].columns[0]);
     assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[21].columns[1]);
     assert_eq!(
-        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("18".to_owned()), Value::String("02".to_owned()), Value::String("08".to_owned()), Value::String("12".to_owned())]),
+        Value::Array(
+            ValueType::String,
+            vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("18".to_owned()), Value::String("02".to_owned()), Value::String("08".to_owned()), Value::String("12".to_owned())]
+        ),
         result_rows[21].columns[2]
     );
 }
@@ -473,7 +437,6 @@ fn test_timestamp1() {
         ).unwrap()
     );
 
-    let mut execution_engine = ExecutionEngine::new(&tables);
     let statement = Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
@@ -490,11 +453,11 @@ fn test_timestamp1() {
         join: None,
         limit: None
     });
+    let mut execution_engine = ExecutionEngine::new(&tables, &statement);
 
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
         let result = execution_engine.execute(
-            &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
@@ -544,7 +507,6 @@ fn test_json_array1() {
         ).unwrap()
     );
 
-    let mut execution_engine = ExecutionEngine::new(&tables);
     let statement = Statement::Select(
         SelectStatement {
             projections: vec![
@@ -565,11 +527,11 @@ fn test_json_array1() {
             limit: None
         }
     );
+    let mut execution_engine = ExecutionEngine::new(&tables, &statement);
 
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/clients_data.json").unwrap()).lines() {
         let result = execution_engine.execute(
-            &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
@@ -620,7 +582,6 @@ fn test_limit1() {
         ).unwrap()
     );
 
-    let mut execution_engine = ExecutionEngine::new(&tables);
     let statement = Statement::Select(SelectStatement {
         projections: vec![
             ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
@@ -637,11 +598,11 @@ fn test_limit1() {
         join: None,
         limit: Some(10)
     });
+    let mut execution_engine = ExecutionEngine::new(&tables, &statement);
 
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
         let output = execution_engine.execute(
-            &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
@@ -661,14 +622,20 @@ fn test_limit1() {
     assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[0].columns[0]);
     assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[0].columns[1]);
     assert_eq!(
-        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("17".to_owned()), Value::String("20".to_owned()), Value::String("55".to_owned()), Value::String("06".to_owned())]),
+        Value::Array(
+            ValueType::String,
+            vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("17".to_owned()), Value::String("20".to_owned()), Value::String("55".to_owned()), Value::String("06".to_owned())]
+        ),
         result_rows[0].columns[2]
     );
 
     assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[9].columns[0]);
     assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[9].columns[1]);
     assert_eq!(
-        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("18".to_owned()), Value::String("02".to_owned()), Value::String("08".to_owned()), Value::String("10".to_owned())]),
+        Value::Array(
+            ValueType::String,
+            vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("18".to_owned()), Value::String("02".to_owned()), Value::String("08".to_owned()), Value::String("10".to_owned())]
+        ),
         result_rows[9].columns[2]
     );
 }

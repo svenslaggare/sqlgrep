@@ -42,10 +42,10 @@ fn test_ssh1() {
         vec![File::open("testdata/ssh_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(386, ingester.statistics.total_result_rows);
 }
 
@@ -60,10 +60,10 @@ fn test_ssh2() {
         vec![File::open("testdata/ssh_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(14, ingester.statistics.total_result_rows);
 }
 
@@ -78,10 +78,10 @@ fn test_ftpd1() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -96,10 +96,10 @@ fn test_ftpd2() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
 
@@ -114,10 +114,10 @@ fn test_ftpd3() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(6, ingester.statistics.total_result_rows);
 }
 
@@ -132,10 +132,10 @@ fn test_ftpd4() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
 
@@ -150,10 +150,10 @@ fn test_ftpd5() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(2, ingester.statistics.total_result_rows);
 }
 
@@ -168,10 +168,10 @@ fn test_ftpd6() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -186,10 +186,10 @@ fn test_ftpd7() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -204,10 +204,10 @@ fn test_ftpd8() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(653, ingester.statistics.total_result_rows);
 }
 
@@ -222,10 +222,10 @@ fn test_ftpd9() {
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(8, ingester.statistics.total_result_rows);
 }
 
@@ -241,10 +241,10 @@ fn test_ftpd_csv1() {
         vec![File::open("testdata/ftpd_data_csv.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(200, ingester.statistics.total_result_rows);
 }
 
@@ -259,10 +259,10 @@ fn test_client1() {
         vec![File::open("testdata/clients_data.json").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(232, ingester.statistics.total_result_rows);
 }
 
@@ -277,10 +277,10 @@ fn test_client2() {
         vec![File::open("testdata/clients_data.json").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(3, ingester.statistics.total_result_rows);
 }
 
@@ -295,10 +295,10 @@ fn test_client3() {
         vec![File::open("testdata/clients_data.json").unwrap()],
         true,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(3, ingester.statistics.total_result_rows);
 }
 
@@ -313,10 +313,10 @@ fn test_join1() {
         vec![File::open("testdata/dummy1_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(2, ingester.statistics.total_result_rows);
 }
 
@@ -331,10 +331,10 @@ fn test_join2() {
         vec![File::open("testdata/dummy1_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(3, ingester.statistics.total_result_rows);
 }
 
@@ -349,9 +349,9 @@ fn test_join3() {
         vec![File::open("testdata/dummy2_data.txt").unwrap()],
         false,
         Default::default(),
-        ExecutionEngine::new(&tables)
+        ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
-    ingester.process(query).unwrap();
+    ingester.process().unwrap();
     assert_eq!(4, ingester.statistics.total_result_rows);
 }

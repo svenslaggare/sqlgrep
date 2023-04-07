@@ -9,6 +9,7 @@ use crate::data_model::{Row, TableDefinition};
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::execution_engine::{ExecutionEngine, ExecutionConfig, ExecutionOutput};
 use crate::model::{JoinClause, Value, SelectStatement, ExpressionTree, Statement};
+use crate::Tables;
 
 pub struct JoinedTableData {
     pub column_names: Vec<String>,
@@ -25,7 +26,7 @@ impl JoinedTableData {
         }
     }
 
-    pub fn execute(execution_engine: &mut ExecutionEngine,
+    pub fn execute(tables: &Tables,
                    running: Arc<AtomicBool>,
                    join: &JoinClause) -> ExecutionResult<JoinedTableData> {
         let join_statement = Statement::Select(SelectStatement {
@@ -36,6 +37,8 @@ impl JoinedTableData {
             join: None,
             limit: None
         });
+
+        let mut execution_engine = ExecutionEngine::new(tables, &join_statement);
 
         let joined_table = execution_engine.get_table(&join.joined_table)?.clone();
         let join_on_column_index = joined_table.index_for(&join.joined_column)
@@ -56,7 +59,7 @@ impl JoinedTableData {
             }
 
             if let Ok(line) = line {
-                let result = execution_engine.execute(&join_statement, line.clone(), &config, None)?.row;
+                let result = execution_engine.execute(line.clone(), &config, None)?.row;
                 if let Some(result) = result {
                     for row in result.data {
                         joined_table_data.add_row(
