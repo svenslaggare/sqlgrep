@@ -5,6 +5,9 @@ pub mod execution;
 pub mod ingest;
 pub mod helpers;
 
+#[cfg(unix)]
+pub mod table_editor;
+
 #[cfg(test)]
 pub mod integration_tests;
 
