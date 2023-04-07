@@ -1,8 +1,8 @@
 use crate::data_model::{ColumnParsing, JsonAccess, RegexMode, RegexResultReference};
 use crate::model::{Value, ValueType};
 use crate::parsing::operator::{BinaryOperators, Operator, UnaryOperators};
-use crate::parsing::parser::{parse_str, Parser, ParserColumnDefinition, ParserExpressionTree, ParserExpressionTreeData, ParserJoinClause, ParserOperationTree, ParserResult};
-use crate::parsing::tokenizer::{Keyword, ParserError, ParserErrorType, Token, tokenize, TokenLocation};
+use crate::parsing::parser::{parse_str, Parser, ParserColumnDefinition, ParserExpressionTree, ParserExpressionTreeData, ParserOperationTree, ParserResult};
+use crate::parsing::tokenizer::{ParserError, ParserErrorType, Token, tokenize, TokenLocation};
 
 fn parse_expression_str(text: &str) -> ParserResult<ParserExpressionTree> {
     let tokens = tokenize(text)?;
@@ -268,6 +268,12 @@ fn test_parse_select_having() {
 }
 
 #[test]
+fn test_parse_select_many_features1() {
+    let tree = parse_str("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE x >= 13 GROUP BY x").unwrap();
+    assert_eq!("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE (x >= 13) GROUP BY x", tree.to_string());
+}
+
+#[test]
 fn test_parse_inner_join1() {
     let tree = parse_str("SELECT x FROM test WHERE x > 4 INNER JOIN table1::'file.log' ON table2.x = table1.y").unwrap();
     assert_eq!("SELECT x FROM test WHERE (x > 4) INNER JOIN table1::'file.log' ON table2.x = table1.y", tree.to_string());
@@ -281,42 +287,11 @@ fn test_parse_outer_join1() {
 
 #[test]
 fn test_parse_create_table1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+)', line[1] => x INT);").unwrap();
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: Default::default(),
+            location: TokenLocation::new(0, 6),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParserColumnDefinition::new(
@@ -332,51 +307,11 @@ fn test_parse_create_table1() {
 
 #[test]
 fn test_parse_create_table2() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+), B: ([A-Z]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(2),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("y".to_owned()),
-            Token::Identifier("TEXT".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+), B: ([A-Z]+)', line[1] => x INT, line[2] => y TEXT);").unwrap();
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: Default::default(),
+            location: TokenLocation::new(0, 6),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
@@ -399,75 +334,13 @@ fn test_parse_create_table2() {
 }
 
 #[test]
-fn test_parse_create_table3() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test1".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test2".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+), B: ([A-Z]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(2),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("y".to_owned()),
-            Token::Identifier("TEXT".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+fn test_parse_create_table_multiple1() {
+    let tree = parse_str("CREATE TABLE test1(line = 'A: ([0-9]+)', line[1] => x INT); CREATE TABLE test2(line = 'A: ([0-9]+), B: ([A-Z]+)', line[1] => x INT, line[2] => y TEXT);").unwrap();
 
     assert_eq!(
         ParserOperationTree::Multiple(vec![
             ParserOperationTree::CreateTable {
-                location: Default::default(),
+                location: TokenLocation::new(0, 6),
                 name: "test1".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
@@ -480,7 +353,7 @@ fn test_parse_create_table3() {
                 ]
             },
             ParserOperationTree::CreateTable {
-                location: Default::default(),
+                location: TokenLocation::new(0, 66),
                 name: "test2".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
@@ -504,35 +377,12 @@ fn test_parse_create_table3() {
 }
 
 #[test]
-fn test_parse_create_table4() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+fn test_parse_create_table_inline1() {
+    let tree = parse_str("CREATE TABLE test('A: ([0-9]+)' => x INT);").unwrap();
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: Default::default(),
+            location: TokenLocation::new(0, 6),
             name: "test".to_string(),
             patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
@@ -549,166 +399,12 @@ fn test_parse_create_table4() {
 }
 
 #[test]
-fn test_parse_create_table5() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-            Token::Keyword(Keyword::Not),
-            Token::Null,
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+fn test_parse_create_table_create_array1() {
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+), ([0-9]+), ([0-9]+)', line[1], line[2], line[3] => x INT[]);").unwrap();
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: Default::default(),
-            name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-            columns: vec![ParserColumnDefinition {
-                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
-                name: "x".to_string(),
-                column_type: ValueType::Int,
-                nullable: Some(false),
-                trim: None,
-                convert: None,
-                microseconds: None,
-                default_value: None
-            }]
-        },
-        tree
-    );
-}
-
-#[test]
-fn test_parse_create_table6() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("TEXT".to_owned()),
-            Token::Identifier("TRIM".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::CreateTable {
-            location: Default::default(),
-            name: "test".to_string(),
-            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
-            columns: vec![ParserColumnDefinition {
-                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
-                name: "x".to_owned(),
-                column_type: ValueType::String,
-                nullable: None,
-                trim: Some(true),
-                convert: None,
-                microseconds: None,
-                default_value: None
-            }]
-        },
-        tree
-    );
-}
-
-#[test]
-fn test_parse_create_table7() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::Comma,
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(2),
-            Token::RightSquareParentheses,
-            Token::Comma,
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(3),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT[]".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
-
-    assert_eq!(
-        ParserOperationTree::CreateTable {
-            location: Default::default(),
+            location: TokenLocation::new(0, 6),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
@@ -733,44 +429,12 @@ fn test_parse_create_table7() {
 }
 
 #[test]
-fn test_parse_create_table8() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::Identifier("split".to_owned()),
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+fn test_parse_create_table_split_mode1() {
+    let tree = parse_str("CREATE TABLE test(line = split 'A: ([0-9]+)', line[1] => x INT);").unwrap();
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: Default::default(),
+            location: TokenLocation::new(0, 6),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Split)],
             columns: vec![ParserColumnDefinition::new(
@@ -785,45 +449,60 @@ fn test_parse_create_table8() {
 }
 
 #[test]
-fn test_parse_create_table9() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Create),
-            Token::Keyword(Keyword::Table),
-            Token::Identifier("test".to_string()),
-            Token::LeftParentheses,
-
-            Token::Identifier("line".to_string()),
-            Token::Operator(Operator::Single('=')),
-            Token::String("A: ([0-9]+)".to_owned()),
-            Token::Comma,
-
-            Token::Identifier("line".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1),
-            Token::RightSquareParentheses,
-            Token::RightArrow,
-            Token::Identifier("x".to_owned()),
-            Token::Identifier("INT".to_owned()),
-            Token::Keyword(Keyword::Default),
-            Token::Int(4711),
-
-            Token::RightParentheses,
-            Token::SemiColon,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse().unwrap();
+fn test_parse_create_table_modifiers1() {
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+)', line[1] => x INT NOT NULL);").unwrap();
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: Default::default(),
+            location: TokenLocation::new(0, 6),
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
+            columns: vec![ParserColumnDefinition {
+                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
+                name: "x".to_string(),
+                column_type: ValueType::Int,
+                nullable: Some(false),
+                trim: None,
+                convert: None,
+                microseconds: None,
+                default_value: None
+            }]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_create_table_modifiers2() {
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+)', line[1] => x TEXT TRIM);").unwrap();
+
+    assert_eq!(
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(0, 6),
+            name: "test".to_string(),
+            patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
+            columns: vec![ParserColumnDefinition {
+                parsing: ColumnParsing::Regex(RegexResultReference { pattern_name: "line".to_string(), group_index: 1 }),
+                name: "x".to_owned(),
+                column_type: ValueType::String,
+                nullable: None,
+                trim: Some(true),
+                convert: None,
+                microseconds: None,
+                default_value: None
+            }]
+        },
+        tree
+    );
+}
+
+#[test]
+fn test_parse_create_table_modifiers3() {
+    let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+)', line[1] => x INT DEFAULT 4711);").unwrap();
+
+    assert_eq!(
+        ParserOperationTree::CreateTable {
+            location: TokenLocation::new(0, 6),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParserColumnDefinition {
@@ -908,72 +587,7 @@ fn test_parse_json_table2() {
 }
 
 #[test]
-fn test_parse_str1() {
-    let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x").unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: TokenLocation::new(0, 6),
-            projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
-                (
-                    None,
-                    ParserExpressionTreeData::Call {
-                        name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))],
-                        distinct: None
-                    }.with_location(TokenLocation::new(0, 13))
-                )
-            ],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Dual('>', '='),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 34))),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 36)))
-                }.with_location(TokenLocation::new(0, 34))
-            ),
-            group_by: Some(vec!["x".to_owned()]),
-            having: None,
-            join: None,
-        },
-        tree
-    );
-}
-
-#[test]
-fn test_parse_str2() {
-    let tree = parse_str("SELECT x, MAX(x) FROM test::'/haha/test.log' WHERE x >= 13 GROUP BY x").unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: TokenLocation::new(0, 6),
-            projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
-                (
-                    None,
-                    ParserExpressionTreeData::Call {
-                        name: "MAX".to_owned(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))],
-                        distinct: None
-                    }.with_location(TokenLocation::new(0, 13))
-                )
-            ],
-            from: ("test".to_string(), Some("/haha/test.log".to_owned())),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Dual('>', '='),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 52))),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 54)))
-                }.with_location(TokenLocation::new(0, 52))
-            ),
-            group_by: Some(vec!["x".to_owned()]), having: None, join: None, },
-        tree
-    );
-}
-
-#[test]
-fn test_parse_str3() {
+fn test_parse_create_table_multiline1() {
     let tree = parse_str(r"
     CREATE TABLE connections(
         line = 'connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)',
@@ -1051,41 +665,7 @@ fn test_parse_str3() {
 }
 
 #[test]
-fn test_parse_str4() {
-    let tree = parse_str("SELECT x, MAX(x) FROM test WHERE x >= 13 GROUP BY x, y, z").unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: TokenLocation::new(0, 6),
-            projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
-                (
-                    None,
-                    ParserExpressionTreeData::Call {
-                        name: "MAX".to_string(),
-                        arguments: vec![ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 15))],
-                        distinct: None
-                    }.with_location(TokenLocation::new(0, 13))
-                )
-            ],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Dual('>', '='),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 34))),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(13)).with_location(TokenLocation::new(0, 36)))
-                }.with_location(TokenLocation::new(0, 34))
-            ),
-            group_by: Some(vec!["x".to_owned(), "y".to_owned(), "z".to_owned()]),
-            having: None,
-            join: None,
-        },
-        tree
-    );
-}
-
-#[test]
-fn test_parse_str5() {
+fn test_parse_create_table_multiline2() {
     let tree = parse_str(r"
     CREATE TABLE test(
         line = 'testing (.*) (.*)',
@@ -1115,39 +695,6 @@ fn test_parse_str5() {
                     ValueType::Array(Box::new(ValueType::String))
                 )
             ]
-        },
-        tree
-    );
-}
-
-#[test]
-fn test_parse_str6() {
-    let tree = parse_str("SELECT x FROM test WHERE x::int >= 0").unwrap();
-
-    assert_eq!(
-        ParserOperationTree::Select {
-            location: TokenLocation::new(0, 6),
-            projections: vec![
-                (None, ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 8))),
-            ],
-            from: ("test".to_string(), None),
-            filter: Some(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Dual('>', '='),
-                    left: Box::new(
-                        ParserExpressionTreeData::TypeConversion {
-                            operand: Box::new(
-                                ParserExpressionTreeData::ColumnAccess("x".to_owned()).with_location(TokenLocation::new(0, 26))
-                            ),
-                            convert_to_type: ValueType::Int
-                        }.with_location(TokenLocation::new(0, 26))
-                    ),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(0)).with_location(TokenLocation::new(0, 33)))
-                }.with_location(TokenLocation::new(0, 31))
-            ),
-            group_by: None,
-            having: None,
-            join: None
         },
         tree
     );
