@@ -6,7 +6,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables, RegexMode};
 use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate};
-use sqlgrep::executer::{FileExecuter, DisplayOptions};
+use sqlgrep::executor::{FileExecutor, DisplayOptions};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 
 fn filtering() {
@@ -30,7 +30,7 @@ fn filtering() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileExecuter::new(
+    let mut ingester = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
         false,
@@ -87,7 +87,7 @@ fn aggregate() {
     let mut tables = Tables::new();
     tables.add_table("connections", table_definition);
 
-    let mut ingester = FileExecuter::new(
+    let mut ingester = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
         false,

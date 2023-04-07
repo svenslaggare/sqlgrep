@@ -54,7 +54,7 @@ impl Default for DisplayOptions {
     }
 }
 
-pub struct FileExecuter<'a> {
+pub struct FileExecutor<'a> {
     running: Arc<AtomicBool>,
     readers: Vec<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
@@ -64,15 +64,15 @@ pub struct FileExecuter<'a> {
     output_printer: OutputPrinter
 }
 
-impl<'a> FileExecuter<'a> {
+impl<'a> FileExecutor<'a> {
     pub fn new(running: Arc<AtomicBool>,
                files: Vec<File>,
                display_options: DisplayOptions,
-               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileExecuter<'a>> {
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileExecutor<'a>> {
         let output_printer = OutputPrinter::new(display_options.output_format.clone());
 
         Ok(
-            FileExecuter {
+            FileExecutor {
                 running,
                 readers: files.into_iter().map(|file| BufReader::new(file)).collect(),
                 execution_engine,
@@ -136,19 +136,19 @@ impl<'a> FileExecuter<'a> {
     }
 }
 
-pub struct FollowFileExecuter<'a> {
+pub struct FollowFileExecutor<'a> {
     running: Arc<AtomicBool>,
     reader: Option<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
     output_printer: OutputPrinter
 }
 
-impl<'a> FollowFileExecuter<'a> {
+impl<'a> FollowFileExecutor<'a> {
     pub fn new(running: Arc<AtomicBool>,
                file: File,
                head: bool,
                display_options: DisplayOptions,
-               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileExecuter<'a>> {
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FollowFileExecutor<'a>> {
         let output_printer = OutputPrinter::new(display_options.output_format.clone());
 
         let mut reader = BufReader::new(file);
@@ -160,7 +160,7 @@ impl<'a> FollowFileExecuter<'a> {
         }
 
         Ok(
-            FollowFileExecuter {
+            FollowFileExecutor {
                 running,
                 reader: Some(reader),
                 execution_engine,
@@ -290,7 +290,7 @@ impl OutputPrinter {
 }
 
 #[test]
-fn test_file_executer_select1() {
+fn test_file_executor_select1() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
@@ -318,14 +318,14 @@ fn test_file_executer_select1() {
 
     let statement = parse("SELECT ip, hostname, year, month, day, hour, minute, second FROM connections WHERE day >= 15").unwrap();
 
-    let mut executer = FileExecuter::new(
+    let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executer.execute();
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -334,7 +334,7 @@ fn test_file_executer_select1() {
 }
 
 #[test]
-fn test_file_executer_aggregate1() {
+fn test_file_executor_aggregate1() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
@@ -362,14 +362,14 @@ fn test_file_executer_aggregate1() {
 
     let statement = parse("SELECT hour, COUNT(*) AS count, MAX(minute) AS max_minute FROM connections WHERE day >= 15 GROUP BY hour").unwrap();
 
-    let mut executer = FileExecuter::new(
+    let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executer.execute();
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -378,7 +378,7 @@ fn test_file_executer_aggregate1() {
 }
 
 #[test]
-fn test_file_executer_aggregate2() {
+fn test_file_executor_aggregate2() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
@@ -406,14 +406,14 @@ fn test_file_executer_aggregate2() {
 
     let statement = parse("SELECT COUNT(*) AS count, MAX(minute) AS max_minute FROM connections WHERE day >= 15").unwrap();
 
-    let mut executer = FileExecuter::new(
+    let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executer.execute();
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -422,7 +422,7 @@ fn test_file_executer_aggregate2() {
 }
 
 #[test]
-fn test_file_executer_aggregate3() {
+fn test_file_executor_aggregate3() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
@@ -450,7 +450,7 @@ fn test_file_executer_aggregate3() {
 
     let statement = parse("SELECT hostname, COUNT(*) AS count, MAX(day) AS last_day FROM connections GROUP BY hostname").unwrap();
 
-    let mut ingester = FileExecuter::new(
+    let mut ingester = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
@@ -466,7 +466,7 @@ fn test_file_executer_aggregate3() {
 }
 
 #[test]
-fn test_file_executer_aggregate4() {
+fn test_file_executor_aggregate4() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
@@ -496,14 +496,14 @@ fn test_file_executer_aggregate4() {
         "SELECT hostname, hour, COUNT(*) AS count, MAX(minute) AS max_minute FROM connections GROUP BY hostname, hour WHERE day >= 15"
     ).unwrap();
 
-    let mut executer = FileExecuter::new(
+    let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executer.execute();
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -512,7 +512,7 @@ fn test_file_executer_aggregate4() {
 }
 
 #[test]
-fn test_file_executer_aggregate5() {
+fn test_file_executor_aggregate5() {
     use crate::data_model::{ColumnDefinition, TableDefinition, Tables, RegexMode};
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
@@ -542,14 +542,14 @@ fn test_file_executer_aggregate5() {
         "SELECT hostname, COUNT(*) AS count, MAX(day) AS last_day FROM connections GROUP BY hostname HAVING hostname IS NOT NULL AND COUNT(*) >= 30"
     ).unwrap();
 
-    let mut executer = FileExecuter::new(
+    let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executer.execute();
+    let result = executor.execute();
 
     if let Err(err) = result {
         println!("{:?}", err);

@@ -12,7 +12,7 @@ use rustyline_derive::{Helper, Highlighter, Hinter};
 use rustyline::completion::{Completer, Pair};
 
 use sqlgrep::{parsing, Tables, Statement, ExecutionEngine};
-use sqlgrep::executer::{FileExecuter, FollowFileExecuter, DisplayOptions, OutputFormat};
+use sqlgrep::executor::{FileExecutor, FollowFileExecutor, DisplayOptions, OutputFormat};
 use sqlgrep::parsing::tokenizer::keywords_list;
 use sqlgrep::helpers::TablePrinter;
 
@@ -205,7 +205,7 @@ fn execute(command_line_input: &CommandLineInput,
             }
 
             let result = if command_line_input.follow {
-                let executer = FollowFileExecuter::new(
+                let executor = FollowFileExecutor::new(
                     running,
                     files.remove(0),
                     command_line_input.head,
@@ -213,9 +213,9 @@ fn execute(command_line_input: &CommandLineInput,
                     ExecutionEngine::new(&tables, &statement)
                 );
 
-                match executer {
-                    Ok(mut executer) => {
-                        executer.execute()
+                match executor {
+                    Ok(mut executor) => {
+                        executor.execute()
                     }
                     Err(err) => {
                         println!("{}", err);
@@ -225,23 +225,23 @@ fn execute(command_line_input: &CommandLineInput,
             } else {
                 display_options.single_result = single_result;
 
-                let executer = FileExecuter::new(
+                let executor = FileExecutor::new(
                     running,
                     files,
                     display_options,
                     ExecutionEngine::new(&tables, &statement),
                 );
 
-                match executer {
-                    Ok(mut executer) => {
-                        let result = executer.execute();
+                match executor {
+                    Ok(mut executor) => {
+                        let result = executor.execute();
 
                         if command_line_input.show_run_stats {
                             println!(
                                 "Executed query in {:.2} seconds, ingested {:.2} MB, processed {} lines.",
-                                executer.statistics.execution_time(),
-                                executer.statistics.ingested_megabytes(),
-                                executer.statistics.total_lines
+                                executor.statistics.execution_time(),
+                                executor.statistics.ingested_megabytes(),
+                                executor.statistics.total_lines
                             );
                         }
 

@@ -2,7 +2,7 @@ pub mod model;
 pub mod data_model;
 pub mod parsing;
 pub mod execution;
-pub mod executer;
+pub mod executor;
 pub mod helpers;
 
 #[cfg(unix)]
