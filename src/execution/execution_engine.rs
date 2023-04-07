@@ -6,6 +6,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use fnv::FnvHasher;
+use itertools::Either;
 
 use crate::data_model::{ColumnDefinition, ColumnParsing, JsonAccess, RegexResultReference, Row, TableDefinition, Tables, RegexMode};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
@@ -28,10 +29,61 @@ impl Default for ExecutionConfig {
     }
 }
 
+#[derive(Debug)]
+pub struct ExecutionOutput {
+    pub row: Option<ResultRow>,
+    pub update: bool,
+    pub joined: bool,
+    pub reached_limit: bool
+}
+
+impl ExecutionOutput {
+    pub fn new(row: Option<ResultRow>) -> ExecutionOutput {
+        ExecutionOutput {
+            row,
+            update: false,
+            joined: false,
+            reached_limit: false
+        }
+    }
+
+    pub fn joined(row: Option<ResultRow>) -> ExecutionOutput {
+        ExecutionOutput {
+            row,
+            update: false,
+            joined: true,
+            reached_limit: false
+        }
+    }
+
+    pub fn empty() -> ExecutionOutput {
+        ExecutionOutput {
+            row: None,
+            update: false,
+            joined: false,
+            reached_limit: false
+        }
+    }
+
+    pub fn with_update(self) -> ExecutionOutput {
+        let mut new = self;
+        new.update = true;
+        new
+    }
+
+    pub fn with_reached_limit(self) -> ExecutionOutput {
+        let mut new = self;
+        new.reached_limit = true;
+        new
+    }
+}
+
 pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
     aggregate_statement_hash: Option<u64>,
-    aggregate_execution_engine: AggregateExecutionEngine
+    aggregate_execution_engine: AggregateExecutionEngine,
+    limit_statement_hash: Option<u64>,
+    num_output_rows: usize
 }
 
 impl<'a> ExecutionEngine<'a> {
@@ -39,7 +91,9 @@ impl<'a> ExecutionEngine<'a> {
         ExecutionEngine {
             tables,
             aggregate_statement_hash: None,
-            aggregate_execution_engine: AggregateExecutionEngine::new()
+            aggregate_execution_engine: AggregateExecutionEngine::new(),
+            limit_statement_hash: None,
+            num_output_rows: 0
         }
     }
 
@@ -47,18 +101,38 @@ impl<'a> ExecutionEngine<'a> {
                    statement: &Statement,
                    line: String,
                    config: &ExecutionConfig,
-                   joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<(Option<ResultRow>, bool)> {
+                   joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
         match statement {
             Statement::Select(select_statement) => {
-                Ok((self.execute_select(&select_statement, line, joined_table_data)?, false))
+                self.try_clear_limit_state(Either::Left(select_statement));
+
+                let output = self.execute_select(&select_statement, line, joined_table_data)?;
+                let output = self.update_limit(select_statement.limit, output);
+
+                Ok(output)
             }
             Statement::Aggregate(aggregate_statement) => {
+                self.try_clear_limit_state(Either::Right(aggregate_statement));
+
                 if config.update && config.result {
-                    Ok((self.execute_aggregate(&aggregate_statement, line, joined_table_data)?, true))
+                    let output = self.execute_aggregate(&aggregate_statement, line, joined_table_data)?.with_update();
+                    let output = self.update_limit(aggregate_statement.limit, output);
+
+                    Ok(output)
                 } else if config.update && !config.result {
-                    Ok((self.execute_aggregate_update(&aggregate_statement, line, joined_table_data).map(|_| None)?, false))
+                    self.execute_aggregate_update(&aggregate_statement, line, joined_table_data).map(|_| ExecutionOutput::empty())
                 } else if !config.update && config.result {
-                    Ok((self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?, true))
+                    let mut output = ExecutionOutput::new(self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?).with_update();
+
+                    if let Some(limit) = aggregate_statement.limit {
+                        if let Some(row) = output.row.as_mut() {
+                            if row.data.len() > limit as usize {
+                                row.data.drain(limit..);
+                            }
+                        }
+                    }
+
+                    Ok(output)
                 } else {
                     Err(ExecutionError::NotSupportedOperation)
                 }
@@ -75,7 +149,7 @@ impl<'a> ExecutionEngine<'a> {
     fn execute_select(&mut self,
                       select_statement: &SelectStatement,
                       line: String,
-                      joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
+                      joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
         let table_definition = self.get_table(&select_statement.from)?;
         let select_execution_engine = SelectExecutionEngine::new();
         let row = table_definition.extract(&line);
@@ -95,26 +169,30 @@ impl<'a> ExecutionEngine<'a> {
                         |column_provider| {
                             select_execution_engine.execute(select_statement, column_provider)
                         }
-                    )?.0
+                    )?
                 )
             } else {
-                select_execution_engine.execute(
-                    select_statement,
-                    HashMapColumnProvider::with_table_keys(
-                        ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
-                        table_definition
+                Ok(
+                    ExecutionOutput::new(
+                        select_execution_engine.execute(
+                            select_statement,
+                            HashMapColumnProvider::with_table_keys(
+                                ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
+                                table_definition
+                            )
+                        )?
                     )
                 )
             }
         } else {
-            Ok(None)
+            Ok(ExecutionOutput::empty())
         }
     }
 
     fn execute_aggregate(&mut self,
                          aggregate_statement: &AggregateStatement,
                          line: String,
-                         joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<Option<ResultRow>> {
+                         joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
         self.try_clear_aggregate_state(aggregate_statement);
 
         let table_definition = self.tables.get(&aggregate_statement.from)
@@ -139,19 +217,23 @@ impl<'a> ExecutionEngine<'a> {
                                 column_provider
                             )
                         }
-                    )?.0
+                    )?
                 )
             } else {
-                self.aggregate_execution_engine.execute(
-                    aggregate_statement,
-                    HashMapColumnProvider::with_table_keys(
-                        ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
-                        table_definition
+                Ok(
+                    ExecutionOutput::new(
+                        self.aggregate_execution_engine.execute(
+                            aggregate_statement,
+                            HashMapColumnProvider::with_table_keys(
+                                ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
+                                table_definition
+                            )
+                        )?
                     )
                 )
             }
         } else {
-            Ok(None)
+            Ok(ExecutionOutput::empty())
         }
     }
 
@@ -170,7 +252,7 @@ impl<'a> ExecutionEngine<'a> {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = joined_table_data {
-                let (_, joined) = execute_join(
+                let joined = execute_join(
                     table_definition,
                     &row,
                     &line_value,
@@ -185,7 +267,7 @@ impl<'a> ExecutionEngine<'a> {
 
                         Ok(None)
                     }
-                )?;
+                )?.joined;
 
                 if !joined {
                     return Ok(false);
@@ -208,6 +290,20 @@ impl<'a> ExecutionEngine<'a> {
 
     fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         self.aggregate_execution_engine.execute_result(aggregate_statement)
+    }
+
+    fn update_limit(&mut self, limit: Option<usize>, mut output: ExecutionOutput) -> ExecutionOutput {
+        if let Some(row) = output.row.as_ref() {
+            self.num_output_rows += row.data.iter().filter(|row| row.any_result()).count();
+        }
+
+        if let Some(limit) = limit {
+            if self.num_output_rows >= limit {
+                output = output.with_reached_limit();
+            }
+        }
+
+        output
     }
 
     pub fn create_joined_data(&mut self, statement: &Statement, running: Arc<AtomicBool>) -> ExecutionResult<Option<JoinedTableData>> {
@@ -248,6 +344,27 @@ impl<'a> ExecutionEngine<'a> {
         }
 
         self.aggregate_statement_hash = Some(hash);
+    }
+
+    fn try_clear_limit_state(&mut self, statement: Either<&SelectStatement, &AggregateStatement>) {
+        let mut hasher = FnvHasher::default();
+        match statement {
+            Either::Left(statement) => {
+                statement.hash(&mut hasher);
+            }
+            Either::Right(statement) => {
+                statement.hash(&mut hasher);
+            }
+        }
+        let hash = hasher.finish();
+
+        if let Some(current_hash) = self.limit_statement_hash {
+            if current_hash != hash {
+                self.num_output_rows = 0;
+            }
+        }
+
+        self.limit_statement_hash = Some(hash);
     }
 }
 
@@ -293,17 +410,18 @@ fn test_regex_array1() {
             left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
         }),
-        join: None
+        join: None,
+        limit: None
     });
 
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
-        let (result, _) = execution_engine.execute(
+        let result = execution_engine.execute(
             &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
-        ).unwrap();
+        ).unwrap().row;
 
         if let Some(result) = result {
             result_rows.extend(result.data);
@@ -369,17 +487,18 @@ fn test_timestamp1() {
             left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
         }),
-        join: None
+        join: None,
+        limit: None
     });
 
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
-        let (result, _) = execution_engine.execute(
+        let result = execution_engine.execute(
             &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
-        ).unwrap();
+        ).unwrap().row;
 
         if let Some(result) = result {
             result_rows.extend(result.data);
@@ -426,32 +545,35 @@ fn test_json_array1() {
     );
 
     let mut execution_engine = ExecutionEngine::new(&tables);
-    let statement = Statement::Select(SelectStatement {
-        projections: vec![
-            ("timestamp".to_owned(), ExpressionTree::ColumnAccess("timestamp".to_owned())),
-            ("event".to_owned(), ExpressionTree::ArrayElementAccess {
-                array: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
-                index: Box::new(ExpressionTree::Value(Value::Int(1)))
-            })
-        ],
-        from: "clients".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::NullableCompare {
-            operator: NullableCompareOperator::NotEqual,
-            left: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::Null))
-        }),
-        join: None
-    });
+    let statement = Statement::Select(
+        SelectStatement {
+            projections: vec![
+                ("timestamp".to_owned(), ExpressionTree::ColumnAccess("timestamp".to_owned())),
+                ("event".to_owned(), ExpressionTree::ArrayElementAccess {
+                    array: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
+                    index: Box::new(ExpressionTree::Value(Value::Int(1)))
+                })
+            ],
+            from: "clients".to_string(),
+            filename: None,
+            filter: Some(ExpressionTree::NullableCompare {
+                operator: NullableCompareOperator::NotEqual,
+                left: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::Null))
+            }),
+            join: None,
+            limit: None
+        }
+    );
 
     let mut result_rows = Vec::new();
     for line in BufReader::new(File::open("testdata/clients_data.json").unwrap()).lines() {
-        let (result, _) = execution_engine.execute(
+        let result = execution_engine.execute(
             &statement,
             line.unwrap(),
             &ExecutionConfig::default(),
             None
-        ).unwrap();
+        ).unwrap().row;
 
         if let Some(result) = result {
             result_rows.extend(result.data);
@@ -468,4 +590,85 @@ fn test_json_array1() {
 
     assert_eq!(Value::Int(1609789426639), result_rows[2].columns[0]);
     assert_eq!(Value::Null, result_rows[2].columns[1]);
+}
+
+#[test]
+fn test_limit1() {
+    let mut tables = Tables::new();
+    tables.add_table(
+        TableDefinition::new(
+            "connections",
+            vec![
+                ("line", "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)", RegexMode::Captures)
+            ],
+            vec![
+                ColumnDefinition::with_regex("line", 1, "ip", ValueType::String),
+                ColumnDefinition::with_regex("line", 2, "hostname", ValueType::String),
+                ColumnDefinition::with_parsing(
+                    ColumnParsing::MultiRegex(vec![
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 9 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 4 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 5 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 6 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 7 },
+                        RegexResultReference { pattern_name: "line".to_string(), group_index: 8 },
+                    ]),
+                    "datetime",
+                    ValueType::Array(Box::new(ValueType::String))
+                )
+            ],
+        ).unwrap()
+    );
+
+    let mut execution_engine = ExecutionEngine::new(&tables);
+    let statement = Statement::Select(SelectStatement {
+        projections: vec![
+            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+            ("datetime".to_owned(), ExpressionTree::ColumnAccess("datetime".to_owned())),
+        ],
+        from: "connections".to_string(),
+        filename: None,
+        filter: Some(ExpressionTree::Compare {
+            operator: CompareOperator::Equal,
+            left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
+            right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
+        }),
+        join: None,
+        limit: Some(10)
+    });
+
+    let mut result_rows = Vec::new();
+    for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
+        let output = execution_engine.execute(
+            &statement,
+            line.unwrap(),
+            &ExecutionConfig::default(),
+            None
+        ).unwrap();
+
+        if let Some(result) = output.row {
+            result_rows.extend(result.data);
+        }
+
+        if output.reached_limit {
+            break;
+        }
+    }
+
+    assert_eq!(10, result_rows.len());
+
+    assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[0].columns[0]);
+    assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[0].columns[1]);
+    assert_eq!(
+        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("17".to_owned()), Value::String("20".to_owned()), Value::String("55".to_owned()), Value::String("06".to_owned())]),
+        result_rows[0].columns[2]
+    );
+
+    assert_eq!(Value::String("82.252.162.81".to_owned()), result_rows[9].columns[0]);
+    assert_eq!(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned()), result_rows[9].columns[1]);
+    assert_eq!(
+        Value::Array(ValueType::String, vec![Value::String("2005".to_owned()), Value::String("Jun".to_owned()), Value::String("18".to_owned()), Value::String("02".to_owned()), Value::String("08".to_owned()), Value::String("10".to_owned())]),
+        result_rows[9].columns[2]
+    );
 }

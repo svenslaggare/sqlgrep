@@ -36,7 +36,8 @@ pub enum Keyword {
     When,
     Then,
     Else,
-    End
+    End,
+    Limit
 }
 
 impl std::fmt::Display for Keyword {
@@ -206,7 +207,8 @@ pub enum ParserErrorType {
     AlreadyHaveWhere,
     AlreadyHaveJoin,
     AlreadyHaveGroupBy,
-    AlreadyHaveHaving
+    AlreadyHaveHaving,
+    AlreadyHaveLimit
 }
 
 impl std::fmt::Display for ParserErrorType {
@@ -251,6 +253,7 @@ impl std::fmt::Display for ParserErrorType {
             ParserErrorType::AlreadyHaveJoin => { write!(f, "This statement already have a 'JOIN' clause") }
             ParserErrorType::AlreadyHaveGroupBy => { write!(f, "This statement already have a 'GROUP BY' clause") }
             ParserErrorType::AlreadyHaveHaving => { write!(f, "This statement already have a 'HAVING' clause") }
+            ParserErrorType::AlreadyHaveLimit => { write!(f, "This statement already have a 'LIMIT' clause") }
         }
     }
 }
@@ -283,6 +286,7 @@ lazy_static! {
             ("then".to_owned(), Keyword::Then),
             ("else".to_owned(), Keyword::Else),
             ("end".to_owned(), Keyword::End),
+            ("limit".to_owned(), Keyword::Limit),
         ].into_iter()
     );
 

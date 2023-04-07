@@ -27,7 +27,8 @@ fn test_group_by_and_count() {
         filter: None,
         group_by: Some(vec!["x".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -95,7 +96,8 @@ fn test_group_by_and_count2() {
         filter: None,
         group_by: Some(vec!["x".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -145,7 +147,8 @@ fn test_group_by_and_count3() {
         filter: None,
         group_by: Some(vec!["x".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -205,7 +208,8 @@ fn test_group_by_and_count_and_filter() {
         ),
         group_by: Some(vec!["x".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -254,7 +258,8 @@ fn test_group_by_and_max() {
         filter: None,
         group_by: Some(vec!["name".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     for i in 1..6 {
@@ -311,7 +316,8 @@ fn test_group_by_and_min() {
         filter: None,
         group_by: Some(vec!["name".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     for i in 1..6 {
@@ -369,7 +375,8 @@ fn test_group_by_and_count_and_max() {
         filter: None,
         group_by: Some(vec!["name".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     for i in 1..6 {
@@ -428,7 +435,8 @@ fn test_group_by_and_average() {
         filter: None,
         group_by: Some(vec!["name".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     for i in 1..6 {
@@ -485,7 +493,8 @@ fn test_group_by_and_sum() {
         filter: None,
         group_by: Some(vec!["name".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     for i in 1..6 {
@@ -550,7 +559,8 @@ fn test_group_by_and_sum_and_transform() {
         filter: None,
         group_by: Some(vec!["name".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     for i in 1..6 {
@@ -607,7 +617,8 @@ fn test_count() {
         filter: None,
         group_by: None,
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -659,7 +670,8 @@ fn test_group_by_and_count_and_having1() {
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
         ),
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -724,7 +736,8 @@ fn test_group_by_and_count_and_having2() {
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
         ),
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -789,7 +802,8 @@ fn test_group_by_and_count_and_having3() {
                 right: Box::new(ExpressionTree::Value(Value::Int(1)))
             }
         ),
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -888,7 +902,8 @@ fn test_group_by_and_count_and_having4() {
                 })
             }
         ),
-        join: None
+        join: None,
+        limit: None
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -970,7 +985,8 @@ fn test_group_by_array_agg1() {
         filter: None,
         group_by: Some(vec!["x".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     // Add first group
@@ -1046,7 +1062,8 @@ fn test_group_by_array_agg2() {
         filter: None,
         group_by: Some(vec!["x".to_string()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     };
 
     // Add first group
@@ -1122,6 +1139,7 @@ fn test_count_distinct() {
         group_by: None,
         having: None,
         join: None,
+        limit: None
     };
 
     for i in 1..6 {

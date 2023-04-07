@@ -104,12 +104,16 @@ impl<'a> FileIngester<'a> {
                     self.statistics.total_lines += 1;
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
-                    let (result, _) = self.execution_engine.execute(&statement, line, &config, joined_table_data.as_ref())?;
-                    if let Some(result_row) = result {
+                    let output = self.execution_engine.execute(&statement, line, &config, joined_table_data.as_ref())?;
+                    if let Some(result_row) = output.row {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
                             self.output_printer.print(&result_row, self.single_result);
                         }
+                    }
+
+                    if output.reached_limit {
+                        break;
                     }
                 } else {
                     break;
@@ -121,7 +125,7 @@ impl<'a> FileIngester<'a> {
             config.result = true;
             config.update = false;
 
-            let (result, _) = self.execution_engine.execute(&statement, String::new(), &config, joined_table_data.as_ref())?;
+            let result = self.execution_engine.execute(&statement, String::new(), &config, joined_table_data.as_ref())?.row;
             if self.print_result {
                 if let Some(result_row) = result {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -197,13 +201,17 @@ impl<'a> FollowFileIngester<'a> {
             let mut input_line = String::new();
             std::mem::swap(&mut input_line, &mut line);
 
-            let (result, refresh) = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default(), None)?;
-            if let Some(result_row) = result {
-                if refresh {
+            let output = self.execution_engine.execute(&statement, input_line, &ExecutionConfig::default(), None)?;
+            if let Some(result_row) = output.row {
+                if output.update {
                     print!("\x1B[2J\x1B[1;1H");
                 }
 
-                self.output_printer.print(&result_row, refresh)
+                self.output_printer.print(&result_row, output.update);
+
+                if output.reached_limit {
+                    break;
+                }
             }
         }
 
@@ -313,26 +321,29 @@ fn test_file_ingest1() {
         ExecutionEngine::new(&tables)
     ).unwrap();
 
-    let result = ingester.process(Statement::Select(SelectStatement {
-        projections: vec![
-            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
-            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
-            ("year".to_owned(), ExpressionTree::ColumnAccess("year".to_owned())),
-            ("month".to_owned(), ExpressionTree::ColumnAccess("month".to_owned())),
-            ("day".to_owned(), ExpressionTree::ColumnAccess("day".to_owned())),
-            ("hour".to_owned(), ExpressionTree::ColumnAccess("hour".to_owned())),
-            ("minute".to_owned(), ExpressionTree::ColumnAccess("minute".to_owned())),
-            ("second".to_owned(), ExpressionTree::ColumnAccess("second".to_owned()))
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::Int(15))),
-            operator: CompareOperator::GreaterThanOrEqual
-        }),
-        join: None
-    }));
+    let result = ingester.process(
+        Statement::Select(SelectStatement {
+            projections: vec![
+                ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+                ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+                ("year".to_owned(), ExpressionTree::ColumnAccess("year".to_owned())),
+                ("month".to_owned(), ExpressionTree::ColumnAccess("month".to_owned())),
+                ("day".to_owned(), ExpressionTree::ColumnAccess("day".to_owned())),
+                ("hour".to_owned(), ExpressionTree::ColumnAccess("hour".to_owned())),
+                ("minute".to_owned(), ExpressionTree::ColumnAccess("minute".to_owned())),
+                ("second".to_owned(), ExpressionTree::ColumnAccess("second".to_owned()))
+            ],
+            from: "connections".to_string(),
+            filename: None,
+            filter: Some(ExpressionTree::Compare {
+                left: Box::new(ExpressionTree::ColumnAccess("day".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::Int(15))),
+                operator: CompareOperator::GreaterThanOrEqual
+            }),
+            join: None,
+            limit: None
+        })
+    );
 
     if let Err(err) = result {
         println!("{:?}", err);
@@ -385,7 +396,8 @@ fn test_file_ingest2() {
         }),
         group_by: Some(vec!["hour".to_owned()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     }));
 
     if let Err(err) = result {
@@ -438,7 +450,8 @@ fn test_file_ingest3() {
         }),
         group_by: None,
         having: None,
-        join: None
+        join: None,
+        limit: None
     }));
 
     if let Err(err) = result {
@@ -488,7 +501,8 @@ fn test_file_ingest4() {
         filter: None,
         group_by: Some(vec!["hostname".to_owned()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     }));
 
     if let Err(err) = result {
@@ -543,7 +557,8 @@ fn test_file_ingest5() {
         }),
         group_by: Some(vec!["hostname".to_owned(), "hour".to_owned()]),
         having: None,
-        join: None
+        join: None,
+        limit: None
     }));
 
     if let Err(err) = result {
@@ -607,7 +622,8 @@ fn test_file_ingest6() {
                 })
             }
         ),
-        join: None
+        join: None,
+        limit: None
     }));
 
     if let Err(err) = result {

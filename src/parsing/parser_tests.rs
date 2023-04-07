@@ -293,14 +293,20 @@ fn test_parse_select_many_features1() {
 
 #[test]
 fn test_parse_inner_join1() {
-    let tree = parse_str("SELECT x FROM test WHERE x > 4 INNER JOIN table1::'file.log' ON table2.x = table1.y").unwrap();
-    assert_eq!("SELECT x FROM test WHERE (x > 4) INNER JOIN table1::'file.log' ON table2.x = table1.y", tree.to_string());
+    let tree = parse_str("SELECT x FROM test INNER JOIN table1::'file.log' ON table2.x = table1.y WHERE x > 4").unwrap();
+    assert_eq!("SELECT x FROM test INNER JOIN table1::'file.log' ON table2.x = table1.y WHERE (x > 4)", tree.to_string());
 }
 
 #[test]
 fn test_parse_outer_join1() {
-    let tree = parse_str("SELECT x FROM test WHERE x > 4 OUTER JOIN table1::'file.log' ON table2.x = table1.y").unwrap();
-    assert_eq!("SELECT x FROM test WHERE (x > 4) OUTER JOIN table1::'file.log' ON table2.x = table1.y", tree.to_string());
+    let tree = parse_str("SELECT x FROM test OUTER JOIN table1::'file.log' ON table2.x = table1.y WHERE x > 4").unwrap();
+    assert_eq!("SELECT x FROM test OUTER JOIN table1::'file.log' ON table2.x = table1.y WHERE (x > 4)", tree.to_string());
+}
+
+#[test]
+fn test_parse_select_limit() {
+    let tree = parse_str("SELECT x FROM test LIMIT 10").unwrap();
+    assert_eq!("SELECT x FROM test LIMIT 10", tree.to_string());
 }
 
 #[test]

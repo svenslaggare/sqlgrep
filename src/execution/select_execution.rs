@@ -42,12 +42,14 @@ impl SelectExecutionEngine  {
                 }
             }
 
-            Ok(Some(
-                ResultRow {
-                    data: vec![Row::new(result_columns)],
-                    columns: column_names
-                }
-            ))
+            Ok(
+                Some(
+                    ResultRow {
+                        data: vec![Row::new(result_columns)],
+                        columns: column_names
+                    }
+                )
+            )
         } else {
             Ok(None)
         }
@@ -71,7 +73,8 @@ fn test_project1() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
-            join: None
+            join: None,
+            limit: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -111,7 +114,8 @@ fn test_project2() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
-            join: None
+            join: None,
+            limit: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -155,7 +159,8 @@ fn test_project3() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
-            join: None
+            join: None,
+            limit: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -199,7 +204,8 @@ fn test_project4() {
             from: "test".to_owned(),
             filename: None,
             filter: None,
-            join: None
+            join: None,
+            limit: None
         },
         HashMapColumnProvider::with_table_keys(columns, tables.get("test").unwrap())
     );
@@ -240,7 +246,8 @@ fn test_filter1() {
                     operator: CompareOperator::GreaterThan
                 }
             ),
-            join: None
+            join: None,
+            limit: None
         },
         HashMapColumnProvider::new(columns)
     );
@@ -274,7 +281,8 @@ fn test_filter2() {
                     operator: CompareOperator::GreaterThan
                 }
             ),
-            join: None
+            join: None,
+            limit: None
         },
         HashMapColumnProvider::new(columns)
     );

@@ -48,13 +48,14 @@ Tries to follow the SQL standard, so you should expect that normal SQL queries w
 
 ## Queries
 Supported features:
-* Where
-* Group by
-* Aggregates
-* Having
+* Where.
+* Group by.
+* Aggregates.
+* Having.
 * Inner & outer joins. The joined table is loaded completely in memory.
+* Limits.
 * Extract(x FROM y) for timestamps.
-
+* Case expressions.
 
 Supported aggregates:
 * `count`

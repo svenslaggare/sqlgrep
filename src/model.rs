@@ -559,13 +559,14 @@ pub struct JoinClause {
     pub is_outer: bool
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash)]
 pub struct SelectStatement {
     pub projections: Vec<(String, ExpressionTree)>,
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
-    pub join: Option<JoinClause>
+    pub join: Option<JoinClause>,
+    pub limit: Option<usize>
 }
 
 impl SelectStatement {
@@ -582,7 +583,8 @@ pub struct AggregateStatement {
     pub filter: Option<ExpressionTree>,
     pub group_by: Option<Vec<String>>,
     pub having: Option<ExpressionTree>,
-    pub join: Option<JoinClause>
+    pub join: Option<JoinClause>,
+    pub limit: Option<usize>
 }
 
 pub struct CreateTableStatement {

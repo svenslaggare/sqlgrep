@@ -151,7 +151,8 @@ pub enum ParserOperationTree {
         filter: Option<ParserExpressionTree>,
         group_by: Option<Vec<String>>,
         having: Option<ParserExpressionTree>,
-        join: Option<ParserJoinClause>
+        join: Option<ParserJoinClause>,
+        limit: Option<usize>
     },
     CreateTable {
         location: TokenLocation,
@@ -262,6 +263,7 @@ impl<'a> Parser<'a> {
         let mut group_by = None;
         let mut having = None;
         let mut join = None;
+        let mut limit = None;
 
         if self.current() != &Token::End {
             loop {
@@ -317,6 +319,14 @@ impl<'a> Parser<'a> {
                         self.next()?;
                         having = Some(self.parse_expression_internal()?);
                     }
+                    Token::Keyword(Keyword::Limit) => {
+                        if limit.is_some() {
+                            return Err(self.create_error(ParserErrorType::AlreadyHaveLimit));
+                        }
+
+                        self.next()?;
+                        limit = Some(self.consume_int()? as usize);
+                    }
                     Token::SemiColon => {
                         self.next()?;
                         break;
@@ -338,7 +348,8 @@ impl<'a> Parser<'a> {
                 filter,
                 group_by,
                 having,
-                join
+                join,
+                limit
             }
         )
     }
@@ -1054,7 +1065,7 @@ impl<'a> Parser<'a> {
 impl std::fmt::Display for ParserOperationTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserOperationTree::Select { projections, from, filter, group_by, having, join, .. } => {
+            ParserOperationTree::Select { projections, from, filter, group_by, having, join, limit, .. } => {
                 let projection_str = projections
                     .iter()
                     .map(|(name, expression)| {
@@ -1072,6 +1083,17 @@ impl std::fmt::Display for ParserOperationTree {
                     write!(f, "::'{}'", from_file)?;
                 }
 
+                if let Some(join) = join {
+                    if join.is_outer {
+                        write!(f, " OUTER JOIN ")?;
+                    } else {
+                        write!(f, " INNER JOIN ")?;
+                    }
+
+                    write!(f, "{}::'{}'", join.joiner_table, join.joiner_filename)?;
+                    write!(f, " ON {}.{} = {}.{}", join.left_table, join.left_column, join.right_table, join.right_column)?;
+                }
+
                 if let Some(filter) = filter {
                     write!(f, " WHERE {}", filter.tree)?;
                 }
@@ -1084,15 +1106,8 @@ impl std::fmt::Display for ParserOperationTree {
                     write!(f, " HAVING {}", having.tree)?;
                 }
 
-                if let Some(join) = join {
-                    if join.is_outer {
-                        write!(f, " OUTER JOIN ")?;
-                    } else {
-                        write!(f, " INNER JOIN ")?;
-                    }
-
-                    write!(f, "{}::'{}'", join.joiner_table, join.joiner_filename)?;
-                    write!(f, " ON {}.{} = {}.{}", join.left_table, join.left_column, join.right_table, join.right_column)?;
+                if let Some(limit) = limit {
+                    write!(f, " LIMIT {}", limit)?;
                 }
 
                 Ok(())

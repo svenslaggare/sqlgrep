@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use crate::data_model::{Row, TableDefinition};
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
-use crate::execution::execution_engine::{ExecutionEngine, ExecutionConfig};
+use crate::execution::execution_engine::{ExecutionEngine, ExecutionConfig, ExecutionOutput};
 use crate::model::{JoinClause, Value, SelectStatement, ExpressionTree, Statement};
 
 pub struct JoinedTableData {
@@ -33,7 +33,8 @@ impl JoinedTableData {
             from: join.joined_table.clone(),
             filename: None,
             filter: None,
-            join: None
+            join: None,
+            limit: None
         });
 
         let joined_table = execution_engine.get_table(&join.joined_table)?.clone();
@@ -55,7 +56,7 @@ impl JoinedTableData {
             }
 
             if let Ok(line) = line {
-                let (result, _) = execution_engine.execute(&join_statement, line.clone(), &config, None)?;
+                let result = execution_engine.execute(&join_statement, line.clone(), &config, None)?.row;
                 if let Some(result) = result {
                     for row in result.data {
                         joined_table_data.add_row(
@@ -96,7 +97,7 @@ pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<Re
                                                                                            join_clause: &JoinClause,
                                                                                            joined_table_data: &JoinedTableData,
                                                                                            allow_outer: bool,
-                                                                                           mut execute: F) -> ExecutionResult<(Option<ResultRow>, bool)> {
+                                                                                           mut execute: F) -> ExecutionResult<ExecutionOutput> {
     if let Some(joined_rows) = joined_table_data.get_joined_row(table_definition,
                                                                 &row,
                                                                 &join_clause.joiner_column)? {
@@ -114,7 +115,7 @@ pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<Re
             extend_option_result_row(&mut result_row, result);
         }
 
-        Ok((result_row, true))
+        Ok(ExecutionOutput::joined(result_row))
     } else {
         if join_clause.is_outer && allow_outer {
             let null_row = Row::new(vec![Value::Null; joined_table_data.fully_qualified_column_names.len()]);
@@ -126,9 +127,9 @@ pub fn execute_join<F: FnMut(HashMapColumnProvider) -> ExecutionResult<Option<Re
                 &null_row
             );
 
-            Ok((execute(column_provider)?, true))
+            Ok(ExecutionOutput::joined(execute(column_provider)?))
         } else {
-            Ok((None, false))
+            Ok(ExecutionOutput::empty())
         }
     }
 }
