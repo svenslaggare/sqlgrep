@@ -39,7 +39,8 @@ pub enum ParserExpressionTreeData {
     NullableCompare { operator: NullableCompareOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     Call { name: String, arguments: Vec<ParserExpressionTree>, distinct: Option<bool> },
     ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> },
-    TypeConversion { operand: Box<ParserExpressionTree>, convert_to_type: ValueType }
+    TypeConversion { operand: Box<ParserExpressionTree>, convert_to_type: ValueType },
+    Case { clauses: Vec<(ParserExpressionTree, ParserExpressionTree)>, else_clause: Box<ParserExpressionTree> }
 }
 
 impl ParserExpressionTreeData {
@@ -84,6 +85,14 @@ impl ParserExpressionTreeData {
             }
             ParserExpressionTreeData::TypeConversion { operand, .. } => {
                 operand.tree.visit(f)?;
+            }
+            ParserExpressionTreeData::Case { clauses, else_clause } => {
+                for clause in clauses {
+                    clause.0.tree.visit(f)?;
+                    clause.1.tree.visit(f)?;
+                }
+
+                else_clause.tree.visit(f)?;
             }
         }
 
@@ -797,6 +806,9 @@ impl<'a> Parser<'a> {
             Token::Keyword(Keyword::Extract) => {
                 self.parse_extract_expression()
             }
+            Token::Keyword(Keyword::Case) => {
+                self.parse_case_expression()
+            }
             _ => Err(self.create_error(ParserErrorType::ExpectedExpression))
         }
     }
@@ -933,6 +945,37 @@ impl<'a> Parser<'a> {
                 }
             )
         )
+    }
+
+    fn parse_case_expression(&mut self) -> ParserResult<ParserExpressionTree> {
+        let token_location = self.current_location();
+        self.next()?;
+
+        let mut clauses = Vec::new();
+        loop {
+            self.expect_and_consume_token(Token::Keyword(Keyword::When), ParserErrorType::ExpectedKeyword(Keyword::When))?;
+            let condition = self.parse_expression_internal()?;
+            self.expect_and_consume_token(Token::Keyword(Keyword::Then), ParserErrorType::ExpectedKeyword(Keyword::Then))?;
+            let result = self.parse_expression_internal()?;
+
+            clauses.push((condition, result));
+
+            if self.current() == &Token::Keyword(Keyword::Else) {
+                self.next()?;
+                let else_result = self.parse_expression_internal()?;
+                self.expect_and_consume_token(Token::Keyword(Keyword::End), ParserErrorType::ExpectedKeyword(Keyword::End))?;
+
+                return Ok(
+                    ParserExpressionTree::new(
+                        token_location,
+                        ParserExpressionTreeData::Case {
+                            clauses,
+                            else_clause: Box::new(else_result)
+                        }
+                    )
+                );
+            }
+        }
     }
 
     fn consume_identifier(&mut self) -> ParserResult<String> {
@@ -1156,6 +1199,20 @@ impl ParserExpressionTreeDataVisualizer {
             ParserExpressionTreeData::TypeConversion { operand, convert_to_type } => {
                 self.fmt(&operand.tree, f)?;
                 write!(f, "::{}", convert_to_type)?;
+                Ok(())
+            }
+            ParserExpressionTreeData::Case { clauses, else_clause } => {
+                write!(f, "(CASE ")?;
+                for clause in clauses {
+                    write!(f, "WHEN ")?;
+                    self.fmt(&clause.0.tree, f)?;
+                    write!(f, " THEN ")?;
+                    self.fmt(&clause.1.tree, f)?;
+                    write!(f, " ")?;
+                }
+                write!(f, "ELSE ")?;
+                self.fmt(&else_clause.tree, f)?;
+                write!(f, " END)")?;
                 Ok(())
             }
         }

@@ -14,7 +14,6 @@ use itertools::Itertools;
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator, IntervalType};
 use crate::execution::{ColumnProvider};
 
-
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
     ColumnNotFound(String),
@@ -528,6 +527,15 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     }
                 }
             }
+            ExpressionTree::Case { clauses, else_clause } => {
+                for (bool_condition, result) in clauses {
+                    if self.evaluate(bool_condition)?.bool() {
+                        return self.evaluate(result);
+                    }
+                }
+
+                self.evaluate(else_clause)
+            }
             ExpressionTree::Aggregate(id, aggregate) => {
                 match aggregate.as_ref() {
                     Aggregate::GroupKey(column) => {
@@ -982,6 +990,46 @@ fn test_type_convert1() {
         expression_execution_engine.evaluate(&ExpressionTree::TypeConversion {
             operand: Box::new(ExpressionTree::Value(Value::String("2022-10-14 22:11:12".to_owned()))),
             convert_to_type: ValueType::Timestamp
+        })
+    );
+}
+
+#[test]
+fn test_case_expression() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Int(10)),
+        expression_execution_engine.evaluate(&ExpressionTree::Case {
+            clauses: vec![
+                (ExpressionTree::Value(Value::Bool(true)), ExpressionTree::Value(Value::Int(10))),
+                (ExpressionTree::Value(Value::Bool(false)), ExpressionTree::Value(Value::Int(1)))
+            ],
+            else_clause: Box::new(ExpressionTree::Value(Value::Int(0)))
+        })
+    );
+
+    assert_eq!(
+        Ok(Value::Int(1)),
+        expression_execution_engine.evaluate(&ExpressionTree::Case {
+            clauses: vec![
+                (ExpressionTree::Value(Value::Bool(false)), ExpressionTree::Value(Value::Int(10))),
+                (ExpressionTree::Value(Value::Bool(true)), ExpressionTree::Value(Value::Int(1)))
+            ],
+            else_clause: Box::new(ExpressionTree::Value(Value::Int(0)))
+        })
+    );
+
+    assert_eq!(
+        Ok(Value::Int(0)),
+        expression_execution_engine.evaluate(&ExpressionTree::Case {
+            clauses: vec![
+                (ExpressionTree::Value(Value::Bool(false)), ExpressionTree::Value(Value::Int(10))),
+                (ExpressionTree::Value(Value::Bool(false)), ExpressionTree::Value(Value::Int(1)))
+            ],
+            else_clause: Box::new(ExpressionTree::Value(Value::Int(0)))
         })
     );
 }

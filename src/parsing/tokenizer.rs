@@ -31,7 +31,12 @@ pub enum Keyword {
     On,
     Extract,
     Default,
-    Distinct
+    Distinct,
+    Case,
+    When,
+    Then,
+    Else,
+    End
 }
 
 impl std::fmt::Display for Keyword {
@@ -273,6 +278,11 @@ lazy_static! {
             ("extract".to_owned(), Keyword::Extract),
             ("default".to_owned(), Keyword::Default),
             ("distinct".to_owned(), Keyword::Distinct),
+            ("case".to_owned(), Keyword::Case),
+            ("when".to_owned(), Keyword::When),
+            ("then".to_owned(), Keyword::Then),
+            ("else".to_owned(), Keyword::Else),
+            ("end".to_owned(), Keyword::End),
         ].into_iter()
     );
 

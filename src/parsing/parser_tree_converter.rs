@@ -415,6 +415,18 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
             let operand = Box::new(transform_expression(*operand, state)?);
             Ok(ExpressionTree::TypeConversion { operand, convert_to_type })
         }
+        ParserExpressionTreeData::Case { clauses, else_clause } => {
+            let mut transformed_clauses = Vec::new();
+            for clause in clauses {
+                transformed_clauses.push((
+                    transform_expression(clause.0, state)?,
+                    transform_expression(clause.1, state)?
+                ));
+            }
+
+            let else_clause = Box::new(transform_expression(*else_clause, state)?);
+            Ok(ExpressionTree::Case { clauses: transformed_clauses, else_clause })
+        }
     }
 }
 

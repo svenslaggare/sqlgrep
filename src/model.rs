@@ -474,6 +474,7 @@ pub enum ExpressionTree {
     Function { function: Function, arguments: Vec<ExpressionTree> },
     ArrayElementAccess { array: Box<ExpressionTree>, index: Box<ExpressionTree> },
     TypeConversion { operand: Box<ExpressionTree>, convert_to_type: ValueType },
+    Case { clauses: Vec<(ExpressionTree, ExpressionTree)>, else_clause: Box<ExpressionTree> },
     Aggregate(usize, Box<Aggregate>)
 }
 
@@ -513,6 +514,14 @@ impl ExpressionTree {
             }
             ExpressionTree::TypeConversion { operand, .. } => {
                 operand.visit(f)?;
+            }
+            ExpressionTree::Case { clauses, else_clause } => {
+                for clause in clauses {
+                    clause.0.visit(f)?;
+                    clause.1.visit(f)?;
+                }
+
+                else_clause.visit(f)?;
             }
             ExpressionTree::Aggregate(_, aggregate) => {
                 match aggregate.as_ref() {

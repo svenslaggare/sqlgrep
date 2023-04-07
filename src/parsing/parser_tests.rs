@@ -199,6 +199,18 @@ fn test_parse_type_convert1() {
 }
 
 #[test]
+fn test_parse_case_expression1() {
+    let tree = parse_expression_str("CASE WHEN x > 0 THEN 1 ELSE 0 END").unwrap();
+    assert_eq!("(CASE WHEN (x > 0) THEN 1 ELSE 0 END)", tree.tree.to_string());
+}
+
+#[test]
+fn test_parse_case_expression2() {
+    let tree = parse_expression_str("CASE WHEN x > 10 THEN 2 WHEN x > 5 THEN 1 ELSE 0 END").unwrap();
+    assert_eq!("(CASE WHEN (x > 10) THEN 2 WHEN (x > 5) THEN 1 ELSE 0 END)", tree.tree.to_string());
+}
+
+#[test]
 fn test_parse_select1() {
     let tree = parse_str("SELECT x FROM test").unwrap();
     assert_eq!("SELECT x FROM test", tree.to_string());
@@ -208,6 +220,12 @@ fn test_parse_select1() {
 fn test_parse_select2() {
     let tree = parse_str("SELECT * FROM test").unwrap();
     assert_eq!("SELECT * FROM test", tree.to_string());
+}
+
+#[test]
+fn test_parse_select3() {
+    let tree = parse_str("SELECT (CASE WHEN x > 0 THEN 1 ELSE 0 END) FROM test").unwrap();
+    assert_eq!("SELECT (CASE WHEN (x > 0) THEN 1 ELSE 0 END) FROM test", tree.to_string());
 }
 
 #[test]

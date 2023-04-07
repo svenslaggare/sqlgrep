@@ -1,7 +1,7 @@
 use crate::data_model::{ColumnParsing, RegexMode, RegexResultReference};
 use crate::model::{Aggregate, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Function, JoinClause, UnaryArithmeticOperator, Value, ValueType};
 use crate::parsing::operator::Operator;
-use crate::parsing::parser::{ParserColumnDefinition, ParserExpressionTreeData, ParserJoinClause, ParserOperationTree};
+use crate::parsing::parser::{parse_str, ParserColumnDefinition, ParserExpressionTreeData, ParserJoinClause, ParserOperationTree};
 use crate::parsing::parser_tree_converter::{ConvertParserTreeErrorType, transform_statement};
 
 #[test]
@@ -262,6 +262,40 @@ fn test_select_statement7() {
         &ExpressionTree::Function {
             function: Function::Greatest,
             arguments: vec![ExpressionTree::ColumnAccess("x".to_owned()), ExpressionTree::ColumnAccess("y".to_owned())]
+        },
+        &statement.projections[0].1
+    );
+
+    assert_eq!("test", statement.from);
+}
+
+#[test]
+fn test_select_statement8() {
+    let tree = parse_str("SELECT (CASE WHEN x > 0 THEN 1 ELSE 0 END) FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("p0", statement.projections[0].0.as_str());
+    assert_eq!(
+        &ExpressionTree::Case {
+            clauses: vec![
+                (
+                    ExpressionTree::Compare {
+                        operator: CompareOperator::GreaterThan,
+                        left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
+                        right: Box::new(ExpressionTree::Value(Value::Int(0)))
+                    },
+                    ExpressionTree::Value(Value::Int(1))
+                )
+            ],
+            else_clause: Box::new(ExpressionTree::Value(Value::Int(0)))
         },
         &statement.projections[0].1
     );
