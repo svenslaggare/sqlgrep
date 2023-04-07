@@ -1007,3 +1007,100 @@ impl<'a> Parser<'a> {
         Ok(&self.tokens[self.index as usize].token)
     }
 }
+
+impl std::fmt::Display for ParserExpressionTreeData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        ParserExpressionTreeDataVisualizer {}.fmt(self, f)
+    }
+}
+
+struct ParserExpressionTreeDataVisualizer {
+
+}
+
+impl ParserExpressionTreeDataVisualizer {
+    fn fmt(&self, value: &ParserExpressionTreeData, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match value {
+            ParserExpressionTreeData::Value(value) => {
+                write!(f, "{}", value)
+            }
+            ParserExpressionTreeData::ColumnAccess(name) => {
+                write!(f, "{}", name)
+            }
+            ParserExpressionTreeData::Wildcard => {
+                write!(f, "*")
+            }
+            ParserExpressionTreeData::BinaryOperator { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left.tree, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right.tree, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ParserExpressionTreeData::BooleanOperation { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left.tree, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right.tree, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ParserExpressionTreeData::UnaryOperator { operator, operand } => {
+                write!(f, "{}", operator)?;
+                self.fmt(&operand.tree, f)?;
+                Ok(())
+            }
+            ParserExpressionTreeData::Invert { operand } => {
+                write!(f, "NOT ")?;
+                self.fmt(&operand.tree, f)?;
+                Ok(())
+            }
+            ParserExpressionTreeData::NullableCompare { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left.tree, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right.tree, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ParserExpressionTreeData::Call { name, arguments, distinct } => {
+                write!(f, "{}", name)?;
+                write!(f, "(")?;
+                let mut is_first = true;
+                for argument in arguments {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    } else {
+                        is_first = false;
+                    }
+
+                    self.fmt(&argument.tree, f)?;
+                }
+
+                if let Some(distinct) = distinct {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    }
+
+                    write!(f, "distinct={}", distinct)?;
+                }
+
+                write!(f, ")")?;
+                Ok(())
+            }
+            ParserExpressionTreeData::ArrayElementAccess { array, index } => {
+                self.fmt(&array.tree, f)?;
+                write!(f, "[")?;
+                self.fmt(&index.tree, f)?;
+                write!(f, "]")?;
+                Ok(())
+            }
+            ParserExpressionTreeData::TypeConversion { operand, convert_to_type } => {
+                self.fmt(&operand.tree, f)?;
+                write!(f, "::{}", convert_to_type)?;
+                Ok(())
+            }
+        }
+    }
+}

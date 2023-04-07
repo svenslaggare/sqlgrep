@@ -1,8 +1,17 @@
 use crate::data_model::{ColumnParsing, JsonAccess, RegexMode, RegexResultReference};
-use crate::model::{BooleanOperator, NullableCompareOperator, Value, ValueType};
+use crate::model::{Value, ValueType};
 use crate::parsing::operator::{BinaryOperators, Operator, UnaryOperators};
-use crate::parsing::parser::{parse_str, Parser, ParserColumnDefinition, ParserExpressionTreeData, ParserJoinClause, ParserOperationTree};
-use crate::parsing::tokenizer::{Keyword, ParserError, ParserErrorType, Token, TokenLocation};
+use crate::parsing::parser::{parse_str, Parser, ParserColumnDefinition, ParserExpressionTree, ParserExpressionTreeData, ParserJoinClause, ParserOperationTree, ParserResult};
+use crate::parsing::tokenizer::{Keyword, ParserError, ParserErrorType, Token, tokenize, TokenLocation};
+
+fn parse_expression_str(text: &str) -> ParserResult<ParserExpressionTree> {
+    let tokens = tokenize(text)?;
+
+    let binary_operators = BinaryOperators::new();
+    let unary_operators = UnaryOperators::new();
+
+    Parser::new(&binary_operators, &unary_operators, tokens).parse_expression()
+}
 
 #[test]
 fn test_advance_parser() {
@@ -104,450 +113,89 @@ fn test_parse_values() {
 
 #[test]
 fn test_parse_expression1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::Operator(Operator::Single('+')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::BinaryOperator {
-            operator: Operator::Single('+'),
-            left: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default())),
-            right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("a + 4").unwrap();
+    assert_eq!("(a + 4)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression2() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::LeftParentheses,
-            Token::Identifier("a".to_string()),
-            Token::Operator(Operator::Single('+')),
-            Token::Int(4),
-            Token::RightParentheses,
-            Token::Operator(Operator::Single('*')),
-            Token::Identifier("b".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::BinaryOperator {
-            operator: Operator::Single('*'),
-            left: Box::new(
-                ParserExpressionTreeData::BinaryOperator {
-                    operator: Operator::Single('+'),
-                    left: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default())),
-                    right: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-                }.with_location(Default::default())
-            ),
-            right: Box::new(ParserExpressionTreeData::ColumnAccess("b".to_string()).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("(a + 4) * b").unwrap();
+    assert_eq!("((a + 4) * b)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression3() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Operator(Operator::Single('-')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::UnaryOperator {
-            operator: Operator::Single('-'),
-            operand: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("-4").unwrap();
+    assert_eq!("-4", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression4() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("f".to_string()),
-            Token::LeftParentheses,
-            Token::Int(4),
-            Token::Comma,
-            Token::Identifier("a".to_string()),
-            Token::RightParentheses,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::Call {
-            name: "f".to_string(),
-            arguments: vec![
-                ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()),
-                ParserExpressionTreeData::ColumnAccess("a".to_string()).with_location(Default::default()),
-            ],
-            distinct: None
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("f(4, a)").unwrap();
+    assert_eq!("f(4, a)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression5() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::True,
-            Token::Keyword(Keyword::And),
-            Token::False,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::BooleanOperation {
-            operator: BooleanOperator::And,
-            left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
-            right: Box::new(ParserExpressionTreeData::Value(Value::Bool(false)).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("TRUE AND FALSE").unwrap();
+    assert_eq!("(true AND false)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression6() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Operator(Operator::Single('-')),
-            Token::Int(4),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::UnaryOperator {
-            operator: Operator::Single('-'),
-            operand: Box::new(ParserExpressionTreeData::Value(Value::Int(4)).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("NOT TRUE").unwrap();
+    assert_eq!("NOT true", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression7() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
+    let tree = parse_expression_str("TRUE IS NULL").unwrap();
+    assert_eq!("(true IS NULL)", tree.tree.to_string());
 
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Not),
-            Token::True,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::Invert {
-            operand: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("TRUE IS NOT NULL").unwrap();
+    assert_eq!("(true IS NOT NULL)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression8() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::True,
-            Token::Keyword(Keyword::Is),
-            Token::Null,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::NullableCompare {
-            operator: NullableCompareOperator::Equal,
-            left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
-            right: Box::new(ParserExpressionTreeData::Value(Value::Null).with_location(Default::default()))
-        },
-        tree.tree
-    );
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::True,
-            Token::Keyword(Keyword::IsNot),
-            Token::Null,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::NullableCompare {
-            operator: NullableCompareOperator::NotEqual,
-            left: Box::new(ParserExpressionTreeData::Value(Value::Bool(true)).with_location(Default::default())),
-            right: Box::new(ParserExpressionTreeData::Value(Value::Null).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("a.b").unwrap();
+    assert_eq!("a.b", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression9() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::Operator(Operator::Single('.')),
-            Token::Identifier("b".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::ColumnAccess("a.b".to_owned()),
-        tree.tree
-    );
+    let tree = parse_expression_str("a[11]").unwrap();
+    assert_eq!("a[11]", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression10() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(11),
-            Token::RightSquareParentheses,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::ArrayElementAccess {
-            array: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_owned()).with_location(Default::default())),
-            index: Box::new(ParserExpressionTreeData::Value(Value::Int(11)).with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("a[11 + b]").unwrap();
+    assert_eq!("a[(11 + b)]", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression11() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("a".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(11),
-            Token::Operator(Operator::Single('+')),
-            Token::Identifier("a".to_string()),
-            Token::RightSquareParentheses,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::ArrayElementAccess {
-            array: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_owned()).with_location(Default::default())),
-            index: Box::new(ParserExpressionTreeData::BinaryOperator {
-                operator: Operator::Single('+'),
-                left: Box::new(ParserExpressionTreeData::Value(Value::Int(11)).with_location(Default::default())),
-                right: Box::new(ParserExpressionTreeData::ColumnAccess("a".to_owned()).with_location(Default::default()))
-            }.with_location(Default::default()))
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("EXTRACT (EPOCH FROM timestamp)").unwrap();
+    assert_eq!("timestamp_extract_epoch(timestamp)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression12() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Keyword(Keyword::Extract),
-            Token::LeftParentheses,
-            Token::Identifier("EPOCH".to_string()),
-            Token::Keyword(Keyword::From),
-            Token::Identifier("timestamp".to_string()),
-            Token::RightParentheses,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::Call {
-            name: "timestamp_extract_epoch".to_string(),
-            arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())],
-            distinct: None
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("COUNT(DISTINCT timestamp)").unwrap();
+    assert_eq!("COUNT(timestamp, distinct=true)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_expression13() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("COUNT".to_owned()),
-            Token::LeftParentheses,
-            Token::Keyword(Keyword::Distinct),
-            Token::Identifier("timestamp".to_string()),
-            Token::RightParentheses,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::Call {
-            name: "COUNT".to_string(),
-            arguments: vec![ParserExpressionTreeData::ColumnAccess("timestamp".to_owned()).with_location(Default::default())],
-            distinct: Some(true)
-        },
-        tree.tree
-    );
-}
-
-#[test]
-fn test_parse_expression14() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::Identifier("array".to_string()),
-            Token::LeftSquareParentheses,
-            Token::Int(1337),
-            Token::Comma,
-            Token::Int(4711),
-            Token::RightSquareParentheses,
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::Call {
-            name: "create_array".to_string(),
-            arguments: vec![
-                ParserExpressionTreeData::Value(Value::Int(1337)).with_location(Default::default()),
-                ParserExpressionTreeData::Value(Value::Int(4711)).with_location(Default::default())
-            ],
-            distinct: None
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("array[1337, 4711]").unwrap();
+    assert_eq!("create_array(1337, 4711)", tree.tree.to_string());
 }
 
 #[test]
 fn test_parse_type_convert1() {
-    let binary_operators = BinaryOperators::new();
-    let unary_operators = UnaryOperators::new();
-
-    let mut parser = Parser::from_plain_tokens(
-        &binary_operators,
-        &unary_operators,
-        vec![
-            Token::String("2022-10-11 22:00:00".to_string()),
-            Token::DoubleColon,
-            Token::Identifier("timestamp".to_string()),
-            Token::End
-        ]
-    );
-
-    let tree = parser.parse_expression().unwrap();
-    assert_eq!(
-        ParserExpressionTreeData::TypeConversion {
-            operand: Box::new(ParserExpressionTreeData::Value(Value::String("2022-10-11 22:00:00".to_owned())).with_location(Default::default())),
-            convert_to_type: ValueType::Timestamp
-        },
-        tree.tree
-    );
+    let tree = parse_expression_str("'2022-10-11 22:00:00'::timestamp").unwrap();
+    assert_eq!("'2022-10-11 22:00:00'::timestamp", tree.tree.to_string());
 }
 
 #[test]

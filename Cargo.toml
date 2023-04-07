@@ -24,7 +24,7 @@ chrono = "0.4.19"
 cursive = "0.20"
 
 [dev-dependencies]
-criterion = "0.3"
+criterion = "0.4"
 
 [[bench]]
 name = "full_pipeline"

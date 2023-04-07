@@ -206,7 +206,7 @@ impl std::fmt::Display for Value {
             Value::Int(x) => write!(f, "{}", x),
             Value::Float(x) => write!(f, "{:.2}", x.0),
             Value::Bool(x) => write!(f, "{}", x),
-            Value::String(x) => write!(f, "{}", x),
+            Value::String(x) => write!(f, "'{}'", x),
             Value::Array(_, x) => write!(f, "{{{}}}", x.iter().map(|x| format!("{}", x)).join(", ")),
             Value::Timestamp(x) => write!(f, "{}", x),
             Value::Interval(x) => {
@@ -348,6 +348,15 @@ pub enum NullableCompareOperator {
     NotEqual
 }
 
+impl std::fmt::Display for NullableCompareOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NullableCompareOperator::Equal => write!(f, "IS"),
+            NullableCompareOperator::NotEqual => write!(f, "IS NOT")
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum ArithmeticOperator {
     Add,
@@ -362,10 +371,28 @@ pub enum BooleanOperator {
     Or
 }
 
+impl std::fmt::Display for BooleanOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BooleanOperator::And => write!(f, "AND"),
+            BooleanOperator::Or => write!(f, "OR"),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum UnaryArithmeticOperator {
     Negative,
     Invert
+}
+
+impl std::fmt::Display for UnaryArithmeticOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UnaryArithmeticOperator::Negative => write!(f, "-"),
+            UnaryArithmeticOperator::Invert => write!(f, "NOT"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Hash)]
@@ -392,6 +419,35 @@ pub enum Function {
     TimestampExtractSecond,
     TimestampExtractMinute,
     TruncateTimestamp
+}
+
+impl std::fmt::Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Function::Greatest => write!(f, "greatest"),
+            Function::Least => write!(f, "least"),
+            Function::Abs => write!(f, "abs"),
+            Function::Sqrt => write!(f, "sqrt"),
+            Function::Pow => write!(f, "pow"),
+            Function::StringLength => write!(f, "length"),
+            Function::StringToUpper => write!(f, "upper"),
+            Function::StringToLower => write!(f, "lower"),
+            Function::RegexMatches => write!(f, "regex_matches"),
+            Function::CreateArray => write!(f, "create_array"),
+            Function::ArrayUnique => write!(f, "array_unique"),
+            Function::ArrayLength => write!(f, "array_length"),
+            Function::TimestampNow => write!(f, "now"),
+            Function::MakeTimestamp => write!(f, "make_timestamp"),
+            Function::TimestampExtractEpoch => write!(f, "timestamp_extract_epoch"),
+            Function::TimestampExtractYear => write!(f, "timestamp_extract_year"),
+            Function::TimestampExtractMonth => write!(f, "timestamp_extract_month"),
+            Function::TimestampExtractDay => write!(f, "timestamp_extract_day"),
+            Function::TimestampExtractHour => write!(f, "timestamp_extract_hour"),
+            Function::TimestampExtractSecond => write!(f, "timestamp_extract_second"),
+            Function::TimestampExtractMinute => write!(f, "timestamp_extract_minute"),
+            Function::TruncateTimestamp => write!(f, "date_trunc"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
