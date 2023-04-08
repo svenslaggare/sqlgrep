@@ -80,15 +80,9 @@ impl TableDefinition {
             let mut value = column.parsing.extract(&column, &parsing_input);
 
             if column.options.trim {
-                value.modify(
-                    |_| {},
-                    |_| {},
-                    |_| {},
-                    |x| *x = x.trim().to_owned(),
-                    |_| {},
-                    |_| {},
-                    |_| {}
-                )
+                if let Value::String(value) = &mut value {
+                    *value = value.trim().to_owned();
+                }
             }
 
             let is_null = value.is_null();
