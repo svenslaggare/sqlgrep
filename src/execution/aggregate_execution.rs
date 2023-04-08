@@ -123,15 +123,9 @@ impl AggregateExecutionEngine {
                     }
 
                     if valid {
-                        self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Int(0)))?.modify(
-                            |group_value| { *group_value += 1; },
-                            |_| {},
-                            |_| {},
-                            |_| {},
-                            |_| {},
-                            |_| {},
-                            |_| {}
-                        );
+                        if let Value::Int(group_value) = self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Int(0)))? {
+                            *group_value += 1;
+                        }
                     }
                 }
                 Aggregate::Min(ref expression) => {
@@ -140,14 +134,10 @@ impl AggregateExecutionEngine {
                         let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
 
                         if group_value.is_not_null() {
-                            group_value.modify_same_type(
+                            group_value.modify_same_type_numeric(
                                 &column_value,
                                 |x, y| { *x = (*x).min(y) },
-                                |x, y| { *x = (*x).min(y) },
-                                |_, _| {},
-                                |_, _| {},
-                                |_, _| {},
-                                |_, _| {},
+                                |x, y| { *x = (*x).min(y) }
                             );
                         } else {
                             *group_value = column_value;
@@ -162,14 +152,10 @@ impl AggregateExecutionEngine {
                         let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
 
                         if group_value.is_not_null() {
-                            group_value.modify_same_type(
+                            group_value.modify_same_type_numeric(
                                 &column_value,
                                 |x, y| { *x = (*x).max(y) },
-                                |x, y| { *x = (*x).max(y) },
-                                |_, _| {},
-                                |_, _| {},
-                                |_, _| {},
-                                |_, _| {},
+                                |x, y| { *x = (*x).max(y) }
                             );
                         } else {
                             *group_value = column_value;
@@ -191,14 +177,10 @@ impl AggregateExecutionEngine {
 
                         if let SummaryGroupValue::Average(sum, count) = average_entry {
                             if sum.is_not_null() {
-                                sum.modify_same_type(
+                                sum.modify_same_type_numeric(
                                     &column_value,
                                     |x, y| { *x += y },
-                                    |x, y| { *x += y },
-                                    |_, _| {},
-                                    |_, _| {},
-                                    |_, _| {},
-                                    |_, _| {},
+                                    |x, y| { *x += y }
                                 );
                             } else {
                                 *sum = column_value;
@@ -206,15 +188,9 @@ impl AggregateExecutionEngine {
 
                             *count += 1;
 
-                            let average = sum.map(
-                                || None,
+                            let average = sum.map_numeric(
                                 |x| Some(x / *count),
-                                |x| Some(x / *count as f64),
-                                |_| None,
-                                |_| None,
-                                |_| None,
-                                |_| None,
-                                |_| None,
+                                |x| Some(x / *count as f64)
                             );
 
                             if let Some(average) = average {
@@ -248,14 +224,10 @@ impl AggregateExecutionEngine {
 
                         if let SummaryGroupValue::Sum(sum) = sum_entry {
                             if sum.is_not_null() {
-                                sum.modify_same_type(
+                                sum.modify_same_type_numeric(
                                     &column_value,
                                     |x, y| { *x += y },
-                                    |x, y| { *x += y },
-                                    |_, _| {},
-                                    |_, _| {},
-                                    |_, _| {},
-                                    |_, _| {},
+                                    |x, y| { *x += y }
                                 );
                             } else {
                                 *sum = column_value;
@@ -289,15 +261,9 @@ impl AggregateExecutionEngine {
                         }
                     )?;
 
-                    group_value.modify(
-                        |_| {},
-                        |_| {},
-                        |_| {},
-                        |_| {},
-                        |array| { array.push(column_value.clone()) },
-                        |_| {},
-                        |_| {}
-                    );
+                    if let Value::Array(_, array) = group_value {
+                        array.push(column_value.clone());
+                    }
                 }
             }
 

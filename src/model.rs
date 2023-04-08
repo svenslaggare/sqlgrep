@@ -145,6 +145,17 @@ impl Value {
         }
     }
 
+    pub fn map_numeric<
+        F1: Fn(i64) -> Option<i64>,
+        F2: Fn(f64) -> Option<f64>
+    >(&self, int_f: F1, float_f: F2) -> Option<Value> {
+        match self {
+            Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
+            Value::Float(x) => float_f(x.0).map(|x| Value::Float(Float(x))),
+            _ => None
+        }
+    }
+
     pub fn modify<
         F1: Fn(&mut i64),
         F2: Fn(&mut f64),
@@ -181,6 +192,17 @@ impl Value {
             (Value::String(x), Value::String(y)) => string_f(x, y),
             (Value::Array(_, x), Value::Array(_, y)) => array_f(x, y),
             (Value::Timestamp(x), Value::Timestamp(y)) => timestamp_f(x, *y),
+            _ => {}
+        }
+    }
+
+    pub fn modify_same_type_numeric<
+        F1: Fn(&mut i64, i64),
+        F2: Fn(&mut f64, f64)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2) {
+        match (self, value) {
+            (Value::Int(x), Value::Int(y)) => int_f(x, *y),
+            (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
             _ => {}
         }
     }
