@@ -63,6 +63,7 @@ Supported aggregates:
 * `max`
 * `sum`
 * `avg`
+* `stddev`
 * `array_agg`
 
 Supported functions:

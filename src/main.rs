@@ -15,6 +15,7 @@ use sqlgrep::{parsing, Tables, Statement, ExecutionEngine};
 use sqlgrep::executor::{FileExecutor, FollowFileExecutor, DisplayOptions, OutputFormat};
 use sqlgrep::parsing::tokenizer::keywords_list;
 use sqlgrep::helpers::TablePrinter;
+use sqlgrep::parsing::parser_tree_converter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name="sqlgrep", about="sqlgrep")]
@@ -296,11 +297,7 @@ impl InputValidator {
 
 fn create_completion_words(tables: &Tables) -> Vec<String> {
     let mut completion_words = keywords_list(true);
-    completion_words.push("COUNT".to_owned());
-    completion_words.push("SUM".to_owned());
-    completion_words.push("MAX".to_owned());
-    completion_words.push("MIN".to_owned());
-    completion_words.push("ARRAY_AGG".to_owned());
+    completion_words.extend(parser_tree_converter::completion_words());
 
     for table in tables.tables() {
         completion_words.push(table.name.clone());

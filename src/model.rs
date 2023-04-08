@@ -486,6 +486,7 @@ pub enum Aggregate {
     Max(ExpressionTree),
     Average(ExpressionTree),
     Sum(ExpressionTree),
+    StandardDeviation(ExpressionTree),
     CollectArray(ExpressionTree)
 }
 
@@ -564,6 +565,9 @@ impl ExpressionTree {
                         expression.visit(f)?;
                     }
                     Aggregate::Sum(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::StandardDeviation(expression) => {
                         expression.visit(f)?;
                     }
                     Aggregate::CollectArray(expression) => {

@@ -433,6 +433,23 @@ fn test_aggregate_statement2() {
 }
 
 #[test]
+fn test_aggregate_statement3() {
+    let tree = parse_str("SELECT STDDEV(x) FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("stddev0", statement.aggregates[0].0);
+    assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+}
+
+#[test]
 fn test_transform_aggregate_statement1() {
     let tree = parse_str("SELECT MAX(x) * 2 FROM test").unwrap();
 

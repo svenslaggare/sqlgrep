@@ -279,8 +279,9 @@ lazy_static! {
             "count".to_owned(),
             "min".to_owned(),
             "max".to_owned(),
-            "avg".to_owned(),
             "sum".to_owned(),
+            "avg".to_owned(),
+            "stddev".to_owned(),
             "array_agg".to_owned(),
          ].into_iter()
     );
@@ -314,6 +315,14 @@ lazy_static! {
             ("date_trunc".to_owned(), Function::TruncateTimestamp)
         ].into_iter()
     );
+}
+
+pub fn completion_words() -> Vec<String> {
+    let mut words = Vec::new();
+    words.extend(AGGREGATE_FUNCTIONS.iter().cloned());
+    words.extend(FUNCTIONS.keys().cloned());
+    words.sort();
+    words
 }
 
 pub struct TransformExpressionState {
@@ -619,8 +628,9 @@ fn transform_call_aggregate(location: TokenLocation,
             let aggregate = match name_lowercase.as_str() {
                 "max" => Aggregate::Max(expression),
                 "min" => Aggregate::Min(expression),
-                "avg" => Aggregate::Average(expression),
                 "sum" => Aggregate::Sum(expression),
+                "avg" => Aggregate::Average(expression),
+                "stddev" => Aggregate::StandardDeviation(expression),
                 "array_agg" => Aggregate::CollectArray(expression),
                 _ => { panic!("should not happen") }
             };

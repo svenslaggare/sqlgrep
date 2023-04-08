@@ -6,7 +6,7 @@ use fnv::FnvHasher;
 use crate::data_model::Row;
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine};
-use crate::model::{Aggregate, AggregateStatement, ExpressionTree, Value, ValueType};
+use crate::model::{Aggregate, AggregateStatement, ExpressionTree, Float, Value, ValueType};
 
 type GroupKey = Vec<Value>;
 type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
@@ -14,6 +14,7 @@ type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
 enum SummaryGroupValue {
     Sum(Value),
     Average(Value, i64),
+    StandardDeviation { sum: Value, sum_square: Value, count: i64 },
     CountDistinct(HashSet<Value>)
 }
 
@@ -28,11 +29,6 @@ impl AggregateExecutionEngine {
             group_values: BTreeMap::new(),
             groups: BTreeMap::new()
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.group_values.clear();
-        self.groups.clear();
     }
 
     pub fn execute<TColumnProvider: ColumnProvider>(&mut self,
@@ -164,6 +160,45 @@ impl AggregateExecutionEngine {
                         self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
                     }
                 }
+                Aggregate::Sum(ref expression) => {
+                    let column_value = expression_execution_engine.evaluate(expression)?;
+                    if column_value.is_not_null() {
+                        let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
+
+                        let sum_entry = self.get_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::Sum(value_type.default_value())
+                        )?;
+
+                        if let SummaryGroupValue::Sum(sum) = sum_entry {
+                            if sum.is_not_null() {
+                                sum.modify_same_type_numeric(
+                                    &column_value,
+                                    |x, y| { *x += y },
+                                    |x, y| { *x += y }
+                                );
+                            } else {
+                                *sum = column_value;
+                            }
+
+                            let sum = sum.clone();
+                            *self.get_group_value(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                        }
+                    } else {
+                        let sum_entry = self.get_group(
+                            group_key.clone(),
+                            aggregate_index,
+                            SummaryGroupValue::Sum(Value::Null)
+                        )?;
+
+                        if let SummaryGroupValue::Sum(sum) = sum_entry {
+                            if sum.is_null() {
+                                *self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))? = Value::Null;
+                            }
+                        }
+                    }
+                }
                 Aggregate::Average(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     if column_value.is_not_null() {
@@ -211,18 +246,22 @@ impl AggregateExecutionEngine {
                         }
                     }
                 }
-                Aggregate::Sum(ref expression) => {
+                Aggregate::StandardDeviation(ref expression) => {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     if column_value.is_not_null() {
                         let value_type = column_value.value_type().ok_or(ExecutionError::ExpectedNumericValue)?;
 
-                        let sum_entry = self.get_group(
+                        let std_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::Sum(value_type.default_value())
+                            SummaryGroupValue::StandardDeviation {
+                                sum: value_type.default_value(),
+                                sum_square: value_type.default_value(),
+                                count: 0
+                            }
                         )?;
 
-                        if let SummaryGroupValue::Sum(sum) = sum_entry {
+                        if let SummaryGroupValue::StandardDeviation { sum, sum_square, count } = std_entry {
                             if sum.is_not_null() {
                                 sum.modify_same_type_numeric(
                                     &column_value,
@@ -230,21 +269,58 @@ impl AggregateExecutionEngine {
                                     |x, y| { *x += y }
                                 );
                             } else {
-                                *sum = column_value;
+                                *sum = column_value.clone();
                             }
 
-                            let sum = sum.clone();
-                            *self.get_group_value(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
+                            if sum_square.is_not_null() {
+                                sum_square.modify_same_type_numeric(
+                                    &column_value,
+                                    |x, y| { *x += y * y },
+                                    |x, y| { *x += y * y }
+                                );
+                            } else {
+                                sum_square.modify_same_type_numeric(
+                                    &column_value,
+                                    |x, y| { *x = y * y },
+                                    |x, y| { *x = y * y }
+                                );
+                            }
+
+                            *count += 1;
+
+                            let std = match (sum, sum_square) {
+                                (Value::Int(sum), Value::Int(sum_square)) => {
+                                    let n = *count as f64;
+                                    let sum = *sum as f64;
+                                    let sum_square = *sum_square as f64;
+                                    let var = (sum_square - (sum * sum) / n) / n;
+                                    Some(Value::Float(Float(var.sqrt())))
+                                }
+                                (Value::Float(sum), Value::Float(sum_square)) => {
+                                    let n = *count as f64;
+                                    let var = (sum_square.0 - (sum.0 * sum.0) / n) / n;
+                                    Some(Value::Float(Float(var.sqrt())))
+                                }
+                                _ => None
+                            };
+
+                            if let Some(std) = std {
+                                *self.get_group_value(group_key.clone(), aggregate_index, || Ok(std.clone()))? = std.clone();
+                            }
                         }
                     } else {
-                        let sum_entry = self.get_group(
+                        let std_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::Sum(Value::Null)
+                            SummaryGroupValue::StandardDeviation {
+                                sum: Value::Null,
+                                sum_square: Value::Null,
+                                count: 0
+                            }
                         )?;
 
-                        if let SummaryGroupValue::Sum(sum) = sum_entry {
-                            if sum.is_null() {
+                        if let SummaryGroupValue::StandardDeviation { sum, sum_square, .. } = std_entry {
+                            if sum.is_null() || sum_square.is_null() {
                                 *self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))? = Value::Null;
                             }
                         }
@@ -362,7 +438,7 @@ impl AggregateExecutionEngine {
                         result_column.push(group_key[group_key_mapping[&column]].clone());
                     }
                 }
-                Aggregate::Count(_, _) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Average(_) | Aggregate::Sum(_) => {
+                Aggregate::Count(_, _) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Sum(_) | Aggregate::Average(_) | Aggregate::StandardDeviation(_) => {
                     for subgroups in self.group_values.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_column.push(transform_value(group_value.clone())?);
