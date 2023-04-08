@@ -347,7 +347,10 @@ impl AggregateExecutionEngine {
         Ok(())
     }
 
-    fn get_group_value<F: Fn() -> ExecutionResult<Value>>(&mut self, group_key: GroupKey, aggregate_index: usize, default_value_fn: F) -> ExecutionResult<&mut Value> {
+    fn get_group_value<F: Fn() -> ExecutionResult<Value>>(&mut self,
+                                                          group_key: GroupKey,
+                                                          aggregate_index: usize,
+                                                          default_value_fn: F) -> ExecutionResult<&mut Value> {
         AggregateExecutionEngine::get_generic_group(
             &mut self.group_values,
             group_key,
@@ -515,5 +518,5 @@ fn accept_group<'a>(group_key_mapping: &HashMap<&String, usize>,
         return Ok(false);
     }
 
-    return Ok(true)
+    Ok(true)
 }

@@ -64,7 +64,9 @@ fn main() {
 fn main_normal(command_line_input: CommandLineInput) {
     let mut tables = Tables::new();
     if let Some(table_definition_filename) = command_line_input.data_definition_file.clone() {
-        let table_definition_content = std::fs::read_to_string(table_definition_filename).expect("Failed to read data definition file.");
+        let table_definition_content = std::fs::read_to_string(
+            table_definition_filename
+        ).expect("Failed to read data definition file.");
 
         if let Err(err) = define_table(&mut tables, table_definition_content.clone()) {
             println!("{}", err);
