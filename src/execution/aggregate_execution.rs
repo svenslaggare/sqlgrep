@@ -272,18 +272,16 @@ impl AggregateExecutionEngine {
 
                             *count += 1;
 
+                            let calculate_std = |sum: f64, sum_square: f64, n: f64| {
+                                ((sum_square - (sum * sum) / n) / n).sqrt()
+                            };
+
                             let std = match (sum, sum_square) {
                                 (Value::Int(sum), Value::Int(sum_square)) => {
-                                    let n = *count as f64;
-                                    let sum = *sum as f64;
-                                    let sum_square = *sum_square as f64;
-                                    let var = (sum_square - (sum * sum) / n) / n;
-                                    Some(Value::Float(Float(var.sqrt())))
+                                    Some(Value::Float(Float(calculate_std(*sum as f64, *sum_square as f64, *count as f64))))
                                 }
                                 (Value::Float(sum), Value::Float(sum_square)) => {
-                                    let n = *count as f64;
-                                    let var = (sum_square.0 - (sum.0 * sum.0) / n) / n;
-                                    Some(Value::Float(Float(var.sqrt())))
+                                    Some(Value::Float(Float(calculate_std(sum.0, sum_square.0, *count as f64))))
                                 }
                                 _ => None
                             };
@@ -422,14 +420,7 @@ impl AggregateExecutionEngine {
                         result_column.push(group_key[group_key_mapping[&column]].clone());
                     }
                 }
-                Aggregate::Count(_, _) | Aggregate::Max(_) | Aggregate::Min(_) | Aggregate::Sum(_) | Aggregate::Average(_) | Aggregate::StandardDeviation(_) => {
-                    for subgroups in self.group_values.values() {
-                        if let Some(group_value) = subgroups.get(&aggregate_index) {
-                            result_column.push(transform_value(group_value.clone())?);
-                        }
-                    }
-                }
-                Aggregate::CollectArray(_) => {
+                _ => {
                     for subgroups in self.group_values.values() {
                         if let Some(group_value) = subgroups.get(&aggregate_index) {
                             result_column.push(transform_value(group_value.clone())?);
