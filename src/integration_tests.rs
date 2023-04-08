@@ -5,27 +5,14 @@ use std::fs::File;
 use crate::data_model::{Tables};
 use crate::execution::execution_engine::ExecutionEngine;
 use crate::executor::{DisplayOptions, FileExecutor};
-use crate::model::Statement;
 use crate::parsing;
 
 fn create_tables(filename: &str) -> Tables {
     let mut tables = Tables::new();
 
     let table_definition = parsing::parse(&std::fs::read_to_string(filename).unwrap()).unwrap();
-    match table_definition {
-        Statement::Select(_) | Statement::Aggregate(_) => {
-            panic!("Expected CREATE TABLE.");
-        }
-        Statement::CreateTable(table_definition) => {
-            tables.add_table(table_definition);
-        }
-        Statement::Multiple(statements) => {
-            for statement in statements {
-                if let Statement::CreateTable(table_definition) = statement {
-                    tables.add_table(table_definition);
-                }
-            }
-        }
+    if !tables.add_tables(table_definition) {
+        panic!("Expected CREATE TABLE.");
     }
 
     tables

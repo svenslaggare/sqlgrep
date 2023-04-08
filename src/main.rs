@@ -126,37 +126,7 @@ fn execute(command_line_input: &CommandLineInput,
     }
 
     if query_line.starts_with("\\d") {
-        let parts = query_line.split(" ").collect::<Vec<_>>();
-        if let Some(table) = parts.get(1) {
-            let table = tables.get(table).unwrap();
-            let mut table_printer = TablePrinter::new(vec![
-                "Column".to_owned(),
-                "Type".to_owned(),
-                "Nullable".to_owned(),
-                "Default value".to_owned()
-            ]);
-
-            for column in &table.columns {
-                table_printer.add_row(vec![
-                    column.name.clone(),
-                    column.column_type.to_string(),
-                    column.options.nullable.to_string(),
-                    column.default_value().to_string()
-                ])
-            }
-
-            table_printer.print();
-        } else {
-            let mut table_printer = TablePrinter::new(vec!["Table".to_owned()]);
-            for table in tables.tables() {
-                table_printer.add_row(vec![
-                    table.name.clone()
-                ])
-            }
-
-            table_printer.print();
-        }
-
+        display_table(tables, &query_line);
         return false;
     }
 
@@ -263,6 +233,39 @@ fn execute(command_line_input: &CommandLineInput,
     }
 
     false
+}
+
+fn display_table(tables: &Tables, query_line: &str) {
+    let parts = query_line.split(" ").collect::<Vec<_>>();
+    if let Some(table) = parts.get(1) {
+        let table = tables.get(table).unwrap();
+        let mut table_printer = TablePrinter::new(vec![
+            "Column".to_owned(),
+            "Type".to_owned(),
+            "Nullable".to_owned(),
+            "Default value".to_owned()
+        ]);
+
+        for column in &table.columns {
+            table_printer.add_row(vec![
+                column.name.clone(),
+                column.column_type.to_string(),
+                column.options.nullable.to_string(),
+                column.default_value().to_string()
+            ])
+        }
+
+        table_printer.print();
+    } else {
+        let mut table_printer = TablePrinter::new(vec!["Table".to_owned()]);
+        for table in tables.tables() {
+            table_printer.add_row(vec![
+                table.name.clone()
+            ])
+        }
+
+        table_printer.print();
+    }
 }
 
 fn parse_statement(line: &str) -> Option<Statement> {
