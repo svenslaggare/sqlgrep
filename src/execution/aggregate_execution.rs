@@ -172,15 +172,11 @@ impl AggregateExecutionEngine {
                         )?;
 
                         if let SummaryGroupValue::Sum(sum) = sum_entry {
-                            if sum.is_not_null() {
-                                sum.modify_same_type_numeric(
-                                    &column_value,
-                                    |x, y| { *x += y },
-                                    |x, y| { *x += y }
-                                );
-                            } else {
-                                *sum = column_value;
-                            }
+                            sum.modify_same_type_numeric_nullable(
+                                &column_value,
+                                |x, y| { *x += y },
+                                |x, y| { *x += y }
+                            );
 
                             let sum = sum.clone();
                             *self.get_group_value(group_key.clone(), aggregate_index, || Ok(sum.clone()))? = sum.clone();
@@ -211,16 +207,11 @@ impl AggregateExecutionEngine {
                         )?;
 
                         if let SummaryGroupValue::Average(sum, count) = average_entry {
-                            if sum.is_not_null() {
-                                sum.modify_same_type_numeric(
-                                    &column_value,
-                                    |x, y| { *x += y },
-                                    |x, y| { *x += y }
-                                );
-                            } else {
-                                *sum = column_value;
-                            }
-
+                            sum.modify_same_type_numeric_nullable(
+                                &column_value,
+                                |x, y| { *x += y },
+                                |x, y| { *x += y }
+                            );
                             *count += 1;
 
                             let average = sum.map_numeric(
@@ -262,29 +253,22 @@ impl AggregateExecutionEngine {
                         )?;
 
                         if let SummaryGroupValue::StandardDeviation { sum, sum_square, count } = std_entry {
-                            if sum.is_not_null() {
-                                sum.modify_same_type_numeric(
-                                    &column_value,
-                                    |x, y| { *x += y },
-                                    |x, y| { *x += y }
-                                );
-                            } else {
-                                *sum = column_value.clone();
-                            }
+                            let squared_column_value = column_value.map_numeric(
+                                |x| Some(x * x),
+                                |x| Some(x * x)
+                            ).unwrap_or(Value::Null);
 
-                            if sum_square.is_not_null() {
-                                sum_square.modify_same_type_numeric(
-                                    &column_value,
-                                    |x, y| { *x += y * y },
-                                    |x, y| { *x += y * y }
-                                );
-                            } else {
-                                sum_square.modify_same_type_numeric(
-                                    &column_value,
-                                    |x, y| { *x = y * y },
-                                    |x, y| { *x = y * y }
-                                );
-                            }
+                            sum.modify_same_type_numeric_nullable(
+                                &column_value,
+                                |x, y| { *x += y },
+                                |x, y| { *x += y }
+                            );
+
+                            sum_square.modify_same_type_numeric_nullable(
+                                &squared_column_value,
+                                |x, y| { *x += y },
+                                |x, y| { *x += y }
+                            );
 
                             *count += 1;
 

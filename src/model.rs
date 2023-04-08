@@ -207,6 +207,19 @@ impl Value {
         }
     }
 
+    pub fn modify_same_type_numeric_nullable<
+        F1: Fn(&mut i64, i64),
+        F2: Fn(&mut f64, f64)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2) {
+        match (self, value) {
+            (Value::Int(x), Value::Int(y)) => int_f(x, *y),
+            (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
+            (x @ Value::Null, Value::Int(y)) => { *x = Value::Int(*y) },
+            (x @ Value::Null, Value::Float(y)) => { *x = Value::Float(*y) },
+            _ => {}
+        }
+    }
+
     pub fn json_value(&self) -> serde_json::Value {
         match self {
             Value::Null => serde_json::Value::Null,
