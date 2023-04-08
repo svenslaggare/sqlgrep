@@ -85,7 +85,7 @@ fn main_normal(command_line_input: CommandLineInput) {
     if let Some(command) = command_line_input.command.clone() {
         execute(&command_line_input, &mut tables, running.clone(), command, true);
     } else {
-        let mut line_editor = Editor::new();
+        let mut line_editor = Editor::new().unwrap();
         line_editor.set_helper(Some(InputValidator::new(&tables)));
 
         while let Ok(mut line) = line_editor.readline("> ") {
@@ -93,7 +93,7 @@ fn main_normal(command_line_input: CommandLineInput) {
                 line.pop();
             }
 
-            line_editor.add_history_entry(line.clone());
+            line_editor.add_history_entry(line.clone()).unwrap();
             if execute(&command_line_input, &mut tables, running.clone(), line, false) {
                 break;
             }
