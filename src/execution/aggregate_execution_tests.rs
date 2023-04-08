@@ -361,6 +361,78 @@ fn test_group_by_and_min() {
 }
 
 #[test]
+fn test_group_by_and_min_null() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            ("name".to_owned(), Aggregate::GroupKey("name".to_owned()), None),
+            ("max".to_owned(), Aggregate::Min(ExpressionTree::ColumnAccess("x".to_owned())), None)
+        ],
+        from: "test".to_owned(),
+        filename: None,
+        filter: None,
+        group_by: Some(vec!["name".to_string()]),
+        having: None,
+        join: None,
+        limit: None
+    };
+
+    let column_values = vec![
+        Value::Null,
+        Value::String("test".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+    assert!(result.is_some());
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Int(i * 1000),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Int(0),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Int(1000), result.data[0].columns[1]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Int(0), result.data[1].columns[1]);
+}
+
+#[test]
 fn test_group_by_and_count_and_max() {
     let mut aggregate_execution_engine = AggregateExecutionEngine::new();
 

@@ -128,16 +128,11 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     if column_value.is_not_null() {
                         let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
-
-                        if group_value.is_not_null() {
-                            group_value.modify_same_type_numeric(
-                                &column_value,
-                                |x, y| { *x = (*x).min(y) },
-                                |x, y| { *x = (*x).min(y) }
-                            );
-                        } else {
-                            *group_value = column_value;
-                        }
+                        group_value.modify_same_type_numeric_nullable(
+                            &column_value,
+                            |x, y| { *x = (*x).min(y) },
+                            |x, y| { *x = (*x).min(y) }
+                        );
                     } else {
                         self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
                     }
@@ -146,16 +141,11 @@ impl AggregateExecutionEngine {
                     let column_value = expression_execution_engine.evaluate(expression)?;
                     if column_value.is_not_null() {
                         let group_value = self.get_group_value(group_key.clone(), aggregate_index, || Ok(column_value.clone()))?;
-
-                        if group_value.is_not_null() {
-                            group_value.modify_same_type_numeric(
-                                &column_value,
-                                |x, y| { *x = (*x).max(y) },
-                                |x, y| { *x = (*x).max(y) }
-                            );
-                        } else {
-                            *group_value = column_value;
-                        }
+                        group_value.modify_same_type_numeric_nullable(
+                            &column_value,
+                            |x, y| { *x = (*x).max(y) },
+                            |x, y| { *x = (*x).max(y) }
+                        );
                     } else {
                         self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
                     }
