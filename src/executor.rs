@@ -90,7 +90,7 @@ impl<'a> FileExecutor<'a> {
             config.result = false;
         }
 
-        let joined_table_data = self.execution_engine.create_joined_data(self.running.clone())?;
+        self.execution_engine.create_joined_data(self.running.clone())?;
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {
@@ -102,7 +102,7 @@ impl<'a> FileExecutor<'a> {
                     self.statistics.total_lines += 1;
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
-                    let output = self.execution_engine.execute(line, &config, joined_table_data.as_ref())?;
+                    let output = self.execution_engine.execute(line, &config)?;
                     if let Some(result_row) = output.row {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -123,7 +123,7 @@ impl<'a> FileExecutor<'a> {
             config.result = true;
             config.update = false;
 
-            let result = self.execution_engine.execute(String::new(), &config, joined_table_data.as_ref())?.row;
+            let result = self.execution_engine.execute(String::new(), &config)?.row;
             if self.print_result {
                 if let Some(result_row) = result {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -199,7 +199,7 @@ impl<'a> FollowFileExecutor<'a> {
             let mut input_line = String::new();
             std::mem::swap(&mut input_line, &mut line);
 
-            let output = self.execution_engine.execute(input_line, &ExecutionConfig::default(), None)?;
+            let output = self.execution_engine.execute(input_line, &ExecutionConfig::default())?;
             if let Some(result_row) = output.row {
                 if output.update {
                     print!("\x1B[2J\x1B[1;1H");

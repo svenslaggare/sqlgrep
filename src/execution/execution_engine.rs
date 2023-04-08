@@ -77,7 +77,8 @@ pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
     statement: &'a Statement,
     aggregate_execution_engine: AggregateExecutionEngine,
-    num_output_rows: usize
+    num_output_rows: usize,
+    joined_table_data: Option<JoinedTableData>
 }
 
 impl<'a> ExecutionEngine<'a> {
@@ -86,7 +87,8 @@ impl<'a> ExecutionEngine<'a> {
             tables,
             statement,
             aggregate_execution_engine: AggregateExecutionEngine::new(),
-            num_output_rows: 0
+            num_output_rows: 0,
+            joined_table_data: None
         }
     }
 
@@ -98,23 +100,20 @@ impl<'a> ExecutionEngine<'a> {
         self.statement.join_clause().is_some()
     }
 
-    pub fn execute(&mut self,
-                   line: String,
-                   config: &ExecutionConfig,
-                   joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
+    pub fn execute(&mut self, line: String, config: &ExecutionConfig) -> ExecutionResult<ExecutionOutput> {
         match self.statement {
             Statement::Select(select_statement) => {
-                let output = self.execute_select(&select_statement, line, joined_table_data)?;
+                let output = self.execute_select(&select_statement, line)?;
                 let output = self.update_limit(select_statement.limit, output);
                 Ok(output)
             }
             Statement::Aggregate(aggregate_statement) => {
                 if config.update && config.result {
-                    let output = self.execute_aggregate(&aggregate_statement, line, joined_table_data)?.with_update();
+                    let output = self.execute_aggregate(&aggregate_statement, line)?.with_update();
                     let output = self.update_limit(aggregate_statement.limit, output);
                     Ok(output)
                 } else if config.update && !config.result {
-                    self.execute_aggregate_update(&aggregate_statement, line, joined_table_data).map(|_| ExecutionOutput::empty())
+                    self.execute_aggregate_update(&aggregate_statement, line).map(|_| ExecutionOutput::empty())
                 } else if !config.update && config.result {
                     let mut output = ExecutionOutput::new(
                         self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?
@@ -142,10 +141,7 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    fn execute_select(&mut self,
-                      select_statement: &SelectStatement,
-                      line: String,
-                      joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
+    fn execute_select(&mut self, select_statement: &SelectStatement, line: String) -> ExecutionResult<ExecutionOutput> {
         let table_definition = self.get_table(&select_statement.from)?;
         let select_execution_engine = SelectExecutionEngine::new();
         let row = table_definition.extract(&line);
@@ -153,7 +149,7 @@ impl<'a> ExecutionEngine<'a> {
         if row.any_result() {
             let line_value = Value::String(line);
 
-            if let Some(joined_table_data) = joined_table_data {
+            if let Some(joined_table_data) = self.joined_table_data.as_ref() {
                 Ok(
                     execute_join(
                         table_definition,
@@ -185,10 +181,7 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    fn execute_aggregate(&mut self,
-                         aggregate_statement: &AggregateStatement,
-                         line: String,
-                         joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<ExecutionOutput> {
+    fn execute_aggregate(&mut self, aggregate_statement: &AggregateStatement, line: String) -> ExecutionResult<ExecutionOutput> {
         let table_definition = self.tables.get(&aggregate_statement.from)
             .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
         let row = table_definition.extract(&line);
@@ -196,7 +189,8 @@ impl<'a> ExecutionEngine<'a> {
         if row.any_result() {
             let line_value = Value::String(line);
 
-            if let Some(joined_table_data) = joined_table_data {
+            if let Some(joined_table_data) = self.joined_table_data.as_ref() {
+                let aggregate_execution_engine = &mut self.aggregate_execution_engine;
                 Ok(
                     execute_join(
                         table_definition,
@@ -206,7 +200,7 @@ impl<'a> ExecutionEngine<'a> {
                         joined_table_data,
                         false,
                         |column_provider| {
-                            self.aggregate_execution_engine.execute(
+                            aggregate_execution_engine.execute(
                                 aggregate_statement,
                                 column_provider
                             )
@@ -214,9 +208,10 @@ impl<'a> ExecutionEngine<'a> {
                     )?
                 )
             } else {
+                let aggregate_execution_engine = &mut self.aggregate_execution_engine;
                 Ok(
                     ExecutionOutput::new(
-                        self.aggregate_execution_engine.execute(
+                        aggregate_execution_engine.execute(
                             aggregate_statement,
                             HashMapColumnProvider::with_table_keys(
                                 ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
@@ -231,10 +226,7 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    fn execute_aggregate_update(&mut self,
-                                aggregate_statement: &AggregateStatement,
-                                line: String,
-                                joined_table_data: Option<&JoinedTableData>) -> ExecutionResult<bool> {
+    fn execute_aggregate_update(&mut self, aggregate_statement: &AggregateStatement, line: String) -> ExecutionResult<bool> {
         let table_definition = self.tables.get(&aggregate_statement.from)
             .ok_or_else(|| ExecutionError::TableNotFound(aggregate_statement.from.clone()))?;
 
@@ -243,7 +235,8 @@ impl<'a> ExecutionEngine<'a> {
         if row.any_result() {
             let line_value = Value::String(line);
 
-            if let Some(joined_table_data) = joined_table_data {
+            if let Some(joined_table_data) = self.joined_table_data.as_ref() {
+                let aggregate_execution_engine = &mut self.aggregate_execution_engine;
                 let joined = execute_join(
                     table_definition,
                     &row,
@@ -252,7 +245,7 @@ impl<'a> ExecutionEngine<'a> {
                     joined_table_data,
                     false,
                     |column_provider| {
-                        self.aggregate_execution_engine.execute_update(
+                        aggregate_execution_engine.execute_update(
                             aggregate_statement,
                             column_provider
                         )?;
@@ -298,11 +291,15 @@ impl<'a> ExecutionEngine<'a> {
         output
     }
 
-    pub fn create_joined_data(&mut self, running: Arc<AtomicBool>) -> ExecutionResult<Option<JoinedTableData>> {
+    pub fn create_joined_data(&mut self, running: Arc<AtomicBool>) -> ExecutionResult<()> {
         Ok(
             match self.statement.join_clause() {
-                Some(join_clause) => Some(JoinedTableData::execute(self.tables, running.clone(), join_clause)?),
-                None => None,
+                Some(join_clause) => {
+                    self.joined_table_data = Some(JoinedTableData::execute(self.tables, running.clone(), join_clause)?);
+                },
+                None => {
+                    self.joined_table_data = None;
+                }
             }
         )
     }
@@ -381,8 +378,7 @@ fn test_regex_array1() {
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
         let result = execution_engine.execute(
             line.unwrap(),
-            &ExecutionConfig::default(),
-            None
+            &ExecutionConfig::default()
         ).unwrap().row;
 
         if let Some(result) = result {
@@ -468,8 +464,7 @@ fn test_timestamp1() {
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
         let result = execution_engine.execute(
             line.unwrap(),
-            &ExecutionConfig::default(),
-            None
+            &ExecutionConfig::default()
         ).unwrap().row;
 
         if let Some(result) = result {
@@ -547,8 +542,7 @@ fn test_json_array1() {
     for line in BufReader::new(File::open("testdata/clients_data.json").unwrap()).lines() {
         let result = execution_engine.execute(
             line.unwrap(),
-            &ExecutionConfig::default(),
-            None
+            &ExecutionConfig::default()
         ).unwrap().row;
 
         if let Some(result) = result {
@@ -623,8 +617,7 @@ fn test_limit1() {
     for line in BufReader::new(File::open("testdata/ftpd_data.txt").unwrap()).lines() {
         let output = execution_engine.execute(
             line.unwrap(),
-            &ExecutionConfig::default(),
-            None
+            &ExecutionConfig::default()
         ).unwrap();
 
         if let Some(result) = output.row {
