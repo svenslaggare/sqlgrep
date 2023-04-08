@@ -42,3 +42,9 @@ pub fn parse(line: &str) -> Result<Statement, CommonParserError> {
     let statement = parser_tree_converter::transform_statement(parse_tree).map_err(|err| CommonParserError::ConvertParserTreeError(err))?;
     Ok(statement)
 }
+
+pub fn completion_words() -> Vec<String> {
+    let mut completion_words = tokenizer::keywords_list(true);
+    completion_words.extend(parser_tree_converter::completion_words());
+    completion_words
+}

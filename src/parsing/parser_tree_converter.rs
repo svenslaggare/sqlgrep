@@ -321,6 +321,11 @@ pub fn completion_words() -> Vec<String> {
     let mut words = Vec::new();
     words.extend(AGGREGATE_FUNCTIONS.iter().cloned());
     words.extend(FUNCTIONS.keys().cloned());
+
+    for word in &mut words {
+        *word = word.to_uppercase();
+    }
+
     words.sort();
     words
 }
