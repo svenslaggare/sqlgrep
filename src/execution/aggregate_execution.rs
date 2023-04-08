@@ -110,7 +110,7 @@ impl AggregateExecutionEngine {
                         let count_distinct_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::CountDistinct(HashSet::new())
+                            || SummaryGroupValue::CountDistinct(HashSet::new())
                         )?;
 
                         if let SummaryGroupValue::CountDistinct(values) = count_distinct_entry {
@@ -168,7 +168,7 @@ impl AggregateExecutionEngine {
                         let sum_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::Sum(value_type.default_value())
+                            || SummaryGroupValue::Sum(value_type.default_value())
                         )?;
 
                         if let SummaryGroupValue::Sum(sum) = sum_entry {
@@ -185,7 +185,7 @@ impl AggregateExecutionEngine {
                         let sum_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::Sum(Value::Null)
+                            || SummaryGroupValue::Sum(Value::Null)
                         )?;
 
                         if let SummaryGroupValue::Sum(sum) = sum_entry {
@@ -203,7 +203,7 @@ impl AggregateExecutionEngine {
                         let average_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::Average(value_type.default_value(), 0)
+                            || SummaryGroupValue::Average(value_type.default_value(), 0)
                         )?;
 
                         if let SummaryGroupValue::Average(sum, count) = average_entry {
@@ -227,7 +227,7 @@ impl AggregateExecutionEngine {
                         let average_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::Average(Value::Null, 0)
+                            || SummaryGroupValue::Average(Value::Null, 0)
                         )?;
 
                         if let SummaryGroupValue::Average(sum, _) = average_entry {
@@ -245,7 +245,7 @@ impl AggregateExecutionEngine {
                         let std_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::StandardDeviation {
+                            || SummaryGroupValue::StandardDeviation {
                                 sum: value_type.default_value(),
                                 sum_square: value_type.default_value(),
                                 count: 0
@@ -294,7 +294,7 @@ impl AggregateExecutionEngine {
                         let std_entry = self.get_group(
                             group_key.clone(),
                             aggregate_index,
-                            SummaryGroupValue::StandardDeviation {
+                            || SummaryGroupValue::StandardDeviation {
                                 sum: Value::Null,
                                 sum_square: Value::Null,
                                 count: 0
@@ -366,15 +366,15 @@ impl AggregateExecutionEngine {
         )
     }
 
-    fn get_group(&mut self,
-                 group_key: GroupKey,
-                 aggregate_index: usize,
-                 default_value: SummaryGroupValue) -> ExecutionResult<&mut SummaryGroupValue> {
+    fn get_group<F: Fn() -> SummaryGroupValue>(&mut self,
+                                               group_key: GroupKey,
+                                               aggregate_index: usize,
+                                               default_value_fn: F) -> ExecutionResult<&mut SummaryGroupValue> {
         AggregateExecutionEngine::get_generic_group(
             &mut self.groups,
             group_key,
             aggregate_index,
-            move || Ok(default_value)
+            || Ok(default_value_fn())
         )
     }
 
