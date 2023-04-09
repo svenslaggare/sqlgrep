@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader, Lines};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use chrono::{Datelike, Timelike};
 
@@ -82,6 +84,8 @@ impl TablesWrapper {
 impl TablesWrapper {
     fn execute_statement<'a>(&self, py: Python<'a>, mut lines_iterator: &PyIterator, statement: &Statement) -> PyResult<Vec<&'a PyDict>> {
         let mut execution_engine = ExecutionEngine::new(&self.tables, statement);
+
+        map_py_err!(execution_engine.create_joined_data(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
 
         let mut config = ExecutionConfig::default();
         if execution_engine.is_aggregate() {
