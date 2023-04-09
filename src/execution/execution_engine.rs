@@ -1,8 +1,8 @@
 use std::collections::{HashMap};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use crate::data_model::{Row, TableDefinition};
 
+use crate::data_model::{Row, TableDefinition};
 use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
@@ -13,6 +13,22 @@ use crate::model::{AggregateStatement, SelectStatement, Value};
 pub struct ExecutionConfig {
     pub result: bool,
     pub update: bool
+}
+
+impl ExecutionConfig {
+    pub fn aggregate_update() -> ExecutionConfig {
+        ExecutionConfig {
+            result: false,
+            update: true
+        }
+    }
+
+    pub fn aggregate_result() -> ExecutionConfig {
+        ExecutionConfig {
+            result: true,
+            update: false
+        }
+    }
 }
 
 impl Default for ExecutionConfig {
@@ -27,7 +43,7 @@ impl Default for ExecutionConfig {
 #[derive(Debug)]
 pub struct ExecutionOutput {
     pub result_row: Option<ResultRow>,
-    pub update: bool,
+    pub updated: bool,
     pub joined: bool,
     pub reached_limit: bool
 }
@@ -36,7 +52,7 @@ impl ExecutionOutput {
     pub fn new(row: Option<ResultRow>) -> ExecutionOutput {
         ExecutionOutput {
             result_row: row,
-            update: false,
+            updated: false,
             joined: false,
             reached_limit: false
         }
@@ -45,7 +61,7 @@ impl ExecutionOutput {
     pub fn joined(row: Option<ResultRow>) -> ExecutionOutput {
         ExecutionOutput {
             result_row: row,
-            update: false,
+            updated: false,
             joined: true,
             reached_limit: false
         }
@@ -54,7 +70,7 @@ impl ExecutionOutput {
     pub fn empty() -> ExecutionOutput {
         ExecutionOutput {
             result_row: None,
-            update: false,
+            updated: false,
             joined: false,
             reached_limit: false
         }
@@ -62,7 +78,7 @@ impl ExecutionOutput {
 
     pub fn with_update(self) -> ExecutionOutput {
         let mut new = self;
-        new.update = true;
+        new.updated = true;
         new
     }
 

@@ -302,7 +302,7 @@ lazy_static! {
             ("array_length".to_owned(), Function::ArrayLength),
             ("array_cat".to_owned(), Function::ArrayCat),
             ("array_append".to_owned(), Function::ArrayAppend),
-            (" array_prepend".to_owned(), Function::ArrayPrepend),
+            ("array_prepend".to_owned(), Function::ArrayPrepend),
             ("now".to_owned(), Function::TimestampNow),
             ("make_timestamp".to_owned(), Function::MakeTimestamp),
             ("timestamp_extract_epoch".to_owned(), Function::TimestampExtractEpoch),

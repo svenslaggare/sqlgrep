@@ -85,10 +85,11 @@ impl<'a> FileExecutor<'a> {
     }
 
     pub fn execute(&mut self) -> ExecutionResult<()> {
-        let mut config = ExecutionConfig::default();
-        if self.execution_engine.is_aggregate() {
-            config.result = false;
-        }
+        let config = if self.execution_engine.is_aggregate() {
+            ExecutionConfig::aggregate_update()
+        } else {
+            ExecutionConfig::default()
+        };
 
         self.execution_engine.create_joined_data(self.running.clone())?;
 
@@ -120,12 +121,13 @@ impl<'a> FileExecutor<'a> {
         }
 
         if self.execution_engine.is_aggregate() {
-            config.result = true;
-            config.update = false;
+            let result_row = self.execution_engine.execute(
+                String::new(),
+                &ExecutionConfig::aggregate_result()
+            )?.result_row;
 
-            let result = self.execution_engine.execute(String::new(), &config)?.result_row;
             if self.print_result {
-                if let Some(result_row) = result {
+                if let Some(result_row) = result_row {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
                     self.output_printer.print(&result_row, true);
                 }
@@ -201,11 +203,11 @@ impl<'a> FollowFileExecutor<'a> {
 
             let output = self.execution_engine.execute(input_line, &ExecutionConfig::default())?;
             if let Some(result_row) = output.result_row {
-                if output.update {
+                if output.updated {
                     print!("\x1B[2J\x1B[1;1H");
                 }
 
-                self.output_printer.print(&result_row, output.update);
+                self.output_printer.print(&result_row, output.updated);
 
                 if output.reached_limit {
                     break;

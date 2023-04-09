@@ -87,10 +87,11 @@ impl TablesWrapper {
 
         map_py_err!(execution_engine.create_joined_data(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
 
-        let mut config = ExecutionConfig::default();
-        if execution_engine.is_aggregate() {
-            config.result = false;
-        }
+        let config = if execution_engine.is_aggregate() {
+            ExecutionConfig::aggregate_update()
+        } else {
+            ExecutionConfig::default()
+        };
 
         let mut output_rows = Vec::new();
         while let Some(line) = lines_iterator.next() {
@@ -110,13 +111,10 @@ impl TablesWrapper {
         }
 
         if execution_engine.is_aggregate() {
-            config.result = true;
-            config.update = false;
-
             execute_query_line(
                 py,
                 &mut execution_engine,
-                &config,
+                &ExecutionConfig::aggregate_result(),
                 String::new(),
                 &mut output_rows
             )?;
