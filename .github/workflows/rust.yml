@@ -26,6 +26,8 @@ jobs:
       run: cargo build --release --verbose
     - name: Build Debian package
       run: cargo install cargo-deb && cargo deb
+    - name: Build Python interface
+      run: cargo build --release --features python_wrapper --verbose
     - uses: actions/upload-artifact@v2
       with:
         name: sqlgrep_linux_x86_64
@@ -34,6 +36,10 @@ jobs:
       with:
         name: sqlgrep_linux_x86_64_debian
         path: target/debian/
+    - uses: actions/upload-artifact@v2
+      with:
+        name: libsqlgrep_linux_x86_64
+        path: target/release/libsqlgrep.so
   build-windows:
     runs-on: windows-2019
     steps:
