@@ -59,7 +59,7 @@ impl JoinedTableData {
             }
 
             if let Ok(line) = line {
-                let result = execution_engine.execute(line.clone(), &config)?.row;
+                let result = execution_engine.execute(line.clone(), &config)?.result_row;
                 if let Some(result) = result {
                     for row in result.data {
                         joined_table_data.add_row(

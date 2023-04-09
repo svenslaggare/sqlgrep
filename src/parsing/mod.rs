@@ -37,8 +37,8 @@ impl std::fmt::Display for CommonParserError {
     }
 }
 
-pub fn parse(line: &str) -> Result<Statement, CommonParserError> {
-    let parse_tree = parser::parse_str(&line).map_err(|err| CommonParserError::ParserError(err))?;
+pub fn parse(text: &str) -> Result<Statement, CommonParserError> {
+    let parse_tree = parser::parse_str(&text).map_err(|err| CommonParserError::ParserError(err))?;
     let statement = parser_tree_converter::transform_statement(parse_tree).map_err(|err| CommonParserError::ConvertParserTreeError(err))?;
     Ok(statement)
 }

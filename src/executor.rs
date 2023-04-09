@@ -103,7 +103,7 @@ impl<'a> FileExecutor<'a> {
                     self.statistics.ingested_bytes += line.len() + 1; // +1 for line ending
 
                     let output = self.execution_engine.execute(line, &config)?;
-                    if let Some(result_row) = output.row {
+                    if let Some(result_row) = output.result_row {
                         if self.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
                             self.output_printer.print(&result_row, self.display_options.single_result);
@@ -123,7 +123,7 @@ impl<'a> FileExecutor<'a> {
             config.result = true;
             config.update = false;
 
-            let result = self.execution_engine.execute(String::new(), &config)?.row;
+            let result = self.execution_engine.execute(String::new(), &config)?.result_row;
             if self.print_result {
                 if let Some(result_row) = result {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
@@ -200,7 +200,7 @@ impl<'a> FollowFileExecutor<'a> {
             std::mem::swap(&mut input_line, &mut line);
 
             let output = self.execution_engine.execute(input_line, &ExecutionConfig::default())?;
-            if let Some(result_row) = output.row {
+            if let Some(result_row) = output.result_row {
                 if output.update {
                     print!("\x1B[2J\x1B[1;1H");
                 }

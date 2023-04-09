@@ -7,8 +7,13 @@ description = "sqlgrep = SQL + grep + tail -f"
 license = "MIT"
 homepage = "https://github.com/svenslaggare/sqlgrep"
 
+[features]
+default = []
+python_wrapper = ["pyo3"]
+
 [lib]
 name = "sqlgrep"
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 regex = "1"
@@ -21,6 +26,7 @@ fnv = "1.0"
 itertools = "0.10.0"
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = "0.4.19"
+pyo3 = { version = "0.18", features = ["extension-module"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 cursive = { version = "0.20" }

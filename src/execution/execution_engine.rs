@@ -26,7 +26,7 @@ impl Default for ExecutionConfig {
 
 #[derive(Debug)]
 pub struct ExecutionOutput {
-    pub row: Option<ResultRow>,
+    pub result_row: Option<ResultRow>,
     pub update: bool,
     pub joined: bool,
     pub reached_limit: bool
@@ -35,7 +35,7 @@ pub struct ExecutionOutput {
 impl ExecutionOutput {
     pub fn new(row: Option<ResultRow>) -> ExecutionOutput {
         ExecutionOutput {
-            row,
+            result_row: row,
             update: false,
             joined: false,
             reached_limit: false
@@ -44,7 +44,7 @@ impl ExecutionOutput {
 
     pub fn joined(row: Option<ResultRow>) -> ExecutionOutput {
         ExecutionOutput {
-            row,
+            result_row: row,
             update: false,
             joined: true,
             reached_limit: false
@@ -53,7 +53,7 @@ impl ExecutionOutput {
 
     pub fn empty() -> ExecutionOutput {
         ExecutionOutput {
-            row: None,
+            result_row: None,
             update: false,
             joined: false,
             reached_limit: false
@@ -120,7 +120,7 @@ impl<'a> ExecutionEngine<'a> {
                     ).with_update();
 
                     if let Some(limit) = aggregate_statement.limit {
-                        if let Some(row) = output.row.as_mut() {
+                        if let Some(row) = output.result_row.as_mut() {
                             if row.data.len() > limit as usize {
                                 row.data.drain(limit..);
                             }
@@ -278,7 +278,7 @@ impl<'a> ExecutionEngine<'a> {
     }
 
     fn update_limit(&mut self, limit: Option<usize>, mut output: ExecutionOutput) -> ExecutionOutput {
-        if let Some(row) = output.row.as_ref() {
+        if let Some(row) = output.result_row.as_ref() {
             self.num_output_rows += row.data.iter().filter(|row| row.any_result()).count();
         }
 
@@ -379,7 +379,7 @@ fn test_regex_array1() {
         let result = execution_engine.execute(
             line.unwrap(),
             &ExecutionConfig::default()
-        ).unwrap().row;
+        ).unwrap().result_row;
 
         if let Some(result) = result {
             result_rows.extend(result.data);
@@ -465,7 +465,7 @@ fn test_timestamp1() {
         let result = execution_engine.execute(
             line.unwrap(),
             &ExecutionConfig::default()
-        ).unwrap().row;
+        ).unwrap().result_row;
 
         if let Some(result) = result {
             result_rows.extend(result.data);
@@ -543,7 +543,7 @@ fn test_json_array1() {
         let result = execution_engine.execute(
             line.unwrap(),
             &ExecutionConfig::default()
-        ).unwrap().row;
+        ).unwrap().result_row;
 
         if let Some(result) = result {
             result_rows.extend(result.data);
@@ -620,7 +620,7 @@ fn test_limit1() {
             &ExecutionConfig::default()
         ).unwrap();
 
-        if let Some(result) = output.row {
+        if let Some(result) = output.result_row {
             result_rows.extend(result.data);
         }
 
