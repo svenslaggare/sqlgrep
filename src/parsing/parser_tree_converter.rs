@@ -88,7 +88,7 @@ pub fn transform_statement(tree: ParserOperationTree) -> Result<Statement, Conve
                 }
             }
         }
-        ParserOperationTree::CreateTable { location, name, patterns, columns } => create_create_table_statement(location, name, patterns, columns),
+        ParserOperationTree::CreateTable { location, name, patterns, columns, .. } => create_create_table_statement(location, name, patterns, columns),
         ParserOperationTree::Multiple(statements) => {
             let mut transformed_statements = Vec::new();
             for statement in statements {

@@ -156,6 +156,7 @@ pub enum ParserOperationTree {
     },
     CreateTable {
         location: TokenLocation,
+        end_location: TokenLocation,
         name: String,
         patterns: Vec<(String, String, RegexMode)>,
         columns: Vec<ParserColumnDefinition>
@@ -416,9 +417,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_create_table(&mut self) -> ParserResult<ParserOperationTree> {
+        let location = self.current_location();
+
         self.next()?;
 
-        let location = self.current_location();
         self.expect_and_consume_token(
             Token::Keyword(Keyword::Table),
             ParserErrorType::ExpectedKeyword(Keyword::Table)
@@ -574,6 +576,7 @@ impl<'a> Parser<'a> {
         Ok(
             ParserOperationTree::CreateTable {
                 location,
+                end_location: self.current_location(),
                 name: table_name,
                 patterns,
                 columns

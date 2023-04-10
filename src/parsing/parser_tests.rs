@@ -315,7 +315,8 @@ fn test_parse_create_table1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 58),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParserColumnDefinition::new(
@@ -335,7 +336,8 @@ fn test_parse_create_table2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 90),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
@@ -364,7 +366,8 @@ fn test_parse_create_table_multiple1() {
     assert_eq!(
         ParserOperationTree::Multiple(vec![
             ParserOperationTree::CreateTable {
-                location: TokenLocation::new(0, 6),
+                location: TokenLocation::new(0, 0),
+                end_location: TokenLocation::new(0, 59),
                 name: "test1".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
@@ -377,7 +380,8 @@ fn test_parse_create_table_multiple1() {
                 ]
             },
             ParserOperationTree::CreateTable {
-                location: TokenLocation::new(0, 66),
+                location: TokenLocation::new(0, 59),
+                end_location: TokenLocation::new(0, 151),
                 name: "test2".to_string(),
                 patterns: vec![("line".to_owned(), "A: ([0-9]+), B: ([A-Z]+)".to_owned(), RegexMode::Captures)],
                 columns: vec![
@@ -406,7 +410,8 @@ fn test_parse_create_table_inline1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 42),
             name: "test".to_string(),
             patterns: vec![("_pattern0".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
@@ -428,7 +433,8 @@ fn test_parse_create_table_create_array1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 98),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+), ([0-9]+), ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![
@@ -458,7 +464,8 @@ fn test_parse_create_table_split_mode1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 64),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Split)],
             columns: vec![ParserColumnDefinition::new(
@@ -478,7 +485,8 @@ fn test_parse_create_table_modifiers1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 67),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParserColumnDefinition {
@@ -502,7 +510,8 @@ fn test_parse_create_table_modifiers2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 64),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParserColumnDefinition {
@@ -526,7 +535,8 @@ fn test_parse_create_table_modifiers3() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 71),
             name: "test".to_string(),
             patterns: vec![("line".to_owned(), "A: ([0-9]+)".to_owned(), RegexMode::Captures)],
             columns: vec![ParserColumnDefinition {
@@ -550,7 +560,8 @@ fn test_parse_json_table1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 50),
             name: "connections".to_string(),
             patterns: vec![],
             columns: vec![
@@ -576,7 +587,8 @@ fn test_parse_json_table2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(0, 62),
             name: "connections".to_string(),
             patterns: vec![],
             columns: vec![
@@ -628,7 +640,8 @@ fn test_parse_create_table_multiline1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(1, 10),
+            location: TokenLocation::new(1, 0),
+            end_location: TokenLocation::new(12, 6),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.*)\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
@@ -700,7 +713,8 @@ fn test_parse_create_table_multiline2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(1, 10),
+            location: TokenLocation::new(1, 0),
+            end_location: TokenLocation::new(6, 6),
             name: "test".to_string(),
             patterns: vec![
                 ("line".to_owned(), "testing (.*) (.*)".to_owned(), RegexMode::Captures)
@@ -730,7 +744,8 @@ fn test_parse_str_from_file1() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(11, 2),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), "connection from ([0-9.]+) \\((.+)?\\) at ([a-zA-Z]+) ([a-zA-Z]+) ([0-9]+) ([0-9]+):([0-9]+):([0-9]+) ([0-9]+)".to_owned(), RegexMode::Captures)
@@ -805,7 +820,8 @@ fn test_parse_str_from_file2() {
 
     assert_eq!(
         ParserOperationTree::CreateTable {
-            location: TokenLocation::new(0, 6),
+            location: TokenLocation::new(0, 0),
+            end_location: TokenLocation::new(11, 2),
             name: "connections".to_string(),
             patterns: vec![
                 ("line".to_owned(), ";".to_owned(), RegexMode::Split)
