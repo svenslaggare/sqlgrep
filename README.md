@@ -86,7 +86,7 @@ Supported functions:
 * `date_trunc(TEXT, TIMESTAMP) => TIMESTAMP`
 
 ## Special features
-The input filename can either be specified with the CLI or as an additional argument to the `FROM` statement as following:
+The input file can either be specified using the CLI or as an additional argument to the `FROM` statement as following:
 ```
 SELECT * FROM connections::'file.log';
 ```
