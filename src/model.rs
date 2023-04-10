@@ -10,39 +10,110 @@ use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Local, TimeZone, Dur
 
 use crate::data_model::TableDefinition;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Float(pub f64);
+#[derive(Debug, Hash)]
+pub struct SelectStatement {
+    pub projections: Vec<(String, ExpressionTree)>,
+    pub from: String,
+    pub filename: Option<String>,
+    pub filter: Option<ExpressionTree>,
+    pub join: Option<JoinClause>,
+    pub limit: Option<usize>
+}
 
-impl Eq for Float {}
-impl Ord for Float {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.0 < other.0 {
-            Ordering::Less
-        } else if self.0 > other.0 {
-            Ordering::Greater
-        } else {
-            Ordering::Equal
+impl SelectStatement {
+    pub fn is_wildcard_projection(&self) -> bool {
+        self.projections.len() == 1 && self.projections[0].1 == ExpressionTree::Wildcard
+    }
+}
+
+#[derive(Debug, Hash)]
+pub struct AggregateStatement {
+    pub aggregates: Vec<(String, Aggregate, Option<ExpressionTree>)>,
+    pub from: String,
+    pub filename: Option<String>,
+    pub filter: Option<ExpressionTree>,
+    pub group_by: Option<Vec<String>>,
+    pub having: Option<ExpressionTree>,
+    pub join: Option<JoinClause>,
+    pub limit: Option<usize>
+}
+
+pub struct CreateTableStatement {
+    pub name: String,
+    pub patterns: Vec<(String, String)>,
+    pub columns: Vec<(String, ValueType, String, usize)>
+}
+
+#[derive(Debug)]
+pub enum Statement {
+    Select(SelectStatement),
+    Aggregate(AggregateStatement),
+    CreateTable(TableDefinition),
+    Multiple(Vec<Statement>)
+}
+
+impl Statement {
+    pub fn filename(&self) -> Option<&str> {
+        match self {
+            Statement::Select(statement) => statement.filename.as_ref().map(|x| x.as_str()),
+            Statement::Aggregate(statement) => statement.filename.as_ref().map(|x| x.as_str()),
+            Statement::CreateTable(_) => None,
+            Statement::Multiple(_) => None,
+        }
+    }
+
+    pub fn is_aggregate(&self) -> bool {
+        match self {
+            Statement::Aggregate(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn extract_select(self) -> Option<SelectStatement> {
+        match self {
+            Statement::Select(statement) => Some(statement),
+            _ => None
+        }
+    }
+
+    pub fn extract_aggregate(self) -> Option<AggregateStatement> {
+        match self {
+            Statement::Aggregate(statement) => Some(statement),
+            _ => None
+        }
+    }
+
+    pub fn extract_create_table(self) -> Option<TableDefinition> {
+        match self {
+            Statement::CreateTable(statement) => Some(statement),
+            _ => None
+        }
+    }
+
+    pub fn extract_multiple(self) -> Option<Vec<Statement>> {
+        match self {
+            Statement::Multiple(statements) => Some(statements),
+            _ => None
+        }
+    }
+
+    pub fn join_clause(&self) -> Option<&JoinClause> {
+        match self {
+            Statement::Select(select) => select.join.as_ref(),
+            Statement::Aggregate(aggregate) => aggregate.join.as_ref(),
+            Statement::CreateTable(_) => None,
+            Statement::Multiple(_) => None
         }
     }
 }
 
-impl Hash for Float {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let bits: u64 = unsafe { std::mem::transmute(self.0) };
-        bits.hash(state)
-    }
-}
-
-impl std::fmt::Display for Float {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl From<f64> for Float {
-    fn from(x: f64) -> Self {
-        Float(x)
-    }
+#[derive(PartialEq, Debug, Hash)]
+pub struct JoinClause {
+    pub joiner_column: String,
+    pub joined_table: String,
+    pub joined_filename: String,
+    pub joined_column: String,
+    pub is_outer: bool
 }
 
 pub type TimestampType = DateTime<Local>;
@@ -312,7 +383,7 @@ impl ValueType {
         }
     }
 
-    pub fn convert_json(&self, value: &serde_json::Value) -> Value {
+    pub fn convert_from_json(&self, value: &serde_json::Value) -> Value {
         match self {
             ValueType::Int => value.as_i64().map(|value| Value::Int(value)),
             ValueType::Float => value.as_f64().map(|value| Value::Float(Float(value))),
@@ -324,7 +395,7 @@ impl ValueType {
                     .map(|value|
                         Value::Array(
                             *element.clone(),
-                            value.iter().map(|x| element.convert_json(x)).collect()
+                            value.iter().map(|x| element.convert_from_json(x)).collect()
                         )
                     )
             }
@@ -364,6 +435,41 @@ pub fn value_type_to_string(value: &Option<ValueType>) -> String {
     match value {
         Some(value) => value.to_string(),
         None => "NULL".to_owned()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Float(pub f64);
+
+impl Eq for Float {}
+impl Ord for Float {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.0 < other.0 {
+            Ordering::Less
+        } else if self.0 > other.0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl Hash for Float {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let bits: u64 = unsafe { std::mem::transmute(self.0) };
+        bits.hash(state)
+    }
+}
+
+impl std::fmt::Display for Float {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<f64> for Float {
+    fn from(x: f64) -> Self {
+        Float(x)
     }
 }
 
@@ -592,112 +698,6 @@ impl ExpressionTree {
 
         f(self)?;
         Ok(())
-    }
-}
-
-#[derive(PartialEq, Debug, Hash)]
-pub struct JoinClause {
-    pub joiner_column: String,
-    pub joined_table: String,
-    pub joined_filename: String,
-    pub joined_column: String,
-    pub is_outer: bool
-}
-
-#[derive(Debug, Hash)]
-pub struct SelectStatement {
-    pub projections: Vec<(String, ExpressionTree)>,
-    pub from: String,
-    pub filename: Option<String>,
-    pub filter: Option<ExpressionTree>,
-    pub join: Option<JoinClause>,
-    pub limit: Option<usize>
-}
-
-impl SelectStatement {
-    pub fn is_wildcard_projection(&self) -> bool {
-        self.projections.len() == 1 && self.projections[0].1 == ExpressionTree::Wildcard
-    }
-}
-
-#[derive(Debug, Hash)]
-pub struct AggregateStatement {
-    pub aggregates: Vec<(String, Aggregate, Option<ExpressionTree>)>,
-    pub from: String,
-    pub filename: Option<String>,
-    pub filter: Option<ExpressionTree>,
-    pub group_by: Option<Vec<String>>,
-    pub having: Option<ExpressionTree>,
-    pub join: Option<JoinClause>,
-    pub limit: Option<usize>
-}
-
-pub struct CreateTableStatement {
-    pub name: String,
-    pub patterns: Vec<(String, String)>,
-    pub columns: Vec<(String, ValueType, String, usize)>
-}
-
-#[derive(Debug)]
-pub enum Statement {
-    Select(SelectStatement),
-    Aggregate(AggregateStatement),
-    CreateTable(TableDefinition),
-    Multiple(Vec<Statement>)
-}
-
-impl Statement {
-    pub fn filename(&self) -> Option<&str> {
-        match self {
-            Statement::Select(statement) => statement.filename.as_ref().map(|x| x.as_str()),
-            Statement::Aggregate(statement) => statement.filename.as_ref().map(|x| x.as_str()),
-            Statement::CreateTable(_) => None,
-            Statement::Multiple(_) => None,
-        }
-    }
-
-    pub fn is_aggregate(&self) -> bool {
-        match self {
-            Statement::Aggregate(_) => true,
-            _ => false
-        }
-    }
-
-    pub fn extract_select(self) -> Option<SelectStatement> {
-        match self {
-            Statement::Select(statement) => Some(statement),
-            _ => None
-        }
-    }
-
-    pub fn extract_aggregate(self) -> Option<AggregateStatement> {
-        match self {
-            Statement::Aggregate(statement) => Some(statement),
-            _ => None
-        }
-    }
-
-    pub fn extract_create_table(self) -> Option<TableDefinition> {
-        match self {
-            Statement::CreateTable(statement) => Some(statement),
-            _ => None
-        }
-    }
-
-    pub fn extract_multiple(self) -> Option<Vec<Statement>> {
-        match self {
-            Statement::Multiple(statements) => Some(statements),
-            _ => None
-        }
-    }
-
-    pub fn join_clause(&self) -> Option<&JoinClause> {
-        match self {
-            Statement::Select(select) => select.join.as_ref(),
-            Statement::Aggregate(aggregate) => aggregate.join.as_ref(),
-            Statement::CreateTable(_) => None,
-            Statement::Multiple(_) => None
-        }
     }
 }
 

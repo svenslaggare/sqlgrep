@@ -317,7 +317,7 @@ impl ColumnParsing {
                             .map(|value| column.column_type.parse(value).unwrap_or(Value::Null))
                             .unwrap_or(Value::Null)
                     } else {
-                        column.column_type.convert_json(value)
+                        column.column_type.convert_from_json(value)
                     }
                 } else {
                     column.default_value()
