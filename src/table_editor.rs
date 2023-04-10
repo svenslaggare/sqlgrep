@@ -74,15 +74,6 @@ pub fn run(mut data_definition_file: Option<String>,
                         .with_all(table_editor.borrow().input_lines.iter().enumerate().map(|(i, line)| (line.to_owned(), i)))
                         .on_select(move |siv, line_index| {
                             handle_selected_line(siv, table_editor_extract_data.clone(), *line_index);
-                            // siv.call_on_name("extracted_data", |view: &mut TextView| {
-                            //     let table_editor = table_editor_extract_data.borrow();
-                            //     view.set_content(table_editor.extract_columns_for_line(*line_index).join(", "))
-                            // });
-                            //
-                            // siv.call_on_name("selected_input_line", |view: &mut TextView| {
-                            //     let table_editor = table_editor_extract_data.borrow();
-                            //     view.set_content(table_editor.input_lines[*line_index].clone());
-                            // });
                         })
                         .with_name("input_lines")
                         .scrollable()
