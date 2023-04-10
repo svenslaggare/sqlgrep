@@ -76,7 +76,7 @@ impl ExecutionOutput {
         }
     }
 
-    pub fn with_update(self) -> ExecutionOutput {
+    pub fn with_updated(self) -> ExecutionOutput {
         let mut new = self;
         new.updated = true;
         new
@@ -125,7 +125,7 @@ impl<'a> ExecutionEngine<'a> {
             }
             Statement::Aggregate(aggregate_statement) => {
                 if config.update && config.result {
-                    let output = self.execute_aggregate(&aggregate_statement, line)?.with_update();
+                    let output = self.execute_aggregate(&aggregate_statement, line)?.with_updated();
                     let output = self.update_limit(aggregate_statement.limit, output);
                     Ok(output)
                 } else if config.update && !config.result {
@@ -133,7 +133,7 @@ impl<'a> ExecutionEngine<'a> {
                 } else if !config.update && config.result {
                     let mut output = ExecutionOutput::new(
                         self.execute_aggregate_result(&aggregate_statement).map(|x| Some(x))?
-                    ).with_update();
+                    ).with_updated();
 
                     if let Some(limit) = aggregate_statement.limit {
                         if let Some(row) = output.result_row.as_mut() {
