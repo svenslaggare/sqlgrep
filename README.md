@@ -29,7 +29,7 @@ If we want to know the IP and hostname for all connections which have a hostname
 sqlgrep -d testdata/ftpd.txt testdata/ftpd_data.txt -c "SELECT ip, hostname FROM connections WHERE hostname IS NOT NULL"
 ```
 
-We can also do it "live" by tail following the file (note the `-f` argument):
+We can also do it "live" by tailing following the file (note the `-f` argument):
 
 ```
 sqlgrep -d testdata/ftpd.txt testdata/ftpd_data.txt -f -c "SELECT ip, hostname FROM connections WHERE hostname IS NOT NULL"
@@ -128,7 +128,7 @@ Multiple tables can be defined in the same file.
 * `INTERVAL`: Interval type.
 
 ### Modifiers
-Placed after the column type and add additional constraints/transforms when creating a row.
+Placed after the column type and adds additional constraints/transforms when extracting vale for a column.
 * `NOT NULL`: The column cannot be `NULL`. If a not null column gets a null value, the row is skipped.
 * `TRIM`: Trim string types for whitespaces.
 * `CONVERT`: Tries to convert a string value into the value type.
