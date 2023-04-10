@@ -1,3 +1,4 @@
+![sqlgrep](assets/logo_small.png)
 # sqlgrep
 Combines SQL with regular expressions to provide a new way to filter and process text files.
 
