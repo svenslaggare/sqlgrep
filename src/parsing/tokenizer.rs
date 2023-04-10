@@ -137,6 +137,12 @@ impl Default for TokenLocation {
     }
 }
 
+impl std::fmt::Display for TokenLocation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "TokenLocation({}:{})", self.line, self.column)
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct ParserToken {
     pub location: TokenLocation,

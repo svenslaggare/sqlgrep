@@ -13,6 +13,9 @@ use cursive::theme::{BaseColor, Color};
 
 use crate::data_model::TableDefinition;
 use crate::{parsing, Tables};
+use crate::parsing::parser;
+use crate::parsing::parser::ParserOperationTree;
+use crate::parsing::tokenizer::TokenLocation;
 
 pub fn run(mut data_definition_file: Option<String>,
            input_file: Vec<String>,
@@ -42,7 +45,13 @@ pub fn run(mut data_definition_file: Option<String>,
         table_definition_content,
         BufReader::new(input_file).lines().take(1000).map(|line| line.unwrap()).collect::<Vec<_>>()
     );
-    table_editor.verify_table_exists();
+    let table_editor = match table_editor {
+        Ok(table_editor) => table_editor,
+        Err(err) => {
+            println!("{}", err);
+            std::process::exit(1);
+        }
+    };
 
     let table_editor = Rc::new(RefCell::new(table_editor));
 
@@ -96,7 +105,7 @@ pub fn run(mut data_definition_file: Option<String>,
                         .child(
                             "",
                             TextArea::new()
-                                .content(table_editor.borrow().table_definition_content.clone())
+                                .content(table_editor.borrow().table_content())
                                 .with_name("edit_table")
                                 .max_height(25)
                         )
@@ -142,7 +151,7 @@ pub fn run(mut data_definition_file: Option<String>,
                                         "Restore",
                                         move |siv| {
                                             siv.call_on_name("edit_table", |view: &mut NamedView<TextArea>| {
-                                                view.get_mut().set_content(table_editor_edit_table.borrow().table_definition_content.clone())
+                                                view.get_mut().set_content(table_editor_edit_table.borrow().table_content())
                                             });
                                         }
                                     )
@@ -178,7 +187,9 @@ struct TableEditor {
     tables: Tables,
     table_name: String,
     table_definition_filename: String,
+    table_definition_before_content: String,
     table_definition_content: String,
+    table_definition_after_content: String,
     input_lines: Vec<String>
 }
 
@@ -186,26 +197,66 @@ impl TableEditor {
     pub fn new(tables: Tables,
                table_name: String,
                table_definition_filename: String,
-               table_definition_content: String,
-               input_lines: Vec<String>) -> TableEditor {
-        TableEditor {
-            tables,
-            table_name,
-            table_definition_filename,
-            table_definition_content,
-            input_lines
+               table_definition_full_content: String,
+               input_lines: Vec<String>) -> Result<TableEditor, String> {
+        if tables.get(&table_name).is_none() {
+            return Err(format!("Table '{}' not found.", table_name));
         }
-    }
 
-    pub fn verify_table_exists(&self) {
-        if self.tables.get(&self.table_name).is_none() {
-            println!("Table '{}' not found.", self.table_name);
-            std::process::exit(1);
+        let (table_start, table_end) = get_table_span(&table_definition_full_content, &table_name).unwrap();
+        let mut table_definition_before_content = String::new();
+        let mut table_definition_content = String::new();
+        let mut table_definition_after_content = String::new();
+
+        let mut line = 0;
+        let mut column = 0;
+        for current in table_definition_full_content.chars() {
+            if line < table_start.line {
+                table_definition_before_content.push(current);
+            } else if line == table_start.line {
+                if column < table_start.column {
+                    table_definition_before_content.push(current);
+                } else {
+                    table_definition_content.push(current);
+                }
+            } else if line < table_end.line {
+                table_definition_content.push(current);
+            } else if line == table_end.line {
+                if column < table_start.column {
+                    table_definition_content.push(current);
+                } else {
+                    table_definition_after_content.push(current);
+                }
+            } else {
+                table_definition_after_content.push(current);
+            }
+
+            column += 1;
+            if current == '\n' {
+                line += 1;
+                column = 0;
+            }
         }
+
+        Ok(
+            TableEditor {
+                tables,
+                table_name,
+                table_definition_filename,
+                table_definition_content,
+                table_definition_before_content,
+                table_definition_after_content,
+                input_lines
+            }
+        )
     }
 
     pub fn table(&self) -> &TableDefinition {
         self.tables.get(&self.table_name).unwrap()
+    }
+
+    pub fn table_content(&self) -> String {
+        self.table_definition_content.clone()
     }
 
     pub fn extract_columns_for_line(&self, line_index: usize) -> Vec<String> {
@@ -223,13 +274,37 @@ impl TableEditor {
     }
 
     pub fn save_table(&mut self, content: &str) {
-        if let Err(err) = std::fs::write(&self.table_definition_filename, content) {
+        let full_content = self.table_definition_before_content.clone() + content + &self.table_definition_after_content;
+        if let Err(err) = std::fs::write(&self.table_definition_filename, full_content) {
             println!("Failed to save file due to: {}", err);
             std::process::exit(1);
         }
 
         self.table_definition_content = content.to_owned();
     }
+}
+
+fn get_table_span(text: &str, table_name: &str) -> Option<(TokenLocation, TokenLocation)> {
+    let table_definition_tree = parser::parse_str(text).ok()?;
+    match table_definition_tree {
+        ParserOperationTree::Select { .. } => {},
+        ParserOperationTree::CreateTable { location, end_location, name, .. } => {
+            if name == table_name {
+                return Some((location, end_location));
+            }
+        }
+        ParserOperationTree::Multiple(statements) => {
+            for statement in statements {
+                if let ParserOperationTree::CreateTable { location, end_location, name, .. } = statement {
+                    if name == table_name {
+                        return Some((location, end_location));
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 fn define_table(tables: &mut Tables, text: String) -> Result<(), String> {
