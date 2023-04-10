@@ -107,7 +107,7 @@ pub fn run(mut data_definition_file: Option<String>,
                             TextArea::new()
                                 .content(table_editor.borrow().table_definition_content.clone())
                                 .with_name("edit_table")
-                                .max_height(30)
+                                .max_height(25)
                         )
                         .child(
                             "",
