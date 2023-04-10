@@ -33,7 +33,7 @@ struct CommandLineInput {
     #[structopt(long, help="The input data is given on stdin.")]
     stdin: bool,
     #[structopt(long, help="The output format. Supported values: text, json, csv.", default_value="text")]
-    format: String,
+    format: OutputFormat,
     #[structopt(long, help="Edit the given table.")]
     edit_table: Option<String>
 }
@@ -168,12 +168,7 @@ fn execute(command_line_input: &CommandLineInput,
             };
 
             let mut display_options: DisplayOptions = Default::default();
-            match command_line_input.format.as_str() {
-                "text" => { display_options.output_format = OutputFormat::Text; },
-                "json" => { display_options.output_format = OutputFormat::Json; },
-                "csv" => { display_options.output_format = OutputFormat::CSV(";".to_owned()); }
-                format => { panic!("Unsupported output format '{}'.", format) }
-            }
+            display_options.output_format = command_line_input.format.clone();
 
             let result = if command_line_input.follow {
                 let executor = FollowFileExecutor::new(

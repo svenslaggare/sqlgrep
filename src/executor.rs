@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::iter::FromIterator;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -33,11 +34,24 @@ impl ExecutionStatistics {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum OutputFormat {
     Text,
     Json,
     CSV(String)
+}
+
+impl FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        match text {
+            "text" => Ok(OutputFormat::Text),
+            "json" => Ok(OutputFormat::Json),
+            "csv" => Ok(OutputFormat::CSV(";".to_owned())),
+            other => Err(format!("'{}' is not a defined output format.", other))
+        }
+    }
 }
 
 pub struct DisplayOptions {
