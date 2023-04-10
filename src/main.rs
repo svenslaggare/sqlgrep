@@ -54,7 +54,7 @@ fn main() {
             );
 
             #[cfg(not(unix))]
-            println!("Table editor only supported on Unix.")
+            panic!("Table editor only supported on Unix.");
         }
     }
 }

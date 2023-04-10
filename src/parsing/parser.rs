@@ -549,6 +549,10 @@ impl<'a> Parser<'a> {
                     let json_access = JsonAccess::from_linear(json_access_parts);
                     columns.push(self.parse_define_column(ColumnParsing::Json(json_access))?);
                 }
+                Token::RightParentheses => {
+                    self.next()?;
+                    break;
+                }
                 _ => { return Err(self.create_error(ParserErrorType::ExpectedColumnDefinitionStart)) }
             }
 

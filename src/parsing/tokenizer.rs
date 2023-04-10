@@ -229,7 +229,7 @@ impl std::fmt::Display for ParserErrorType {
             ParserErrorType::ExpectedExpression => { write!(f, "Expected an expression") }
             ParserErrorType::ExpectedArgumentListContinuation => { write!(f, "Expected ',' or ')'") }
             ParserErrorType::ExpectedProjectionContinuation => { write!(f, "Expected ','") }
-            ParserErrorType::ExpectedColumnDefinitionStart => { write!(f, "Expected start of column definition.")  }
+            ParserErrorType::ExpectedColumnDefinitionStart => { write!(f, "Expected start of column definition")  }
             ParserErrorType::ExpectedJsonColumnPartStart => { write!(f, "Expected '.', '[' or '}}'")  }
             ParserErrorType::ExpectedColumnDefinitionContinuation => { write!(f, "Expected ',' or ')'")  }
             ParserErrorType::ExpectedIdentifier => { write!(f, "Expected an identifier") }
