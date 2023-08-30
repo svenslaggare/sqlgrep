@@ -100,7 +100,7 @@ impl<'a> FileExecutor<'a> {
 
     pub fn execute(&mut self) -> ExecutionResult<()> {
         let config = self.execution_engine.execution_config();
-        self.execution_engine.create_joined_data(self.running.clone())?;
+        self.execution_engine.executed_joined_table(self.running.clone())?;
 
         for reader in std::mem::take(&mut self.readers).into_iter() {
             for line in reader.lines() {

@@ -89,7 +89,7 @@ impl TablesWrapper {
     fn execute_statement<'a>(&self, py: Python<'a>, mut lines_iterator: &PyIterator, statement: &Statement) -> PyResult<Vec<&'a PyDict>> {
         let mut execution_engine = ExecutionEngine::new(&self.tables, statement);
 
-        map_py_err!(execution_engine.create_joined_data(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
+        map_py_err!(execution_engine.executed_joined_table(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
 
         let config = execution_engine.execution_config();
         let mut output_rows = Vec::new();
