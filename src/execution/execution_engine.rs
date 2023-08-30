@@ -315,7 +315,7 @@ impl<'a> ExecutionEngine<'a> {
         output
     }
 
-    pub fn executed_joined_table(&mut self, running: Arc<AtomicBool>) -> ExecutionResult<()> {
+    pub fn execute_joined_table(&mut self, running: Arc<AtomicBool>) -> ExecutionResult<()> {
         Ok(
             match self.statement.join_clause() {
                 Some(join_clause) => {
