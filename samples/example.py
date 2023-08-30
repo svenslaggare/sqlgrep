@@ -12,9 +12,9 @@ def main():
     # with open("testdata/ftpd_array.txt", "r") as f:
     #     tables.add_table(f.read())
 
-    for table in tables.table_names():
-        print(table)
-        for name, column in tables.get_table(table).items():
+    for table in tables.tables():
+        print(table.name())
+        for name, column in table.columns().items():
             print("\t{}: {}".format(name, column))
         print("")
 
@@ -36,6 +36,17 @@ def main():
     print(query)
     for row in tables.execute_compiled_query(libsqlgrep.ReadLinesIterator("testdata/ftpd_data.txt"), query):
         print(row)
+
+    print("=" * 120)
+
+    for row in tables.execute_query(yield_lines("testdata/ftpd_data.txt"),
+                                    "SELECT * FROM connections WHERE hostname IS NOT NULL;"):
+        print(row)
+
+def yield_lines(filename):
+    with open(filename, "r") as f:
+        for line in f.readlines():
+            yield line
 
 if __name__ == "__main__":
     main()

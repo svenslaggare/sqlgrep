@@ -4,13 +4,14 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use chrono::{Datelike, Timelike};
+use fnv::FnvHashMap;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDateTime, PyDelta, PyDict, PyIterator};
 
 use crate::{ExecutionEngine, parsing, Statement, Tables};
-use crate::data_model::Row;
+use crate::data_model::{Row, TableDefinition};
 use crate::execution::execution_engine::{ExecutionConfig};
 use crate::model::Value;
 
@@ -56,19 +57,22 @@ impl TablesWrapper {
         }
     }
 
+    fn tables(&self) -> PyResult<Vec<TableWrapper>> {
+        let mut tables = Vec::new();
+        for table in self.tables.tables() {
+            tables.push(TableWrapper::new(table)?);
+        }
+
+        Ok(tables)
+    }
+
     fn table_names(&self) -> PyResult<Vec<String>> {
         Ok(self.tables.tables().map(|table| table.name.clone()).collect())
     }
 
-    fn get_table<'a>(&self, py: Python<'a>, name: &str) -> PyResult<&'a PyDict> {
+    fn get_table<'a>(&self, _py: Python<'a>, name: &str) -> PyResult<TableWrapper> {
         let table = self.tables.get(name).ok_or_else(|| PyValueError::new_err("Table not found."))?;
-
-        let columns = PyDict::new(py);
-        for column in &table.columns {
-            columns.set_item(column.name.clone(), column.column_type.to_string())?;
-        }
-
-        Ok(columns)
+        TableWrapper::new(table)
     }
 
     fn execute_query<'a>(&self, py: Python<'a>, lines_iterator: &PyIterator, query: String) -> PyResult<Vec<&'a PyDict>> {
@@ -87,12 +91,7 @@ impl TablesWrapper {
 
         map_py_err!(execution_engine.create_joined_data(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
 
-        let config = if execution_engine.is_aggregate() {
-            ExecutionConfig::aggregate_update()
-        } else {
-            ExecutionConfig::default()
-        };
-
+        let config = execution_engine.execution_config();
         let mut output_rows = Vec::new();
         while let Some(line) = lines_iterator.next() {
             let line = line?.extract::<String>()?;
@@ -121,6 +120,44 @@ impl TablesWrapper {
         }
 
         Ok(output_rows)
+    }
+}
+
+#[pyclass(name="Table")]
+struct TableWrapper {
+    name: String,
+    columns: FnvHashMap<String, String>
+}
+
+impl TableWrapper {
+    pub fn new(table: &TableDefinition) -> PyResult<Self> {
+        let mut columns = FnvHashMap::default();
+        for column in &table.columns {
+            columns.insert(column.name.clone(), column.column_type.to_string());
+        }
+
+        Ok(
+            TableWrapper {
+                name: table.name.clone(),
+                columns
+            }
+        )
+    }
+}
+
+#[pymethods]
+impl TableWrapper {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn columns<'a>(&self, py: Python<'a>) -> PyResult<&'a PyDict> {
+        let columns = PyDict::new(py);
+        for (column_name, column_type) in self.columns.iter() {
+            columns.set_item(column_name.clone(), column_type.clone())?;
+        }
+
+        Ok(columns)
     }
 }
 

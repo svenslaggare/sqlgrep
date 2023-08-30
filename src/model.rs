@@ -703,8 +703,8 @@ impl ExpressionTree {
 
 pub fn create_timestamp(year: i32, month: u32, day: u32, hour: u32, minute: u32, second: u32, microsecond: u32) -> Option<TimestampType> {
     let timestamp = NaiveDateTime::new(
-        NaiveDate::from_ymd(year, month, day),
-        NaiveTime::from_hms_micro(hour, minute, second, microsecond)
+        NaiveDate::from_ymd_opt(year, month, day)?,
+        NaiveTime::from_hms_micro_opt(hour, minute, second, microsecond)?
     );
 
     Local {}.from_local_datetime(&timestamp).latest()

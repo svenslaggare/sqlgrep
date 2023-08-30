@@ -99,12 +99,7 @@ impl<'a> FileExecutor<'a> {
     }
 
     pub fn execute(&mut self) -> ExecutionResult<()> {
-        let config = if self.execution_engine.is_aggregate() {
-            ExecutionConfig::aggregate_update()
-        } else {
-            ExecutionConfig::default()
-        };
-
+        let config = self.execution_engine.execution_config();
         self.execution_engine.create_joined_data(self.running.clone())?;
 
         for reader in std::mem::take(&mut self.readers).into_iter() {

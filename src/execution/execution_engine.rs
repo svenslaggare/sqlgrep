@@ -116,6 +116,14 @@ impl<'a> ExecutionEngine<'a> {
         self.statement.join_clause().is_some()
     }
 
+    pub fn execution_config(&self) -> ExecutionConfig {
+        if self.is_aggregate() {
+            ExecutionConfig::aggregate_update()
+        } else {
+            ExecutionConfig::default()
+        }
+    }
+
     pub fn execute(&mut self, line: String, config: &ExecutionConfig) -> ExecutionResult<ExecutionOutput> {
         match self.statement {
             Statement::Select(select_statement) => {
