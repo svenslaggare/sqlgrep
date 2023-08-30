@@ -13,6 +13,7 @@ use pyo3::types::{PyDateTime, PyDelta, PyDict, PyIterator};
 use crate::{ExecutionEngine, parsing, Statement, Tables};
 use crate::data_model::{Row, TableDefinition};
 use crate::execution::execution_engine::{ExecutionConfig};
+use crate::helpers::FollowFileIterator;
 use crate::model::Value;
 
 #[pymodule]
@@ -21,6 +22,7 @@ fn libsqlgrep(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<TablesWrapper>()?;
     m.add_class::<StatementWrapper>()?;
     m.add_class::<ReadLinesIterator>()?;
+    m.add_class::<FollowFileIteratorWrapper>()?;
     Ok(())
 }
 
@@ -262,5 +264,32 @@ impl ReadLinesIterator {
         } else {
             Ok(None)
         }
+    }
+}
+
+#[pyclass(name="FollowFileIterator")]
+struct FollowFileIteratorWrapper {
+    iterator: FollowFileIterator
+}
+
+#[pymethods]
+impl FollowFileIteratorWrapper {
+    #[new]
+    fn new(filename: &str) -> PyResult<Self> {
+        let reader = BufReader::new(map_py_err!(File::open(filename), "Failed to open file: {}")?);
+
+        Ok(
+            FollowFileIteratorWrapper {
+                iterator: FollowFileIterator::new(reader)
+            }
+        )
+    }
+
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(&mut self) -> PyResult<Option<String>> {
+        Ok(self.iterator.next())
     }
 }

@@ -43,6 +43,20 @@ def main():
                                     "SELECT * FROM connections WHERE hostname IS NOT NULL;"):
         print(row)
 
+def main_tail():
+    tables = libsqlgrep.Tables()
+
+    with open("testdata/ftpd_timestamp.txt", "r") as f:
+        tables.add_table(f.read())
+
+    iterator = libsqlgrep.FollowFileIterator("output.txt")
+
+    # for line in iterator:
+    #     print(line)
+
+    for row in tables.execute_query(iterator, "SELECT * FROM connections WHERE hostname IS NOT NULL;"):
+        print(row)
+
 def yield_lines(filename):
     with open(filename, "r") as f:
         for line in f.readlines():
@@ -50,3 +64,4 @@ def yield_lines(filename):
 
 if __name__ == "__main__":
     main()
+    # main_tail()

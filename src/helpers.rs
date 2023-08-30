@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+
 pub struct TablePrinter {
     column_names: Vec<String>,
     rows: Vec<Vec<String>>
@@ -72,6 +75,44 @@ impl TablePrinter {
             }
 
             println!();
+        }
+    }
+}
+
+pub struct FollowFileIterator {
+    reader: BufReader<File>,
+    line: String
+}
+
+impl FollowFileIterator {
+    pub fn new(reader: BufReader<File>) -> FollowFileIterator {
+        FollowFileIterator {
+            reader,
+            line: String::new()
+        }
+    }
+}
+
+impl Iterator for FollowFileIterator {
+    type Item = String;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Err(_) = self.reader.read_line(&mut self.line) {
+                return None;
+            }
+
+            // If we get an EOF in the middle of a line, read_line will return.
+            // We will then try again and use content of current read line
+            if !self.line.ends_with('\n') {
+                continue;
+            }
+
+            if self.line.ends_with('\n') {
+                self.line.pop();
+            }
+
+            return Some(std::mem::take(&mut self.line));
         }
     }
 }

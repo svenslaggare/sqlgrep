@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::execution_engine::{ExecutionConfig, ExecutionEngine};
+use crate::helpers::FollowFileIterator;
 
 pub struct ExecutionStatistics {
     execution_start: std::time::Instant,
@@ -181,34 +182,14 @@ impl<'a> FollowFileExecutor<'a> {
     }
 
     pub fn execute(&mut self) -> ExecutionResult<()> {
-        let mut reader = self.reader.take().unwrap();
-        let mut line = String::new();
-
         if self.execution_engine.is_join() {
             return Err(ExecutionError::JoinNotSupported);
         }
 
-        loop {
+        for input_line in FollowFileIterator::new(self.reader.take().unwrap()) {
             if !self.running.load(Ordering::SeqCst) {
                 break;
             }
-
-            if let Err(_) = reader.read_line(&mut line) {
-                break;
-            }
-
-            // If we get an EOF in the middle of a line, read_line will return.
-            // We will then try again and use content of current read line
-            if !line.ends_with('\n') {
-                continue;
-            }
-
-            if line.ends_with('\n') {
-                line.pop();
-            }
-
-            let mut input_line = String::new();
-            std::mem::swap(&mut input_line, &mut line);
 
             let output = self.execution_engine.execute(input_line, &ExecutionConfig::default())?;
             if let Some(result_row) = output.result_row {
