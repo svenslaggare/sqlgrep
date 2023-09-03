@@ -151,7 +151,7 @@ impl<'a> ExecutionEngine<'a> {
 
                     if let Some(limit) = aggregate_statement.limit {
                         if let Some(row) = output.result_row.as_mut() {
-                            if row.data.len() > limit as usize {
+                            if row.data.len() > limit {
                                 row.data.drain(limit..);
                             }
                         }

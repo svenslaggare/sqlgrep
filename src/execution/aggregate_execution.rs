@@ -323,7 +323,7 @@ impl AggregateExecutionEngine {
                                                           group_key: GroupKey,
                                                           aggregate_index: usize,
                                                           default_value_fn: F) -> ExecutionResult<&mut Value> {
-        AggregateExecutionEngine::get_generic_group(
+        AggregateExecutionEngine::get_group(
             &mut self.group_values,
             group_key,
             aggregate_index,
@@ -335,7 +335,7 @@ impl AggregateExecutionEngine {
                                                         group_key: GroupKey,
                                                         aggregate_index: usize,
                                                         default_value_fn: F) -> ExecutionResult<&mut GroupAggregator> {
-        AggregateExecutionEngine::get_generic_group(
+        AggregateExecutionEngine::get_group(
             &mut self.group_aggregators,
             group_key,
             aggregate_index,
@@ -343,10 +343,10 @@ impl AggregateExecutionEngine {
         )
     }
 
-    fn get_generic_group<T, F: FnOnce() -> ExecutionResult<T>>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
-                                                               group_key: GroupKey,
-                                                               aggregate_index: usize,
-                                                               default_value_fn: F) -> ExecutionResult<&mut T> {
+    fn get_group<T, F: FnOnce() -> ExecutionResult<T>>(groups: &mut BTreeMap<GroupKey, HashMap<usize, T>>,
+                                                       group_key: GroupKey,
+                                                       aggregate_index: usize,
+                                                       default_value_fn: F) -> ExecutionResult<&mut T> {
         let group_map = groups.entry(group_key).or_insert_with(|| HashMap::new());
         if !group_map.contains_key(&aggregate_index) {
             group_map.insert(aggregate_index, default_value_fn()?);
