@@ -1,7 +1,5 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader, Lines};
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use chrono::{Datelike, Timelike};
 use fnv::FnvHashMap;

@@ -17,7 +17,7 @@ crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 regex = "1"
-lazy_static = "1.4.0"
+lazy_static = "1"
 structopt = "0.3"
 ctrlc = "3.0"
 rustyline = "12.0.0"
@@ -25,14 +25,14 @@ rustyline-derive = "0.9.0"
 fnv = "1.0"
 itertools = "0.11"
 serde_json = { version = "1", features = ["preserve_order"] }
-chrono = "0.4.19"
-pyo3 = { version = "0.19.1", features = ["extension-module"], optional = true }
+chrono = "0.4"
+pyo3 = { version = "0.19", features = ["extension-module"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 cursive = { version = "0.20" }
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = "0.5"
 
 [[bench]]
 name = "full_pipeline"
