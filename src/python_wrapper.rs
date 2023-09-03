@@ -77,18 +77,43 @@ impl TablesWrapper {
         TableWrapper::new(table)
     }
 
-    fn execute_query<'a>(&self, py: Python<'a>, lines_iterator: &PyIterator, query: String) -> PyResult<Vec<&'a PyDict>> {
+    fn execute_query<'a>(&self,
+                         py: Python<'a>,
+                         lines_iterator: &PyIterator,
+                         query: String) -> PyResult<Vec<&'a PyDict>> {
         let query = map_py_err!(parsing::parse(&query), "Failed to parse query: {}")?;
         self.execute_statement(py, lines_iterator, &query)
     }
 
-    fn execute_compiled_query<'a>(&self, py: Python<'a>, lines_iterator: &PyIterator, query: &StatementWrapper) -> PyResult<Vec<&'a PyDict>> {
+    fn execute_compiled_query<'a>(&self,
+                                  py: Python<'a>,
+                                  lines_iterator: &PyIterator,
+                                  query: &StatementWrapper) -> PyResult<Vec<&'a PyDict>> {
         self.execute_statement(py, lines_iterator, &query.statement)
+    }
+
+    fn execute_query_callback<'a>(&self,
+                                  py: Python<'a>,
+                                  lines_iterator: &PyIterator,
+                                  query: String,
+                                  callback: PyObject) -> PyResult<()> {
+        let query = map_py_err!(parsing::parse(&query), "Failed to parse query: {}")?;
+        self.execute_statement_callback(py, lines_iterator, &query, callback)
+    }
+
+    fn execute_compiled_query_callback<'a>(&self,
+                                           py: Python<'a>,
+                                           lines_iterator: &PyIterator,
+                                           query: &StatementWrapper,
+                                           callback: PyObject) -> PyResult<()> {
+        self.execute_statement_callback(py, lines_iterator, &query.statement, callback)
     }
 }
 
 impl TablesWrapper {
-    fn execute_statement<'a>(&self, py: Python<'a>, mut lines_iterator: &PyIterator, statement: &Statement) -> PyResult<Vec<&'a PyDict>> {
+    fn execute_statement<'a>(&self, py: Python<'a>,
+                             mut lines_iterator: &PyIterator,
+                             statement: &Statement) -> PyResult<Vec<&'a PyDict>> {
         let mut execution_engine = ExecutionEngine::new(&self.tables, statement);
 
         map_py_err!(execution_engine.execute_joined_table(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
@@ -122,6 +147,65 @@ impl TablesWrapper {
         }
 
         Ok(output_rows)
+    }
+
+    fn execute_statement_callback<'a>(&self,
+                                      py: Python<'a>,
+                                      mut lines_iterator: &PyIterator,
+                                      statement: &Statement,
+                                      callback: PyObject) -> PyResult<()> {
+        let mut execution_engine = ExecutionEngine::new(&self.tables, statement);
+
+        map_py_err!(execution_engine.execute_joined_table(Arc::new(AtomicBool::new(true))), "Failed to create joined data: {}")?;
+
+        let config = execution_engine.execution_config();
+        while let Some(line) = lines_iterator.next() {
+            let line = line?.extract::<String>()?;
+
+            let mut output_rows = Vec::new();
+            let reached_limit = execute_query_line(
+                py,
+                &mut execution_engine,
+                &config,
+                line,
+                &mut output_rows
+            )?;
+
+            if !output_rows.is_empty() {
+                let keep_processing = callback.call1(
+                    py,
+                    (output_rows, )
+                )?.extract::<bool>(py)?;
+
+                if !keep_processing {
+                    break;
+                }
+            }
+
+            if reached_limit {
+                break;
+            }
+        }
+
+        if execution_engine.is_aggregate() {
+            let mut output_rows = Vec::new();
+            execute_query_line(
+                py,
+                &mut execution_engine,
+                &ExecutionConfig::aggregate_result(),
+                String::new(),
+                &mut output_rows
+            )?;
+
+            if !output_rows.is_empty() {
+                callback.call1(
+                    py,
+                    (output_rows, )
+                )?;
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -50,12 +50,19 @@ def main_tail():
         tables.add_table(f.read())
 
     iterator = libsqlgrep.FollowFileIterator("output.txt")
+    count = {
+        "value": 0
+    }
+    def callback(rows):
+        print(rows)
+        count["value"] += len(rows)
+        return count["value"] < 100
 
-    # for line in iterator:
-    #     print(line)
-
-    for row in tables.execute_query(iterator, "SELECT * FROM connections WHERE hostname IS NOT NULL;"):
-        print(row)
+    tables.execute_query_callback(
+        iterator,
+        "SELECT * FROM connections WHERE hostname IS NOT NULL;",
+        callback
+    )
 
 def yield_lines(filename):
     with open(filename, "r") as f:
@@ -63,5 +70,5 @@ def yield_lines(filename):
             yield line
 
 if __name__ == "__main__":
-    main()
-    # main_tail()
+    # main()
+    main_tail()
