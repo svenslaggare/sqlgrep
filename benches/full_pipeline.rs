@@ -5,7 +5,7 @@ use std::fs::File;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables, RegexMode};
-use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate};
+use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate, AggregateStatementPart};
 use sqlgrep::executor::{FileExecutor, DisplayOptions};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 
@@ -51,14 +51,15 @@ fn filtering() {
         join: None,
         limit: None
     });
-    
+
+    let mut display_options = DisplayOptions::default();
+    display_options.print_result = false;
     let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
-        DisplayOptions::default(),
+        display_options,
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
-    executor.print_result = false;
 
     let result = executor.execute();
 
@@ -91,9 +92,9 @@ fn aggregate() {
 
     let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            ("hour".to_owned(), Aggregate::GroupKey("hour".to_owned()), None),
-            ("count".to_owned(), Aggregate::Count(None, false), None),
-            ("max_minute".to_owned(), Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), None),
+            AggregateStatementPart { name: "hour".to_string(), aggregate: Aggregate::GroupKey("hour".to_owned()), transform: None },
+            AggregateStatementPart { name: "count".to_string(), aggregate: Aggregate::Count(None, false), transform: None },
+            AggregateStatementPart { name: "max_minute".to_string(), aggregate: Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), transform: None }
         ],
         from: "connections".to_string(),
         filename: None,
@@ -107,14 +108,15 @@ fn aggregate() {
         join: None,
         limit: None
     });
-    
+
+    let mut display_options = DisplayOptions::default();
+    display_options.print_result = false;
     let mut executor = FileExecutor::new(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_large.txt").unwrap()],
-        DisplayOptions::default(),
+        display_options,
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
-    executor.print_result = false;
 
     let result = executor.execute();
 

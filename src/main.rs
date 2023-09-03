@@ -205,9 +205,9 @@ fn execute(command_line_input: &CommandLineInput,
                         if command_line_input.show_run_stats {
                             println!(
                                 "Executed query in {:.2} seconds, ingested {:.2} MB, processed {} lines.",
-                                executor.statistics.execution_time(),
-                                executor.statistics.ingested_megabytes(),
-                                executor.statistics.total_lines
+                                executor.statistics().execution_time(),
+                                executor.statistics().ingested_megabytes(),
+                                executor.statistics().total_lines
                             );
                         }
 

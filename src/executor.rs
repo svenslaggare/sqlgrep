@@ -35,47 +35,12 @@ impl ExecutionStatistics {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum OutputFormat {
-    Text,
-    Json,
-    CSV(String)
-}
-
-impl FromStr for OutputFormat {
-    type Err = String;
-
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        match text {
-            "text" => Ok(OutputFormat::Text),
-            "json" => Ok(OutputFormat::Json),
-            "csv" => Ok(OutputFormat::CSV(";".to_owned())),
-            other => Err(format!("'{}' is not a defined output format.", other))
-        }
-    }
-}
-
-pub struct DisplayOptions {
-    pub output_format: OutputFormat,
-    pub single_result: bool,
-}
-
-impl Default for DisplayOptions {
-    fn default() -> Self {
-        DisplayOptions {
-            output_format: OutputFormat::Text,
-            single_result: false
-        }
-    }
-}
-
 pub struct FileExecutor<'a> {
     running: Arc<AtomicBool>,
     readers: Vec<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
     display_options: DisplayOptions,
-    pub statistics: ExecutionStatistics,
-    pub print_result: bool,
+    statistics: ExecutionStatistics,
     output_printer: OutputPrinter
 }
 
@@ -92,11 +57,14 @@ impl<'a> FileExecutor<'a> {
                 readers: files.into_iter().map(|file| BufReader::new(file)).collect(),
                 execution_engine,
                 display_options,
-                print_result: true,
                 statistics: ExecutionStatistics::new(),
                 output_printer
             }
         )
+    }
+
+    pub fn statistics(&self) -> &ExecutionStatistics {
+        &self.statistics
     }
 
     pub fn execute(&mut self) -> ExecutionResult<()> {
@@ -115,7 +83,7 @@ impl<'a> FileExecutor<'a> {
 
                     let output = self.execution_engine.execute(line, &config)?;
                     if let Some(result_row) = output.result_row {
-                        if self.print_result {
+                        if self.display_options.print_result {
                             self.statistics.total_result_rows += result_row.data.len() as u64;
                             self.output_printer.print(&result_row, self.display_options.single_result);
                         }
@@ -136,7 +104,7 @@ impl<'a> FileExecutor<'a> {
                 &ExecutionConfig::aggregate_result()
             )?.result_row;
 
-            if self.print_result {
+            if self.display_options.print_result {
                 if let Some(result_row) = result_row {
                     self.statistics.total_result_rows += result_row.data.len() as u64;
                     self.output_printer.print(&result_row, true);
@@ -145,6 +113,42 @@ impl<'a> FileExecutor<'a> {
         }
 
         Ok(())
+    }
+}
+
+pub struct DisplayOptions {
+    pub output_format: OutputFormat,
+    pub single_result: bool,
+    pub print_result: bool
+}
+
+impl Default for DisplayOptions {
+    fn default() -> Self {
+        DisplayOptions {
+            output_format: OutputFormat::Text,
+            single_result: false,
+            print_result: true
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum OutputFormat {
+    Text,
+    Json,
+    CSV(String)
+}
+
+impl FromStr for OutputFormat {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        match text {
+            "text" => Ok(OutputFormat::Text),
+            "json" => Ok(OutputFormat::Json),
+            "csv" => Ok(OutputFormat::CSV(";".to_owned())),
+            other => Err(format!("'{}' is not a defined output format.", other))
+        }
     }
 }
 
