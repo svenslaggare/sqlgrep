@@ -284,11 +284,11 @@ fn test_aggregate_group_by_statement1() {
     let statement = statement.unwrap();
 
     assert_eq!(2, statement.aggregates.len());
-    assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
+    assert_eq!("x", statement.aggregates[0].name);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
 
-    assert_eq!("max1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
+    assert_eq!("max1", statement.aggregates[1].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
@@ -307,11 +307,11 @@ fn test_aggregate_group_by_statement2() {
     let statement = statement.unwrap();
 
     assert_eq!(2, statement.aggregates.len());
-    assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
+    assert_eq!("x", statement.aggregates[0].name);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
 
-    assert_eq!("sum1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].1);
+    assert_eq!("sum1", statement.aggregates[1].name);
+    assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
@@ -330,11 +330,11 @@ fn test_aggregate_group_by_statement3() {
     let statement = statement.unwrap();
 
     assert_eq!(2, statement.aggregates.len());
-    assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
+    assert_eq!("x", statement.aggregates[0].name);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
 
-    assert_eq!("count1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Count(None, false), statement.aggregates[1].1);
+    assert_eq!("count1", statement.aggregates[1].name);
+    assert_eq!(Aggregate::Count(None, false), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
@@ -353,8 +353,8 @@ fn test_aggregate_group_by_statement4() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("count0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Count(None, false), statement.aggregates[0].1);
+    assert_eq!("count0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Count(None, false), statement.aggregates[0].aggregate);
 }
 
 #[test]
@@ -370,11 +370,11 @@ fn test_aggregate_group_by_statement5() {
     let statement = statement.unwrap();
 
     assert_eq!(2, statement.aggregates.len());
-    assert_eq!("x", statement.aggregates[0].0);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].1);
+    assert_eq!("x", statement.aggregates[0].name);
+    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
 
-    assert_eq!("count1", statement.aggregates[1].0);
-    assert_eq!(Aggregate::Count(Some("x".to_owned()), true), statement.aggregates[1].1);
+    assert_eq!("count1", statement.aggregates[1].name);
+    assert_eq!(Aggregate::Count(Some("x".to_owned()), true), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
     assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
@@ -393,8 +393,8 @@ fn test_aggregate_statement1() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("max0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!("max0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
 }
 
 #[test]
@@ -410,8 +410,8 @@ fn test_aggregate_statement2() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("max0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!("max0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
     assert_eq!(
         Some(
             ExpressionTree::BooleanOperation {
@@ -445,8 +445,8 @@ fn test_aggregate_statement3() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("stddev0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!("stddev0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
 }
 
 #[test]
@@ -462,15 +462,15 @@ fn test_transform_aggregate_statement1() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("max0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!("max0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
     assert_eq!(
         Some(ExpressionTree::Arithmetic {
             operator: ArithmeticOperator::Multiply,
             left: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(2)))
         }),
-        statement.aggregates[0].2
+        statement.aggregates[0].transform
     );
 }
 
@@ -487,15 +487,15 @@ fn test_transform_aggregate_statement2() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("max0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!("max0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
     assert_eq!(
         Some(ExpressionTree::Arithmetic {
             operator: ArithmeticOperator::Multiply,
             left: Box::new(ExpressionTree::Value(Value::Int(2))),
             right: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
         }),
-        statement.aggregates[0].2
+        statement.aggregates[0].transform
     );
 }
 
@@ -512,14 +512,14 @@ fn test_transform_aggregate_statement3() {
     let statement = statement.unwrap();
 
     assert_eq!(1, statement.aggregates.len());
-    assert_eq!("max0", statement.aggregates[0].0);
-    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].1);
+    assert_eq!("max0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
     assert_eq!(
         Some(ExpressionTree::Function {
             function: Function::Sqrt,
             arguments: vec![ExpressionTree::ColumnAccess("$agg".to_owned())]
         }),
-        statement.aggregates[0].2
+        statement.aggregates[0].transform
     );
 }
 

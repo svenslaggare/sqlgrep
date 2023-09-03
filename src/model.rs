@@ -27,8 +27,15 @@ impl SelectStatement {
 }
 
 #[derive(Debug, Hash)]
+pub struct AggregateStatementPart {
+    pub name: String,
+    pub aggregate: Aggregate,
+    pub transform: Option<ExpressionTree>
+}
+
+#[derive(Debug, Hash)]
 pub struct AggregateStatement {
-    pub aggregates: Vec<(String, Aggregate, Option<ExpressionTree>)>,
+    pub aggregates: Vec<AggregateStatementPart>,
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
@@ -167,6 +174,14 @@ impl Value {
             Value::Array(element, _) => Some(ValueType::Array(Box::new(element.clone()))),
             Value::Timestamp(_) => Some(ValueType::Timestamp),
             Value::Interval(_) => Some(ValueType::Interval)
+        }
+    }
+
+    pub fn default_value(&self) -> Value {
+        if let Some(value_type) = self.value_type() {
+            value_type.default_value()
+        } else {
+            Value::Null
         }
     }
 
@@ -603,8 +618,8 @@ pub enum Aggregate {
     Count(Option<String>, bool),
     Min(ExpressionTree),
     Max(ExpressionTree),
-    Average(ExpressionTree),
     Sum(ExpressionTree),
+    Average(ExpressionTree),
     StandardDeviation(ExpressionTree),
     CollectArray(ExpressionTree)
 }

@@ -116,3 +116,32 @@ impl Iterator for FollowFileIterator {
         }
     }
 }
+
+pub fn tuple_result<T1, T2, E>(x: Result<T1, E>, y: Result<T2, E>) -> Result<(T1, T2), E> {
+    Ok((x?, y?))
+}
+
+pub trait IterExt<T> {
+    fn map_result_vec<F: FnMut(&T) -> Result<O, E>, O, E>(&self, f: F) -> Result<Vec<O>, E>;
+    fn consume_result_vec<F: FnMut(T) -> Result<O, E>, O, E>(self, f: F) -> Result<Vec<O>, E>;
+}
+
+impl<T> IterExt<T> for Vec<T> {
+    fn map_result_vec<F: FnMut(&T) -> Result<O, E>, O, E>(&self, mut f: F) -> Result<Vec<O>, E> {
+        let mut results = Vec::new();
+        for element in self {
+            results.push(f(element)?);
+        }
+
+        Ok(results)
+    }
+
+    fn consume_result_vec<F: FnMut(T) -> Result<O, E>, O, E>(self, mut f: F) -> Result<Vec<O>, E> {
+        let mut results = Vec::new();
+        for element in self {
+            results.push(f(element)?);
+        }
+
+        Ok(results)
+    }
+}

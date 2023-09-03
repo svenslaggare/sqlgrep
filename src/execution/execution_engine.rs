@@ -108,6 +108,12 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
+    pub fn with_executed_joined_table(tables: &'a Tables, statement: &'a Statement) -> ExecutionResult<ExecutionEngine<'a>> {
+        let mut engine = ExecutionEngine::new(tables, statement);
+        engine.execute_joined_table(Arc::new(AtomicBool::new(true)))?;
+        Ok(engine)
+    }
+
     pub fn is_aggregate(&self) -> bool {
         self.statement.is_aggregate()
     }

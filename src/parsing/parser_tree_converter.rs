@@ -6,7 +6,8 @@ use std::iter::FromIterator;
 use lazy_static::lazy_static;
 
 use crate::data_model::{ColumnDefinition, RegexMode, TableDefinition};
-use crate::model::{Aggregate, AggregateStatement, ArithmeticOperator, CompareOperator, ExpressionTree, JoinClause, SelectStatement, UnaryArithmeticOperator};
+use crate::helpers::{IterExt, tuple_result};
+use crate::model::{Aggregate, AggregateStatement, AggregateStatementPart, ArithmeticOperator, CompareOperator, ExpressionTree, JoinClause, SelectStatement, UnaryArithmeticOperator};
 use crate::parsing::parser::{ParserOperationTree, ParserExpressionTreeData, ParserColumnDefinition, ParserJoinClause, ParserExpressionTree};
 use crate::parsing::operator::Operator;
 use crate::parsing::tokenizer::TokenLocation;
@@ -90,12 +91,7 @@ pub fn transform_statement(tree: ParserOperationTree) -> Result<Statement, Conve
         }
         ParserOperationTree::CreateTable { location, name, patterns, columns, .. } => create_create_table_statement(location, name, patterns, columns),
         ParserOperationTree::Multiple(statements) => {
-            let mut transformed_statements = Vec::new();
-            for statement in statements {
-                transformed_statements.push(transform_statement(statement)?);
-            }
-
-            Ok(Statement::Multiple(transformed_statements))
+            Ok(Statement::Multiple(statements.consume_result_vec(|statement| transform_statement(statement))?))
         }
     }
 }
@@ -152,7 +148,13 @@ fn create_aggregate_statement(location: TokenLocation,
         let (default_name, aggregate, transform) = transform_aggregate(tree, projection_index)?;
         let name = name.or(default_name).unwrap_or(format!("p{}", projection_index));
 
-        transformed_aggregates.push((name, aggregate, transform));
+        transformed_aggregates.push(
+            AggregateStatementPart {
+                name,
+                aggregate,
+                transform,
+            }
+        );
     }
 
     let transformed_filter = if let Some(filter) = filter {
@@ -416,11 +418,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
                 }
             }
 
-            let mut transformed_arguments = Vec::new();
-            for argument in arguments {
-                transformed_arguments.push(transform_expression(argument, state)?);
-            }
-
+            let transformed_arguments = arguments.consume_result_vec(|argument| transform_expression(argument, state))?;
             FUNCTIONS.get(&name.to_lowercase())
                 .map(|function| {
                     ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
@@ -437,14 +435,10 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
             Ok(ExpressionTree::TypeConversion { operand, convert_to_type })
         }
         ParserExpressionTreeData::Case { clauses, else_clause } => {
-            let mut transformed_clauses = Vec::new();
-            for clause in clauses {
-                transformed_clauses.push((
-                    transform_expression(clause.0, state)?,
-                    transform_expression(clause.1, state)?
-                ));
-            }
-
+            let transformed_clauses = clauses.consume_result_vec(|clause| tuple_result(
+                transform_expression(clause.0, state),
+                transform_expression(clause.1, state)
+            ))?;
             let else_clause = Box::new(transform_expression(*else_clause, state)?);
             Ok(ExpressionTree::Case { clauses: transformed_clauses, else_clause })
         }
