@@ -308,7 +308,9 @@ impl AggregateExecutionEngine {
     fn validate_group_key(aggregate_statement: &AggregateStatement,
                           group_column: &String) -> ExecutionResult<()> {
         match aggregate_statement.group_by.as_ref() {
-            None => { return Err(ExecutionError::GroupKeyNotAvailable(None)); }
+            None => {
+                return Err(ExecutionError::GroupKeyNotAvailable(None));
+            }
             Some(group_by) => {
                 if !group_by.iter().any(|column| column == group_column) {
                     return Err(ExecutionError::GroupKeyNotAvailable(Some(group_column.clone())));

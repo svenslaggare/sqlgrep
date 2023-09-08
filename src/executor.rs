@@ -27,7 +27,7 @@ impl ExecutionStatistics {
     }
 
     pub fn execution_time(&self) -> f64 {
-        (std::time::Instant::now() - self.execution_start).as_micros() as f64 / 1.0E6
+        (std::time::Instant::now() - self.execution_start).as_secs_f64()
     }
 
     pub fn ingested_megabytes(&self) -> f64 {
