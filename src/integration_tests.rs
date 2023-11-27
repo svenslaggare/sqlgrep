@@ -206,6 +206,23 @@ fn test_ftpd9() {
 }
 
 #[test]
+fn test_ftpd10() {
+    let tables = create_tables("testdata/ftpd_timestamp.txt");
+
+    let query = parsing::parse("SELECT EXTRACT(hour FROM timestamp), COUNT(*) FROM connections WHERE hostname IS NOT NULL GROUP BY EXTRACT(hour FROM timestamp)").unwrap();
+
+    let mut executor = FileExecutor::new(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        Default::default(),
+        ExecutionEngine::new(&tables, &query)
+    ).unwrap();
+
+    executor.execute().unwrap();
+    assert_eq!(10, executor.statistics().total_result_rows);
+}
+
+#[test]
 fn test_ftpd_csv1() {
     let tables = create_tables("testdata/ftpd_csv.txt");
 

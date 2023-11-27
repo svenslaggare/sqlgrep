@@ -139,7 +139,7 @@ fn create_aggregate_statement(location: TokenLocation,
                               projections: Vec<(Option<String>, ParserExpressionTree)>,
                               from: (String, Option<String>),
                               filter: Option<ParserExpressionTree>,
-                              group_by: Option<Vec<String>>,
+                              group_by: Option<Vec<ParserExpressionTree>>,
                               having: Option<ParserExpressionTree>,
                               join: Option<ParserJoinClause>,
                               limit: Option<usize>) -> Result<Statement, ConvertParserTreeError> {
@@ -172,6 +172,12 @@ fn create_aggregate_statement(location: TokenLocation,
     };
 
     let transformed_join = transform_join(location, &from, join)?;
+
+    let group_by = if let Some(group_by) = group_by {
+        Some(group_by.consume_result_vec(|part| transform_expression(part, &mut TransformExpressionState::default()))?)
+    } else {
+        None
+    };
 
     let aggregate_statement = AggregateStatement {
         aggregates: transformed_aggregates,
@@ -353,7 +359,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
             if state.allow_aggregates {
                 let aggregate_index = state.next_aggregate_index;
                 state.next_aggregate_index += 1;
-                Ok(ExpressionTree::Aggregate(aggregate_index, Box::new(Aggregate::GroupKey(name))))
+                Ok(ExpressionTree::Aggregate(aggregate_index, Box::new(Aggregate::GroupKey(ExpressionTree::ColumnAccess(name)))))
             } else {
                 Ok(ExpressionTree::ColumnAccess(name))
             }
@@ -450,25 +456,33 @@ fn transform_aggregate(mut tree: ParserExpressionTree, aggregate_index: usize) -
         return Err(ConvertParserTreeErrorType::TooManyAggregates.with_location(tree.location));
     }
 
-    let (aggregate, not_transformed) = extract_aggregate(&mut tree);
-    match aggregate {
-        Some(ParserExpressionTreeData::ColumnAccess(name)) => {
-            Ok((Some(name.clone()), Aggregate::GroupKey(name), None))
-        }
-        Some(ParserExpressionTreeData::Call { name, arguments, distinct }) => {
-            let mut result = transform_call_aggregate(tree.location.clone(), &name, arguments, distinct, aggregate_index)?;
-            if !not_transformed {
-                result.2 = Some(
-                    transform_expression(
-                        tree,
-                        &mut TransformExpressionState::default()
-                    )?
-                );
-            }
+    if any_aggregates_in_expression(&tree) {
+        let (aggregate, not_transformed) = extract_aggregate(&mut tree);
+        match aggregate {
+            Some(ParserExpressionTreeData::Call { name, arguments, distinct }) => {
+                let mut result = transform_call_aggregate(tree.location.clone(), &name, arguments, distinct, aggregate_index)?;
+                if !not_transformed {
+                    result.2 = Some(
+                        transform_expression(
+                            tree,
+                            &mut TransformExpressionState::default()
+                        )?
+                    );
+                }
 
-            Ok(result)
+                Ok(result)
+            }
+            _ => { Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(tree.location)) }
         }
-        _ => { Err(ConvertParserTreeErrorType::UndefinedAggregate.with_location(tree.location)) }
+    } else {
+        let tree = transform_expression(tree, &mut TransformExpressionState::default())?;
+        let default_name = if let ExpressionTree::ColumnAccess(name) = &tree {
+            Some(name.clone())
+        } else {
+            None
+        };
+
+        Ok((default_name, Aggregate::GroupKey(tree), None))
     }
 }
 

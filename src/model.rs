@@ -39,7 +39,7 @@ pub struct AggregateStatement {
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
-    pub group_by: Option<Vec<String>>,
+    pub group_by: Option<Vec<ExpressionTree>>,
     pub having: Option<ExpressionTree>,
     pub join: Option<JoinClause>,
     pub limit: Option<usize>
@@ -623,7 +623,7 @@ impl std::fmt::Display for Function {
 
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum Aggregate {
-    GroupKey(String),
+    GroupKey(ExpressionTree),
     Count(Option<String>, bool),
     Min(ExpressionTree),
     Max(ExpressionTree),

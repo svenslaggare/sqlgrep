@@ -8,10 +8,12 @@ pub mod execution_engine;
 pub mod aggregate_execution_tests;
 
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use fnv::FnvHasher;
 
 use crate::data_model::{Row, TableDefinition};
 use crate::execution::expression_execution::EvaluationError;
-use crate::model::Value;
+use crate::model::{ExpressionTree, Value};
 
 pub trait ColumnProvider {
     fn get(&self, name: &str) -> Option<&Value>;
@@ -164,7 +166,7 @@ impl std::fmt::Display for ExecutionError {
                         write!(f, "Column names can only be used with group by clause")
                     }
                     Some(name) => {
-                        write!(f, "The column '{}' is not used in group by", name)
+                        write!(f, "The expression '{}' is not used in group by clause", name)
                     }
                 }
             }
@@ -184,4 +186,22 @@ pub type ExecutionResult<T> = Result<T, ExecutionError>;
 pub struct ResultRow {
     pub data: Vec<Row>,
     pub columns: Vec<String>
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ExpressionTreeHash(u64);
+
+impl ExpressionTreeHash {
+    pub fn new(expression_tree: &ExpressionTree) -> ExpressionTreeHash {
+        let mut hasher = FnvHasher::default();
+        expression_tree.hash(&mut hasher);
+        let hash = hasher.finish();
+        ExpressionTreeHash(hash)
+    }
+}
+
+impl std::fmt::Display for ExpressionTreeHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }

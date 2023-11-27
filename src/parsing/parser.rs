@@ -149,7 +149,7 @@ pub enum ParserOperationTree {
         projections: Vec<(Option<String>, ParserExpressionTree)>,
         from: (String, Option<String>),
         filter: Option<ParserExpressionTree>,
-        group_by: Option<Vec<String>>,
+        group_by: Option<Vec<ParserExpressionTree>>,
         having: Option<ParserExpressionTree>,
         join: Option<ParserJoinClause>,
         limit: Option<usize>
@@ -304,10 +304,10 @@ impl<'a> Parser<'a> {
                         }
 
                         let mut group_by_keys = Vec::new();
-                        group_by_keys.push(self.consume_identifier()?);
+                        group_by_keys.push(self.parse_expression_internal()?);
                         while let Token::Comma = self.current() {
                             self.next()?;
-                            group_by_keys.push(self.consume_identifier()?);
+                            group_by_keys.push(self.parse_expression_internal()?);
                         }
 
                         group_by = Some(group_by_keys);
@@ -1106,6 +1106,7 @@ impl std::fmt::Display for ParserOperationTree {
                 }
 
                 if let Some(group_by) = group_by {
+                    let group_by = group_by.iter().map(|part| part.tree.to_string()).collect::<Vec<_>>();
                     write!(f, " GROUP BY {}", group_by.join(", "))?;
                 }
 

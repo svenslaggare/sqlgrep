@@ -1,5 +1,7 @@
 use crate::data_model::{ColumnParsing, RegexResultReference};
+
 use crate::model::{Aggregate, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Function, JoinClause, UnaryArithmeticOperator, Value, ValueType};
+
 use crate::parsing::parser::{parse_str};
 use crate::parsing::parser_tree_converter::{ConvertParserTreeErrorType, transform_statement};
 use crate::parsing::tokenizer::TokenLocation;
@@ -285,13 +287,13 @@ fn test_aggregate_group_by_statement1() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].name);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
+    assert_eq!(Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
 
     assert_eq!("max1", statement.aggregates[1].name);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
+    assert_eq!(Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]), statement.group_by);
 }
 
 #[test]
@@ -308,13 +310,13 @@ fn test_aggregate_group_by_statement2() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].name);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
+    assert_eq!(Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
 
     assert_eq!("sum1", statement.aggregates[1].name);
     assert_eq!(Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
+    assert_eq!(Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]), statement.group_by);
 }
 
 #[test]
@@ -331,13 +333,13 @@ fn test_aggregate_group_by_statement3() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].name);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
+    assert_eq!(Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
 
     assert_eq!("count1", statement.aggregates[1].name);
     assert_eq!(Aggregate::Count(None, false), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
+    assert_eq!(Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]), statement.group_by);
 }
 
 #[test]
@@ -371,13 +373,56 @@ fn test_aggregate_group_by_statement5() {
 
     assert_eq!(2, statement.aggregates.len());
     assert_eq!("x", statement.aggregates[0].name);
-    assert_eq!(Aggregate::GroupKey("x".to_owned()), statement.aggregates[0].aggregate);
+    assert_eq!(Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
 
     assert_eq!("count1", statement.aggregates[1].name);
     assert_eq!(Aggregate::Count(Some("x".to_owned()), true), statement.aggregates[1].aggregate);
 
     assert_eq!("test", statement.from);
-    assert_eq!(Some(vec!["x".to_owned()]), statement.group_by);
+    assert_eq!(Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]), statement.group_by);
+}
+
+#[test]
+fn test_aggregate_group_by_statement6() {
+    let tree = parse_str("SELECT (x * 2) AS x, MAX(x) FROM test GROUP BY x * 2").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(2, statement.aggregates.len());
+    assert_eq!("x", statement.aggregates[0].name);
+    assert_eq!(
+        Aggregate::GroupKey(
+            ExpressionTree::Arithmetic {
+                operator: ArithmeticOperator::Multiply,
+                left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::Int(2))),
+            }
+        ),
+        statement.aggregates[0].aggregate
+    );
+
+    assert_eq!("max1", statement.aggregates[1].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[1].aggregate);
+
+    assert_eq!("test", statement.from);
+    assert_eq!(
+        Some(
+            vec![
+                ExpressionTree::Arithmetic {
+                    operator: ArithmeticOperator::Multiply,
+                    left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
+                    right: Box::new(ExpressionTree::Value(Value::Int(2))),
+                }
+            ]
+        ),
+        statement.group_by
+    );
 }
 
 #[test]
@@ -418,7 +463,7 @@ fn test_aggregate_statement2() {
                 operator: BooleanOperator::And,
                 left: Box::new(ExpressionTree::Compare {
                     operator: CompareOperator::Equal,
-                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey("x".to_owned())))),
+                    left: Box::new(ExpressionTree::Aggregate(0, Box::new(Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned()))))),
                     right: Box::new(ExpressionTree::Value(Value::Int(1337))),
                 }),
                 right: Box::new(ExpressionTree::Compare {

@@ -12,7 +12,7 @@ use chrono::{Local, Datelike, Timelike, DurationRound, Duration};
 use itertools::Itertools;
 
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator};
-use crate::execution::{ColumnProvider};
+use crate::execution::{ColumnProvider, ExpressionTreeHash};
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
@@ -594,7 +594,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 match aggregate.as_ref() {
                     Aggregate::GroupKey(column) => {
                         self.column_access
-                            .get(&format!("$group_key_{}", column))
+                            .get(&format!("$group_key_{}", ExpressionTreeHash::new(column)))
                             .map(|value| value.clone())
                             .ok_or(EvaluationError::GroupKeyNotFound)
                     }

@@ -5,7 +5,7 @@ use std::ops::Add;
 use fnv::FnvHasher;
 
 use crate::data_model::Row;
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
+use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, ExpressionTreeHash, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine};
 use crate::helpers::IterExt;
 use crate::model::{Aggregate, AggregateStatement, ExpressionTree, Float, IntervalType, Value, ValueType};
@@ -62,9 +62,13 @@ impl AggregateExecutionEngine {
                                                           row: &TColumnProvider,
                                                           expression_execution_engine: &ExpressionExecutionEngine<TColumnProvider>) -> ExecutionResult<()> {
         let group_key = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
+            // GroupKey(
+            //     group_by
+            //         .map_result_vec(|column| row.get(column).cloned().ok_or_else(|| ExecutionError::ColumnNotFound(column.clone())))?
+            // )
             GroupKey(
                 group_by
-                    .map_result_vec(|column| row.get(column).cloned().ok_or_else(|| ExecutionError::ColumnNotFound(column.clone())))?
+                    .map_result_vec(|part| expression_execution_engine.evaluate(part))?
             )
         } else {
             GroupKey(vec![Value::Null])
@@ -222,8 +226,8 @@ impl AggregateExecutionEngine {
     pub fn execute_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         let mut group_key_mapping = HashMap::new();
         if let Some(group_key) = aggregate_statement.group_by.as_ref() {
-            for (index, column) in group_key.iter().enumerate() {
-                group_key_mapping.insert(column, index);
+            for (index, part) in group_key.iter().enumerate() {
+                group_key_mapping.insert(ExpressionTreeHash::new(part), index);
             }
         }
 
@@ -271,7 +275,7 @@ impl AggregateExecutionEngine {
 
     fn extract_result_rows_by_column(&self,
                                      aggregate_statement: &AggregateStatement,
-                                     group_key_mapping: &HashMap<&String, usize>) -> ExecutionResult<(Vec<String>, Vec<Vec<Value>>)> {
+                                     group_key_mapping: &HashMap<ExpressionTreeHash, usize>) -> ExecutionResult<(Vec<String>, Vec<Vec<Value>>)> {
         let mut column_names = Vec::new();
         let mut result_rows_by_column = Vec::new();
         for (aggregate_index, aggregate) in aggregate_statement.aggregates.iter().enumerate() {
@@ -289,8 +293,9 @@ impl AggregateExecutionEngine {
 
             match aggregate.aggregate {
                 Aggregate::GroupKey(ref column) => {
+                    let hash = ExpressionTreeHash::new(column);
                     for group_key in self.group_values.keys() {
-                        result_column.push(group_key.0[group_key_mapping[&column]].clone());
+                        result_column.push(group_key.0[group_key_mapping[&hash]].clone());
                     }
                 }
                 _ => {
@@ -309,14 +314,15 @@ impl AggregateExecutionEngine {
     }
 
     fn validate_group_key(aggregate_statement: &AggregateStatement,
-                          group_column: &String) -> ExecutionResult<()> {
+                          group_part: &ExpressionTree) -> ExecutionResult<()> {
         match aggregate_statement.group_by.as_ref() {
             None => {
                 return Err(ExecutionError::GroupKeyNotAvailable(None));
             }
             Some(group_by) => {
-                if !group_by.iter().any(|column| column == group_column) {
-                    return Err(ExecutionError::GroupKeyNotAvailable(Some(group_column.clone())));
+                if !group_by.iter().any(|part| part == group_part) {
+                    //TODO: fix
+                    return Err(ExecutionError::GroupKeyNotAvailable(Some(format!("{:?}", group_part))));
                 }
             }
         }
@@ -502,7 +508,7 @@ fn extract_having_aggregates<'a>(aggregate_statement: &'a AggregateStatement) ->
     Ok(having_aggregates)
 }
 
-fn accept_group<'a>(group_key_mapping: &HashMap<&String, usize>,
+fn accept_group<'a>(group_key_mapping: &HashMap<ExpressionTreeHash, usize>,
                     having_aggregates: &Vec<(usize, &'a Aggregate)>,
                     group_key_value: &GroupKey,
                     group_value: &HashMap<usize, Value>,
