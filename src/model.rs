@@ -233,11 +233,13 @@ impl Value {
 
     pub fn map_numeric<
         F1: Fn(i64) -> Option<i64>,
-        F2: Fn(f64) -> Option<f64>
-    >(&self, int_f: F1, float_f: F2) -> Option<Value> {
+        F2: Fn(f64) -> Option<f64>,
+        F3: Fn(IntervalType) -> Option<IntervalType>
+    >(&self, int_f: F1, float_f: F2, interval_f: F3) -> Option<Value> {
         match self {
             Value::Int(x) => int_f(*x).map(|x| Value::Int(x)),
             Value::Float(x) => float_f(x.0).map(|x| Value::Float(Float(x))),
+            Value::Interval(x) => interval_f(*x).map(|x| Value::Interval(x)),
             _ => None
         }
     }
@@ -269,8 +271,9 @@ impl Value {
         F3: Fn(&mut bool, bool),
         F4: Fn(&mut String, &str),
         F5: Fn(&mut Vec<Value>, &Vec<Value>),
-        F6: Fn(&mut TimestampType, TimestampType)
-    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5, timestamp_f: F6) {
+        F6: Fn(&mut TimestampType, TimestampType),
+        F7: Fn(&mut IntervalType, IntervalType)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2, bool_f: F3, string_f: F4, array_f: F5, timestamp_f: F6, interval_f: F7) {
         match (self, value) {
             (Value::Int(x), Value::Int(y)) => int_f(x, *y),
             (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
@@ -278,30 +281,36 @@ impl Value {
             (Value::String(x), Value::String(y)) => string_f(x, y),
             (Value::Array(_, x), Value::Array(_, y)) => array_f(x, y),
             (Value::Timestamp(x), Value::Timestamp(y)) => timestamp_f(x, *y),
+            (Value::Interval(x), Value::Interval(y)) => interval_f(x, *y),
             _ => {}
         }
     }
 
     pub fn modify_same_type_numeric<
         F1: Fn(&mut i64, i64),
-        F2: Fn(&mut f64, f64)
-    >(&mut self, value: &Value, int_f: F1, float_f: F2) {
+        F2: Fn(&mut f64, f64),
+        F3: Fn(&mut IntervalType, IntervalType)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2, interval_f: F3) {
         match (self, value) {
             (Value::Int(x), Value::Int(y)) => int_f(x, *y),
             (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
+            (Value::Interval(x), Value::Interval(y)) => interval_f(x, *y),
             _ => {}
         }
     }
 
     pub fn modify_same_type_numeric_nullable<
         F1: Fn(&mut i64, i64),
-        F2: Fn(&mut f64, f64)
-    >(&mut self, value: &Value, int_f: F1, float_f: F2) {
+        F2: Fn(&mut f64, f64),
+        F3: Fn(&mut IntervalType, IntervalType)
+    >(&mut self, value: &Value, int_f: F1, float_f: F2, interval_f: F3) {
         match (self, value) {
             (Value::Int(x), Value::Int(y)) => int_f(x, *y),
             (Value::Float(x), Value::Float(y)) => float_f(&mut x.0, y.0),
+            (Value::Interval(x), Value::Interval(y)) => interval_f(x, *y),
             (x @ Value::Null, Value::Int(y)) => { *x = Value::Int(*y) },
             (x @ Value::Null, Value::Float(y)) => { *x = Value::Float(*y) },
+            (x @ Value::Null, Value::Interval(y)) => { *x = Value::Interval(*y) },
             _ => {}
         }
     }
@@ -334,7 +343,7 @@ impl std::fmt::Display for Value {
                 let seconds = x.num_seconds() % 60;
                 let minutes = (x.num_seconds() / 60) % 60;
                 let hours = (x.num_seconds() / 60) / 60;
-                write!(f, "{}:{}:{}", hours, minutes, seconds)
+                write!(f, "{:0>2}:{:0>2}:{:0>2}.{:0>3}", hours, minutes, seconds, x.num_milliseconds() - x.num_seconds() * 1000)
             }
         }
     }

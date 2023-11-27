@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::ops::Add;
 
 use fnv::FnvHasher;
 
@@ -7,7 +8,7 @@ use crate::data_model::Row;
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine};
 use crate::helpers::IterExt;
-use crate::model::{Aggregate, AggregateStatement, ExpressionTree, Float, Value, ValueType};
+use crate::model::{Aggregate, AggregateStatement, ExpressionTree, Float, IntervalType, Value, ValueType};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct GroupKey(Vec<Value>);
@@ -163,12 +164,14 @@ impl AggregateExecutionEngine {
                             group_value.modify_same_type_numeric_nullable(
                                 &column_value,
                                 |x, y| { *x = (*x).min(y) },
+                                |x, y| { *x = (*x).min(y) },
                                 |x, y| { *x = (*x).min(y) }
                             );
                         }
                         Aggregate::Max(_) => {
                             group_value.modify_same_type_numeric_nullable(
                                 &column_value,
+                                |x, y| { *x = (*x).max(y) },
                                 |x, y| { *x = (*x).max(y) },
                                 |x, y| { *x = (*x).max(y) }
                             );
@@ -393,7 +396,8 @@ impl GroupAggregator {
                 sum.modify_same_type_numeric_nullable(
                     &column_value,
                     |x, y| { *x += y },
-                    |x, y| { *x += y }
+                    |x, y| { *x += y },
+                    |x, y| { *x = x.add(y) }
                 );
 
                 let sum = sum.clone();
@@ -403,13 +407,15 @@ impl GroupAggregator {
                 sum.modify_same_type_numeric_nullable(
                     &column_value,
                     |x, y| { *x += y },
-                    |x, y| { *x += y }
+                    |x, y| { *x += y },
+                    |x, y| { *x = x.add(y) }
                 );
                 *count += 1;
 
                 let average = sum.map_numeric(
                     |x| Some(x / *count),
-                    |x| Some(x / *count as f64)
+                    |x| Some(x / *count as f64),
+                    |x| Some(x / *count as i32)
                 );
 
                 Ok(average)
@@ -417,19 +423,28 @@ impl GroupAggregator {
             GroupAggregator::StandardDeviation { sum, sum_square, count } => {
                 let squared_column_value = column_value.map_numeric(
                     |x| Some(x * x),
-                    |x| Some(x * x)
+                    |x| Some(x * x),
+                    |x| {
+                        if let Some(microseconds) = x.num_microseconds() {
+                            Some(IntervalType::microseconds(microseconds * microseconds))
+                        } else {
+                            Some(IntervalType::milliseconds(x.num_milliseconds() * x.num_milliseconds()))
+                        }
+                    }
                 ).unwrap_or(Value::Null);
 
                 sum.modify_same_type_numeric_nullable(
                     &column_value,
                     |x, y| { *x += y },
-                    |x, y| { *x += y }
+                    |x, y| { *x += y },
+                    |x, y| { *x = x.add(y) }
                 );
 
                 sum_square.modify_same_type_numeric_nullable(
                     &squared_column_value,
                     |x, y| { *x += y },
-                    |x, y| { *x += y }
+                    |x, y| { *x += y },
+                    |x, y| { *x = x.add(y) }
                 );
 
                 *count += 1;

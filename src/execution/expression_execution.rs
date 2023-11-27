@@ -566,6 +566,12 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     Value::String(value) => {
                         convert_to_type.parse(&value).ok_or(EvaluationError::FailedToConvert)
                     }
+                    Value::Interval(interval) if convert_to_type == &ValueType::Int => {
+                        Ok(Value::Int(interval.num_seconds()))
+                    }
+                    Value::Interval(interval) if convert_to_type == &ValueType::Float => {
+                        Ok(Value::Float(Float(interval.num_milliseconds() as f64 / 1000.0)))
+                    }
                     _ => {
                         return if let Some(operand_type) = operand.value_type() {
                             Err(EvaluationError::TypeError(ValueType::String, operand_type))

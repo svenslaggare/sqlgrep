@@ -535,6 +535,30 @@ fn test_transform_aggregate_statement4() {
 }
 
 #[test]
+fn test_transform_aggregate_statement5() {
+    let tree = parse_str("SELECT MAX(x)::real FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("max0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
+    assert_eq!(
+        Some(ExpressionTree::TypeConversion {
+            operand: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+            convert_to_type: ValueType::Float,
+        }),
+        statement.aggregates[0].transform
+    );
+}
+
+#[test]
 fn test_create_table_statement1() {
     let tree = parse_str("CREATE TABLE test(line = 'A: ([0-9]+)', line[1] => x INT);").unwrap();
 

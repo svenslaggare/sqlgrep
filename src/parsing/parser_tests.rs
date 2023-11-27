@@ -199,6 +199,12 @@ fn test_parse_type_convert1() {
 }
 
 #[test]
+fn test_parse_type_convert2() {
+    let tree = parse_expression_str("avg(x)::timestamp").unwrap();
+    assert_eq!("avg(x)::timestamp", tree.tree.to_string());
+}
+
+#[test]
 fn test_parse_case_expression1() {
     let tree = parse_expression_str("CASE WHEN x > 0 THEN 1 ELSE 0 END").unwrap();
     assert_eq!("(CASE WHEN (x > 0) THEN 1 ELSE 0 END)", tree.tree.to_string());

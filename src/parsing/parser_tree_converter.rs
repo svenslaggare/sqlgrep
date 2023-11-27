@@ -591,6 +591,15 @@ fn extract_aggregate(tree: &mut ParserExpressionTree) -> (Option<ParserExpressio
 
             (aggregate, false)
         }
+        ParserExpressionTreeData::TypeConversion { operand, .. } => {
+            let (aggregate, found) = extract_aggregate(operand.as_mut());
+
+            if found {
+                std::mem::swap(&mut Box::new(create_agg_access()), operand);
+            }
+
+            (aggregate, false)
+        }
         _ => {
             (None, false)
         }
