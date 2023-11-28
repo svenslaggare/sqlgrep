@@ -1,17 +1,21 @@
-pub mod tokenizer;
-pub mod operator;
-pub mod parser;
-pub mod parser_tree_converter;
+mod parser;
+
+mod operator;
+mod tokenizer;
+mod parser_tree_converter;
 
 #[cfg(test)]
-pub mod parser_tests;
+mod parser_tests;
 
 #[cfg(test)]
-pub mod parser_tree_converter_tests;
+mod parser_tree_converter_tests;
+
+pub use crate::parsing::tokenizer::TokenLocation;
+pub use crate::parsing::parser::{ParserOperationTree, ParserResult};
 
 use crate::model::Statement;
 use crate::parsing::parser_tree_converter::{ConvertParserTreeError};
-use crate::parsing::tokenizer::{ParserError, TokenLocation};
+use crate::parsing::tokenizer::{ParserError};
 
 #[derive(Debug)]
 pub enum CommonParserError {
@@ -38,9 +42,13 @@ impl std::fmt::Display for CommonParserError {
 }
 
 pub fn parse(text: &str) -> Result<Statement, CommonParserError> {
-    let parse_tree = parser::parse_str(&text).map_err(|err| CommonParserError::ParserError(err))?;
+    let parse_tree = parser::parse_str(text).map_err(|err| CommonParserError::ParserError(err))?;
     let statement = parser_tree_converter::transform_statement(parse_tree).map_err(|err| CommonParserError::ConvertParserTreeError(err))?;
     Ok(statement)
+}
+
+pub fn parse_into_tree(text: &str) -> ParserResult<ParserOperationTree> {
+    parser::parse_str(text)
 }
 
 pub fn completion_words() -> Vec<String> {

@@ -5,7 +5,8 @@ use std::ops::Add;
 use fnv::FnvHasher;
 
 use crate::data_model::Row;
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, ExpressionTreeHash, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
+use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, ExpressionTreeHash, ResultRow};
+use crate::execution::column_providers::{HashMapOwnedKeyColumnProvider, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine};
 use crate::execution::helpers::DistinctValues;
 use crate::helpers::IterExt;

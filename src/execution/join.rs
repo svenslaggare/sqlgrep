@@ -6,7 +6,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use crate::data_model::{Row, TableDefinition};
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, ResultRow};
+use crate::execution::column_providers::HashMapColumnProvider;
 use crate::execution::execution_engine::{ExecutionEngine, ExecutionConfig, ExecutionOutput};
 use crate::model::{JoinClause, Value, SelectStatement, ExpressionTree, Statement};
 use crate::Tables;
@@ -155,7 +156,7 @@ fn create_joined_column_mapping<'a>(table_definition: &'a TableDefinition,
     }
 
     let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
-    let keys = HashSet::<String>::from_iter(column_provider.keys.iter().cloned());
+    let keys = HashSet::<String>::from_iter(column_provider.keys().iter().cloned());
     for (column_index, column_name) in joined_table_data.column_names.iter().enumerate() {
         if keys.contains(column_name) {
             column_provider.add_key(&joined_table_data.fully_qualified_column_names[column_index]);

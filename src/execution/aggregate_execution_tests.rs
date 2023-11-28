@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
-use crate::execution::HashMapColumnProvider;
+use crate::execution::column_providers::HashMapColumnProvider;
 use crate::model::{Aggregate, AggregateStatement, AggregateStatementPart, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Float, Function, Value, ValueType};
 
 fn create_test_columns<'a>(names: Vec<&'a str>, values: &'a Vec<Value>) -> HashMap<&'a str, &'a Value> {

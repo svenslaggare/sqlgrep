@@ -64,7 +64,7 @@ impl SelectExecutionEngine  {
 #[test]
 fn test_project1() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();
@@ -97,7 +97,7 @@ fn test_project1() {
 #[test]
 fn test_project2() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{ArithmeticOperator, ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();
@@ -139,7 +139,7 @@ fn test_project2() {
 #[test]
 fn test_project3() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{ArithmeticOperator, ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();
@@ -186,7 +186,7 @@ fn test_project3() {
 #[test]
 fn test_project4() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{ExpressionTree, SelectStatement, Value, ValueType};
     use crate::data_model::{TableDefinition, Tables, ColumnDefinition};
 
@@ -236,7 +236,7 @@ fn test_project4() {
 #[test]
 fn test_filter1() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{CompareOperator, ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();
@@ -273,7 +273,7 @@ fn test_filter1() {
 #[test]
 fn test_filter2() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{CompareOperator, ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();
@@ -313,7 +313,7 @@ fn test_filter2() {
 #[test]
 fn test_distinct1() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();
@@ -389,7 +389,7 @@ fn test_distinct1() {
 #[test]
 fn test_distinct2() {
     use std::collections::HashMap;
-    use crate::execution::HashMapColumnProvider;
+    use crate::execution::column_providers::HashMapColumnProvider;
     use crate::model::{ExpressionTree, SelectStatement, Value};
 
     let mut select_execution_engine = SelectExecutionEngine::new();

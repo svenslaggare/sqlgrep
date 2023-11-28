@@ -3,11 +3,12 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use crate::data_model::{Row, TableDefinition};
-use crate::execution::{ExecutionError, ExecutionResult, HashMapColumnProvider, ResultRow};
+use crate::execution::{ExecutionError, ExecutionResult, ResultRow};
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::join::{execute_join, JoinedTableData};
 use crate::execution::select_execution::SelectExecutionEngine;
 use crate::{Statement, Tables};
+use crate::execution::column_providers::HashMapColumnProvider;
 use crate::model::{AggregateStatement, SelectStatement, Value};
 
 pub struct ExecutionConfig {

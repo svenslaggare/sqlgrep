@@ -13,9 +13,8 @@ use cursive::theme::{BaseColor, Color};
 
 use crate::data_model::TableDefinition;
 use crate::{parsing, Tables};
-use crate::parsing::parser;
-use crate::parsing::parser::ParserOperationTree;
-use crate::parsing::tokenizer::TokenLocation;
+use crate::parsing::ParserOperationTree;
+use crate::parsing::TokenLocation;
 
 pub fn run(mut data_definition_file: Option<String>,
            input_file: Vec<String>,
@@ -285,7 +284,7 @@ impl TableEditor {
 }
 
 fn get_table_span(text: &str, table_name: &str) -> Option<(TokenLocation, TokenLocation)> {
-    let table_definition_tree = parser::parse_str(text).ok()?;
+    let table_definition_tree = parsing::parse_into_tree(text).ok()?;
     match table_definition_tree {
         ParserOperationTree::Select { .. } => {},
         ParserOperationTree::CreateTable { location, end_location, name, .. } => {
