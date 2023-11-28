@@ -35,21 +35,22 @@ impl ExecutionStatistics {
     }
 }
 
-pub struct FileExecutor<'a> {
+pub struct FileExecutor<'a, TPrinter: Printer = ConsolePrinter> {
     running: Arc<AtomicBool>,
     readers: Vec<BufReader<File>>,
     execution_engine: ExecutionEngine<'a>,
     display_options: DisplayOptions,
     statistics: ExecutionStatistics,
-    output_printer: OutputPrinter
+    output_printer: OutputPrinter<TPrinter>
 }
 
-impl<'a> FileExecutor<'a> {
-    pub fn new(running: Arc<AtomicBool>,
-               files: Vec<File>,
-               display_options: DisplayOptions,
-               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileExecutor<'a>> {
-        let output_printer = OutputPrinter::new(display_options.output_format.clone());
+impl<'a, TPrinter: Printer> FileExecutor<'a, TPrinter> {
+    pub fn with_output_printer(running: Arc<AtomicBool>,
+                               files: Vec<File>,
+                               display_options: DisplayOptions,
+                               printer: TPrinter,
+                               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileExecutor<'a, TPrinter>> {
+        let output_printer = OutputPrinter::<TPrinter>::with_printer(printer, display_options.output_format.clone());
 
         Ok(
             FileExecutor {
@@ -65,6 +66,10 @@ impl<'a> FileExecutor<'a> {
 
     pub fn statistics(&self) -> &ExecutionStatistics {
         &self.statistics
+    }
+
+    pub fn output_printer(&self) -> &OutputPrinter<TPrinter> {
+        &self.output_printer
     }
 
     pub fn execute(&mut self) -> ExecutionResult<()> {
@@ -113,6 +118,21 @@ impl<'a> FileExecutor<'a> {
         }
 
         Ok(())
+    }
+}
+
+impl<'a> FileExecutor<'a, ConsolePrinter> {
+    pub fn new(running: Arc<AtomicBool>,
+               files: Vec<File>,
+               display_options: DisplayOptions,
+               execution_engine: ExecutionEngine<'a>) -> std::io::Result<FileExecutor<'a, ConsolePrinter>> {
+        FileExecutor::with_output_printer(
+            running,
+            files,
+            display_options,
+            ConsolePrinter::default(),
+            execution_engine
+        )
     }
 }
 
@@ -213,24 +233,30 @@ impl<'a> FollowFileExecutor<'a> {
     }
 }
 
-struct OutputPrinter {
+pub struct OutputPrinter<T: Printer = ConsolePrinter> {
+    printer: T,
     format: OutputFormat,
     first_line: bool
 }
 
-impl OutputPrinter {
-    pub fn new(format: OutputFormat) -> OutputPrinter {
+impl<T: Printer> OutputPrinter<T> {
+    pub fn with_printer(printer: T, format: OutputFormat) -> OutputPrinter<T> {
         OutputPrinter {
+            printer,
             format,
             first_line: true
         }
+    }
+
+    pub fn printer(&self) -> &T {
+        &self.printer
     }
 
     pub fn print(&mut self, result_row: &ResultRow, single_result: bool) {
         let multiple_rows = result_row.data.len() > 1;
         for row in &result_row.data {
             if row.columns.len() == 1 && result_row.columns[0] == "input" && self.format == OutputFormat::Text {
-                println!("{}", row.columns[0]);
+                self.printer.println(&format!("{}", row.columns[0]));
             } else {
                 match &self.format {
                     OutputFormat::Text => {
@@ -240,7 +266,7 @@ impl OutputPrinter {
                             .map(|(projection_index, projection_name)| format!("{}: {}", projection_name, row.columns[projection_index]))
                             .collect::<Vec<_>>();
 
-                        println!("{}", columns.join(", "));
+                        self.printer.println(&format!("{}", columns.join(", ")));
                     }
                     OutputFormat::Json => {
                         let columns = serde_json::Map::from_iter(
@@ -250,7 +276,7 @@ impl OutputPrinter {
                                 .map(|(projection_index, projection_name)| (projection_name.to_owned(), row.columns[projection_index].json_value()))
                         );
 
-                        println!("{}", serde_json::to_string(&columns).unwrap());
+                        self.printer.println(&format!("{}", serde_json::to_string(&columns).unwrap()));
                     }
                     OutputFormat::CSV(delimiter) => {
                         if self.first_line {
@@ -260,7 +286,7 @@ impl OutputPrinter {
                                 .map(|(_, projection_name)| format!("{}", projection_name))
                                 .collect::<Vec<_>>();
 
-                            println!("{}", column_names.join(&delimiter));
+                            self.printer.println(&format!("{}", column_names.join(&delimiter)));
                         }
 
                         let columns = result_row.columns
@@ -269,7 +295,7 @@ impl OutputPrinter {
                             .map(|(projection_index, _)| format!("{}", row.columns[projection_index]))
                             .collect::<Vec<_>>();
 
-                        println!("{}", columns.join(&delimiter));
+                        self.printer.println(&format!("{}", columns.join(&delimiter)));
                     }
                 }
             }
@@ -280,8 +306,31 @@ impl OutputPrinter {
         }
 
         if multiple_rows && !single_result {
-            println!();
+            self.printer.println("");
         }
+    }
+}
+
+impl<T: Printer + Default> OutputPrinter<T> {
+    pub fn new(format: OutputFormat) -> OutputPrinter<T> {
+        OutputPrinter::with_printer(T::default(), format)
+    }
+}
+
+pub trait Printer {
+    fn println(&mut self, line: &str);
+}
+
+pub struct ConsolePrinter {}
+impl Default for ConsolePrinter {
+    fn default() -> Self {
+        ConsolePrinter {}
+    }
+}
+
+impl Printer for ConsolePrinter {
+    fn println(&mut self, line: &str) {
+        println!("{}", line);
     }
 }
 
