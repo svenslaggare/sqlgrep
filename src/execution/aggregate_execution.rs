@@ -7,6 +7,7 @@ use fnv::FnvHasher;
 use crate::data_model::Row;
 use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, ExpressionTreeHash, HashMapOwnedKeyColumnProvider, ResultRow, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine};
+use crate::execution::helpers::DistinctValues;
 use crate::helpers::IterExt;
 use crate::model::{Aggregate, AggregateStatement, ExpressionTree, Float, IntervalType, Value, ValueType};
 
@@ -17,6 +18,7 @@ type Groups<T> = BTreeMap<GroupKey, HashMap<usize, T>>;
 pub struct AggregateExecutionEngine {
     group_aggregators: Groups<GroupAggregator>,
     group_values: Groups<Value>,
+    distinct_values: DistinctValues
 }
 
 impl AggregateExecutionEngine {
@@ -24,6 +26,7 @@ impl AggregateExecutionEngine {
         AggregateExecutionEngine {
             group_aggregators: BTreeMap::new(),
             group_values: BTreeMap::new(),
+            distinct_values: DistinctValues::new()
         }
     }
 
@@ -62,10 +65,6 @@ impl AggregateExecutionEngine {
                                                           row: &TColumnProvider,
                                                           expression_execution_engine: &ExpressionExecutionEngine<TColumnProvider>) -> ExecutionResult<()> {
         let group_key = if let Some(group_by) = aggregate_statement.group_by.as_ref() {
-            // GroupKey(
-            //     group_by
-            //         .map_result_vec(|column| row.get(column).cloned().ok_or_else(|| ExecutionError::ColumnNotFound(column.clone())))?
-            // )
             GroupKey(
                 group_by
                     .map_result_vec(|part| expression_execution_engine.evaluate(part))?
@@ -223,7 +222,7 @@ impl AggregateExecutionEngine {
         Ok(())
     }
 
-    pub fn execute_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+    pub fn execute_result(&mut self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         let mut group_key_mapping = HashMap::new();
         if let Some(group_key) = aggregate_statement.group_by.as_ref() {
             for (index, part) in group_key.iter().enumerate() {
@@ -259,6 +258,12 @@ impl AggregateExecutionEngine {
                                  aggregate_statement,
                                  having)? {
                     continue;
+                }
+
+                if aggregate_statement.distinct {
+                    if !self.distinct_values.add(&result_columns) {
+                        continue;
+                    }
                 }
             }
 

@@ -10,14 +10,15 @@ use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Local, TimeZone, Dur
 
 use crate::data_model::TableDefinition;
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Default)]
 pub struct SelectStatement {
     pub projections: Vec<(String, ExpressionTree)>,
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
     pub join: Option<JoinClause>,
-    pub limit: Option<usize>
+    pub limit: Option<usize>,
+    pub distinct: bool
 }
 
 impl SelectStatement {
@@ -33,7 +34,7 @@ pub struct AggregateStatementPart {
     pub transform: Option<ExpressionTree>
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Default)]
 pub struct AggregateStatement {
     pub aggregates: Vec<AggregateStatementPart>,
     pub from: String,
@@ -42,7 +43,8 @@ pub struct AggregateStatement {
     pub group_by: Option<Vec<ExpressionTree>>,
     pub having: Option<ExpressionTree>,
     pub join: Option<JoinClause>,
-    pub limit: Option<usize>
+    pub limit: Option<usize>,
+    pub distinct: bool
 }
 
 pub struct CreateTableStatement {

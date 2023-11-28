@@ -3,6 +3,7 @@ pub mod select_execution;
 pub mod aggregate_execution;
 pub mod join;
 pub mod execution_engine;
+mod helpers;
 
 #[cfg(test)]
 pub mod aggregate_execution_tests;

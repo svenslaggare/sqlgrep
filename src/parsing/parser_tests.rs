@@ -259,6 +259,18 @@ fn test_parse_select_and_filter4() {
 }
 
 #[test]
+fn test_parse_select_distinct1() {
+    let tree = parse_str("SELECT DISTINCT x FROM tests WHERE x > 0").unwrap();
+    assert_eq!("SELECT DISTINCT x FROM tests WHERE (x > 0)", tree.to_string());
+}
+
+#[test]
+fn test_parse_select_distinct2() {
+    let tree = parse_str("SELECT DISTINCT x, y FROM tests WHERE x > 0").unwrap();
+    assert_eq!("SELECT DISTINCT x, y FROM tests WHERE (x > 0)", tree.to_string());
+}
+
+#[test]
 fn test_parse_with_filename() {
     let tree = parse_str("SELECT x FROM test::'test.log'").unwrap();
     assert_eq!("SELECT x FROM test::'test.log'", tree.to_string());

@@ -212,6 +212,29 @@ fn test_select_statement8() {
 }
 
 #[test]
+fn test_select_statement_distinct1() {
+    let tree = parse_str("SELECT DISTINCT x FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("x", statement.projections[0].0.as_str());
+    assert_eq!(
+        &ExpressionTree::ColumnAccess("x".to_owned()),
+        &statement.projections[0].1
+    );
+
+    assert_eq!("test", statement.from);
+    assert_eq!(true, statement.distinct);
+}
+
+#[test]
 fn test_select_inner_join1() {
     let tree = parse_str("SELECT x FROM test::'test.log' INNER JOIN other::'other.log' ON test.x = other.y").unwrap();
 

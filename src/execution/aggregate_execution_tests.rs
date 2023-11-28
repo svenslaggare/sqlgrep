@@ -23,12 +23,8 @@ fn test_group_by_and_count() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -92,12 +88,8 @@ fn test_group_by_and_count2() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(Some("x".to_owned()), false), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -143,12 +135,8 @@ fn test_group_by_and_count3() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -198,7 +186,6 @@ fn test_group_by_and_count_and_filter() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
         filter: Some(
             ExpressionTree::Compare {
                 left: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
@@ -207,9 +194,7 @@ fn test_group_by_and_count_and_filter() {
             }
         ),
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -254,12 +239,8 @@ fn test_group_by_and_max() {
             AggregateStatementPart { name: "max".to_owned(), aggregate: Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -312,12 +293,8 @@ fn test_group_by_and_min() {
             AggregateStatementPart { name: "min".to_owned(), aggregate: Aggregate::Min(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -370,12 +347,8 @@ fn test_group_by_and_min_null() {
             AggregateStatementPart { name: "min".to_owned(), aggregate: Aggregate::Min(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![
@@ -443,12 +416,8 @@ fn test_group_by_and_count_and_max() {
             AggregateStatementPart { name: "max".to_owned(), aggregate: Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -503,12 +472,8 @@ fn test_group_by_and_average() {
             AggregateStatementPart { name: "avg".to_owned(), aggregate: Aggregate::Average(ExpressionTree::ColumnAccess("x".to_owned())), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -561,12 +526,8 @@ fn test_group_by_and_average_with_null() {
             AggregateStatementPart { name: "avg".to_owned(), aggregate: Aggregate::Average(ExpressionTree::ColumnAccess("x".to_owned())), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![
@@ -633,12 +594,8 @@ fn test_group_by_and_sum() {
             AggregateStatementPart { name: "sum".to_owned(), aggregate: Aggregate::Sum(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -691,12 +648,8 @@ fn test_group_by_and_stddev1() {
             AggregateStatementPart { name: "std".to_owned(), aggregate: Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -749,12 +702,8 @@ fn test_group_by_and_stddev2() {
             AggregateStatementPart { name: "std".to_owned(), aggregate: Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -807,12 +756,8 @@ fn test_group_by_and_stddev_with_null() {
             AggregateStatementPart { name: "std".to_owned(), aggregate: Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![
@@ -891,12 +836,8 @@ fn test_group_by_and_sum_and_transform() {
             )
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -959,8 +900,6 @@ fn test_group_by_expression_and_average() {
             AggregateStatementPart { name: "avg".to_owned(), aggregate: Aggregate::Average(ExpressionTree::ColumnAccess("x".to_owned())), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(
             vec![
                 ExpressionTree::Arithmetic {
@@ -970,9 +909,7 @@ fn test_group_by_expression_and_average() {
                 }
             ]
         ),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {
@@ -1024,12 +961,7 @@ fn test_count() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1071,8 +1003,6 @@ fn test_group_by_and_count_and_having1() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
         having: Some(
             ExpressionTree::Compare {
@@ -1081,8 +1011,7 @@ fn test_group_by_and_count_and_having1() {
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
         ),
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1137,8 +1066,6 @@ fn test_group_by_and_count_and_having2() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
         having: Some(
             ExpressionTree::Compare {
@@ -1147,8 +1074,7 @@ fn test_group_by_and_count_and_having2() {
                 right: Box::new(ExpressionTree::Value(Value::Int(2000)))
             }
         ),
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1203,8 +1129,6 @@ fn test_group_by_and_count_and_having3() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
         having: Some(
             ExpressionTree::Compare {
@@ -1213,8 +1137,7 @@ fn test_group_by_and_count_and_having3() {
                 right: Box::new(ExpressionTree::Value(Value::Int(1)))
             }
         ),
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1295,8 +1218,6 @@ fn test_group_by_and_count_and_having4() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(None, false), transform: None }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
         having: Some(
             ExpressionTree::BooleanOperation {
@@ -1313,8 +1234,7 @@ fn test_group_by_and_count_and_having4() {
                 })
             }
         ),
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     let column_values = vec![Value::Int(1000)];
@@ -1392,12 +1312,8 @@ fn test_group_by_array_agg1() {
             AggregateStatementPart { name: "ys".to_owned(), aggregate: Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned())), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     // Add first group
@@ -1474,12 +1390,8 @@ fn test_group_by_array_agg2() {
             }
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
         group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     // Add first group
@@ -1550,12 +1462,7 @@ fn test_count_distinct() {
             AggregateStatementPart { name: "count".to_owned(), aggregate: Aggregate::Count(Some("x".to_owned()), true), transform: None },
         ],
         from: "test".to_owned(),
-        filename: None,
-        filter: None,
-        group_by: None,
-        having: None,
-        join: None,
-        limit: None
+        ..Default::default()
     };
 
     for i in 1..6 {

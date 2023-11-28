@@ -35,7 +35,8 @@ impl JoinedTableData {
             filename: None,
             filter: None,
             join: None,
-            limit: None
+            limit: None,
+            distinct: false,
         });
 
         let mut execution_engine = ExecutionEngine::new(tables, &join_statement);

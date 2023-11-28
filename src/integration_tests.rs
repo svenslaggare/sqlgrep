@@ -303,6 +303,35 @@ fn test_ftpd10() {
 }
 
 #[test]
+fn test_ftpd11() {
+    let tables = create_tables("testdata/ftpd.txt");
+
+    let query = parsing::parse(
+        "SELECT DISTINCT hostname FROM connections WHERE hostname IS NOT NULL"
+    ).unwrap();
+
+    let mut executor = FileExecutor::with_output_printer(
+        Arc::new(AtomicBool::new(true)),
+        vec![File::open("testdata/ftpd_data.txt").unwrap()],
+        Default::default(),
+        CapturedPrinter::new(),
+        ExecutionEngine::new(&tables, &query)
+    ).unwrap();
+
+    executor.execute().unwrap();
+    assert_eq!(8, executor.statistics().total_result_rows);
+
+    assert_eq!("hostname: '24-54-76-216.bflony.adelphia.net'", executor.output_printer().printer().lines[0]);
+    assert_eq!("hostname: 'lns-vlq-45-tou-82-252-162-81.adsl.proxad.net'", executor.output_printer().printer().lines[1]);
+    assert_eq!("hostname: 'dsl-082-083-227-067.arcor-ip.net'", executor.output_printer().printer().lines[2]);
+    assert_eq!("hostname: 'aml-sfh-3310b.adsl.wanadoo.nl'", executor.output_printer().printer().lines[3]);
+    assert_eq!("hostname: 'host8.topspot.net'", executor.output_printer().printer().lines[4]);
+    assert_eq!("hostname: 'dsl-Chn-static-059.45.101.203.touchtelindia.net'", executor.output_printer().printer().lines[5]);
+    assert_eq!("hostname: '82-68-222-194.dsl.in-addr.zen.co.uk'", executor.output_printer().printer().lines[6]);
+    assert_eq!("hostname: '82-68-222-195.dsl.in-addr.zen.co.uk'", executor.output_printer().printer().lines[7]);
+}
+
+#[test]
 fn test_ftpd_csv1() {
     let tables = create_tables("testdata/ftpd_csv.txt");
 

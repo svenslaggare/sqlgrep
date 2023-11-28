@@ -152,7 +152,8 @@ pub enum ParserOperationTree {
         group_by: Option<Vec<ParserExpressionTree>>,
         having: Option<ParserExpressionTree>,
         join: Option<ParserJoinClause>,
-        limit: Option<usize>
+        limit: Option<usize>,
+        distinct: bool
     },
     CreateTable {
         location: TokenLocation,
@@ -226,8 +227,15 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_select(&mut self) -> ParserResult<ParserOperationTree> {
-        let mut projections = Vec::new();
         self.next()?;
+
+        let mut projections = Vec::new();
+        let mut distinct = false;
+
+        if self.current() == &Token::Keyword(Keyword::Distinct) {
+            self.next()?;
+            distinct = true;
+        }
 
         let location = self.current_location();
         loop {
@@ -350,7 +358,8 @@ impl<'a> Parser<'a> {
                 group_by,
                 having,
                 join,
-                limit
+                limit,
+                distinct
             }
         )
     }
@@ -1072,7 +1081,7 @@ impl<'a> Parser<'a> {
 impl std::fmt::Display for ParserOperationTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ParserOperationTree::Select { projections, from, filter, group_by, having, join, limit, .. } => {
+            ParserOperationTree::Select { location: _location, projections, from, filter, group_by, having, join, limit, distinct } => {
                 let projection_str = projections
                     .iter()
                     .map(|(name, expression)| {
@@ -1085,7 +1094,13 @@ impl std::fmt::Display for ParserOperationTree {
                     .collect::<Vec<_>>()
                     .join(", ");
 
-                write!(f, "SELECT {} FROM {}", projection_str, from.0)?;
+                let distinct_str = if *distinct {
+                    "DISTINCT "
+                } else {
+                    ""
+                };
+
+                write!(f, "SELECT {}{} FROM {}", distinct_str, projection_str, from.0)?;
                 if let Some(from_file) = &from.1 {
                     write!(f, "::'{}'", from_file)?;
                 }

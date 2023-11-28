@@ -74,18 +74,18 @@ impl std::fmt::Display for ConvertParserTreeErrorType {
 
 pub fn transform_statement(tree: ParserOperationTree) -> Result<Statement, ConvertParserTreeError> {
     match tree {
-        ParserOperationTree::Select { location, projections, from, filter, group_by, having, join, limit } => {
+        ParserOperationTree::Select { location, projections, from, filter, group_by, having, join, limit, distinct } => {
             if let Some(group_by) = group_by {
-                create_aggregate_statement(location, projections, from, filter, Some(group_by), having, join, limit)
+                create_aggregate_statement(location, projections, from, filter, Some(group_by), having, join, limit, distinct)
             } else {
                 if any_aggregates(&projections) {
-                    create_aggregate_statement(location, projections, from, filter, None, having, join, limit)
+                    create_aggregate_statement(location, projections, from, filter, None, having, join, limit, distinct)
                 } else {
                     if having.is_some() {
                         return Err(ConvertParserTreeErrorType::HavingClauseNotPossible.with_location(location));
                     }
 
-                    create_select_statement(location, projections, from, filter, join, limit)
+                    create_select_statement(location, projections, from, filter, join, limit, distinct)
                 }
             }
         }
@@ -101,7 +101,8 @@ fn create_select_statement(location: TokenLocation,
                            from: (String, Option<String>),
                            filter: Option<ParserExpressionTree>,
                            join: Option<ParserJoinClause>,
-                           limit: Option<usize>) -> Result<Statement, ConvertParserTreeError> {
+                           limit: Option<usize>,
+                           distinct: bool) -> Result<Statement, ConvertParserTreeError> {
     let mut transformed_projections = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let expression = transform_expression(tree, &mut TransformExpressionState::default())?;
@@ -129,7 +130,8 @@ fn create_select_statement(location: TokenLocation,
         filename: from.1,
         filter: transformed_filter,
         join: transformed_join,
-        limit
+        limit,
+        distinct,
     };
 
     Ok(Statement::Select(select_statement))
@@ -142,7 +144,8 @@ fn create_aggregate_statement(location: TokenLocation,
                               group_by: Option<Vec<ParserExpressionTree>>,
                               having: Option<ParserExpressionTree>,
                               join: Option<ParserJoinClause>,
-                              limit: Option<usize>) -> Result<Statement, ConvertParserTreeError> {
+                              limit: Option<usize>,
+                              distinct: bool) -> Result<Statement, ConvertParserTreeError> {
     let mut transformed_aggregates = Vec::new();
     for (projection_index, (name, tree)) in projections.into_iter().enumerate() {
         let (default_name, aggregate, transform) = transform_aggregate(tree, projection_index)?;
@@ -187,7 +190,8 @@ fn create_aggregate_statement(location: TokenLocation,
         group_by,
         having: transformed_having,
         join: transformed_join,
-        limit
+        limit,
+        distinct
     };
 
     Ok(Statement::Aggregate(aggregate_statement))

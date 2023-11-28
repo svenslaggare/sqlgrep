@@ -92,6 +92,7 @@ impl ExecutionOutput {
 pub struct ExecutionEngine<'a> {
     tables: &'a Tables,
     statement: &'a Statement,
+    select_execution_engine: SelectExecutionEngine,
     aggregate_execution_engine: AggregateExecutionEngine,
     num_output_rows: usize,
     joined_table_data: Option<JoinedTableData>
@@ -102,6 +103,7 @@ impl<'a> ExecutionEngine<'a> {
         ExecutionEngine {
             tables,
             statement,
+            select_execution_engine: SelectExecutionEngine::new(),
             aggregate_execution_engine: AggregateExecutionEngine::new(),
             num_output_rows: 0,
             joined_table_data: None
@@ -172,14 +174,16 @@ impl<'a> ExecutionEngine<'a> {
     }
 
     fn execute_select(&mut self, select_statement: &SelectStatement, line: String) -> ExecutionResult<ExecutionOutput> {
-        let table_definition = self.get_table(&select_statement.from)?;
-        let select_execution_engine = SelectExecutionEngine::new();
+        let table_definition = self.tables.get(&select_statement.from)
+            .ok_or_else(|| ExecutionError::TableNotFound(select_statement.from.clone()))?;
+
         let row = table_definition.extract(&line);
 
         if row.any_result() {
             let line_value = Value::String(line);
 
             if let Some(joined_table_data) = self.joined_table_data.as_ref() {
+                let select_execution_engine = &mut self.select_execution_engine;
                 Ok(
                     execute_join(
                         table_definition,
@@ -196,7 +200,7 @@ impl<'a> ExecutionEngine<'a> {
             } else {
                 Ok(
                     ExecutionOutput::new(
-                        select_execution_engine.execute(
+                        self.select_execution_engine.execute(
                             select_statement,
                             HashMapColumnProvider::with_table_keys(
                                 ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
@@ -303,7 +307,7 @@ impl<'a> ExecutionEngine<'a> {
         }
     }
 
-    fn execute_aggregate_result(&self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+    fn execute_aggregate_result(&mut self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
         self.aggregate_execution_engine.execute_result(aggregate_statement)
     }
 
@@ -385,22 +389,22 @@ fn test_regex_array1() {
         ).unwrap()
     );
 
-    let statement = Statement::Select(SelectStatement {
-        projections: vec![
-            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
-            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
-            ("datetime".to_owned(), ExpressionTree::ColumnAccess("datetime".to_owned())),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            operator: CompareOperator::Equal,
-            left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
-        }),
-        join: None,
-        limit: None
-    });
+    let statement = Statement::Select(
+        SelectStatement {
+            projections: vec![
+                ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+                ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+                ("datetime".to_owned(), ExpressionTree::ColumnAccess("datetime".to_owned())),
+            ],
+            from: "connections".to_string(),
+            filter: Some(ExpressionTree::Compare {
+                operator: CompareOperator::Equal,
+                left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
+            }),
+            ..Default::default()
+        }
+    );
 
     let mut execution_engine = ExecutionEngine::new(&tables, &statement);
 
@@ -472,22 +476,22 @@ fn test_timestamp1() {
         ).unwrap()
     );
 
-    let statement = Statement::Select(SelectStatement {
-        projections: vec![
-            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
-            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
-            ("timestamp".to_owned(), ExpressionTree::ColumnAccess("timestamp".to_owned())),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            operator: CompareOperator::Equal,
-            left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
-        }),
-        join: None,
-        limit: None
-    });
+    let statement = Statement::Select(
+        SelectStatement {
+            projections: vec![
+                ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+                ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+                ("timestamp".to_owned(), ExpressionTree::ColumnAccess("timestamp".to_owned())),
+            ],
+            from: "connections".to_string(),
+            filter: Some(ExpressionTree::Compare {
+                operator: CompareOperator::Equal,
+                left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
+            }),
+            ..Default::default()
+        }
+    );
     let mut execution_engine = ExecutionEngine::new(&tables, &statement);
 
     let mut result_rows = Vec::new();
@@ -556,14 +560,12 @@ fn test_json_array1() {
                 })
             ],
             from: "clients".to_string(),
-            filename: None,
             filter: Some(ExpressionTree::NullableCompare {
                 operator: NullableCompareOperator::NotEqual,
                 left: Box::new(ExpressionTree::ColumnAccess("events".to_owned())),
                 right: Box::new(ExpressionTree::Value(Value::Null))
             }),
-            join: None,
-            limit: None
+            ..Default::default()
         }
     );
     let mut execution_engine = ExecutionEngine::new(&tables, &statement);
@@ -625,22 +627,23 @@ fn test_limit1() {
         ).unwrap()
     );
 
-    let statement = Statement::Select(SelectStatement {
-        projections: vec![
-            ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
-            ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
-            ("datetime".to_owned(), ExpressionTree::ColumnAccess("datetime".to_owned())),
-        ],
-        from: "connections".to_string(),
-        filename: None,
-        filter: Some(ExpressionTree::Compare {
-            operator: CompareOperator::Equal,
-            left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
-            right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
-        }),
-        join: None,
-        limit: Some(10)
-    });
+    let statement = Statement::Select(
+        SelectStatement {
+            projections: vec![
+                ("ip".to_owned(), ExpressionTree::ColumnAccess("ip".to_owned())),
+                ("hostname".to_owned(), ExpressionTree::ColumnAccess("hostname".to_owned())),
+                ("datetime".to_owned(), ExpressionTree::ColumnAccess("datetime".to_owned())),
+            ],
+            from: "connections".to_string(),
+            filter: Some(ExpressionTree::Compare {
+                operator: CompareOperator::Equal,
+                left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::String("lns-vlq-45-tou-82-252-162-81.adsl.proxad.net".to_owned())))
+            }),
+            limit: Some(10),
+            ..Default::default()
+        }
+    );
     let mut execution_engine = ExecutionEngine::new(&tables, &statement);
 
     let mut result_rows = Vec::new();
