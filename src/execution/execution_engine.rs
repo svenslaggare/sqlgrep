@@ -204,7 +204,7 @@ impl<'a> ExecutionEngine<'a> {
                         self.select_execution_engine.execute(
                             select_statement,
                             HashMapColumnProvider::with_table_keys(
-                                ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
+                                HashMapColumnProvider::create_table_scope(ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value)),
                                 table_definition
                             )
                         )?
@@ -249,7 +249,7 @@ impl<'a> ExecutionEngine<'a> {
                         aggregate_execution_engine.execute(
                             aggregate_statement,
                             HashMapColumnProvider::with_table_keys(
-                                ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
+                                HashMapColumnProvider::create_table_scope(ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value)),
                                 table_definition
                             )
                         )?
@@ -296,7 +296,7 @@ impl<'a> ExecutionEngine<'a> {
                 self.aggregate_execution_engine.execute_update(
                     aggregate_statement,
                     HashMapColumnProvider::with_table_keys(
-                        ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value),
+                        HashMapColumnProvider::create_table_scope(ExecutionEngine::create_columns_mapping(&table_definition, &row, &line_value)),
                         table_definition
                     )
                 )?;

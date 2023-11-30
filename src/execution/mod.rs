@@ -67,10 +67,18 @@ impl std::fmt::Display for ExecutionError {
 
 pub type ExecutionResult<T> = Result<T, ExecutionError>;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ColumnScope {
+    Table,
+    AggregationValue,
+    GroupKey,
+    GroupValue
+}
+
 pub trait ColumnProvider {
-    fn get(&self, name: &str) -> Option<&Value>;
-    fn exist(&self, name: &str) -> bool {
-        self.get(name).is_some()
+    fn get(&self, scope: ColumnScope, name: &str) -> Option<&Value>;
+    fn exist(&self, scope: ColumnScope, name: &str) -> bool {
+        self.get(scope, name).is_some()
     }
 
     fn add_key(&mut self, key: &str);

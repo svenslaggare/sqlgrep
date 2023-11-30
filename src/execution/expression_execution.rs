@@ -12,7 +12,7 @@ use chrono::{Local, Datelike, Timelike, DurationRound, Duration};
 use itertools::Itertools;
 
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator};
-use crate::execution::{ColumnProvider, ExpressionTreeHash};
+use crate::execution::{ColumnProvider, ColumnScope, ExpressionTreeHash};
 
 #[derive(Debug, PartialEq)]
 pub enum EvaluationError {
@@ -80,7 +80,13 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
             ExpressionTree::Value(value) => Ok(value.clone()),
             ExpressionTree::ColumnAccess(name) => {
                 self.column_access
-                    .get(name.as_str())
+                    .get(ColumnScope::Table, name.as_str())
+                    .map(|value| value.clone())
+                    .ok_or_else(|| EvaluationError::ColumnNotFound(name.to_owned()))
+            }
+            ExpressionTree::ScopedColumnAccess(scope, name) => {
+                self.column_access
+                    .get(*scope, name.as_str())
                     .map(|value| value.clone())
                     .ok_or_else(|| EvaluationError::ColumnNotFound(name.to_owned()))
             }
@@ -594,7 +600,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                 match aggregate.as_ref() {
                     Aggregate::GroupKey(column) => {
                         self.column_access
-                            .get(&format!("$group_key_{}", ExpressionTreeHash::new(column)))
+                            .get(ColumnScope::GroupKey, &ExpressionTreeHash::new(column).to_string())
                             .map(|value| value.clone())
                             .ok_or(EvaluationError::GroupKeyNotFound)
                     }
@@ -604,7 +610,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                         let hash = hasher.finish();
 
                         self.column_access
-                            .get(&format!("$group_value_{}_{}", id, hash))
+                            .get(ColumnScope::GroupValue, &format!("{}_{}", id, hash))
                             .map(|value| value.clone())
                             .ok_or(EvaluationError::GroupValueNotFound)
                     }
@@ -621,7 +627,7 @@ pub fn unique_values(values: &mut Vec<Value>) {
 
 #[cfg(test)]
 struct TestColumnProvider {
-    columns: std::collections::HashMap<String, Value>,
+    columns: std::collections::HashMap<ColumnScope, std::collections::HashMap<String, Value>>,
     keys: Vec<String>
 }
 
@@ -634,15 +640,17 @@ impl TestColumnProvider {
         }
     }
 
-    fn add_column(&mut self, name: &str, value: Value) {
-        self.columns.insert(name.to_owned(), value);
+    fn add_column(&mut self, scope: ColumnScope, name: &str, value: Value) {
+        self.columns.entry(scope)
+            .or_insert_with(|| std::collections::HashMap::new())
+            .insert(name.to_owned(), value);
     }
 }
 
 #[cfg(test)]
 impl ColumnProvider for TestColumnProvider {
-    fn get(&self, name: &str) -> Option<&Value> {
-        self.columns.get(name)
+    fn get(&self, scope: ColumnScope, name: &str) -> Option<&Value> {
+        self.columns.get(&scope).map(|columns| columns.get(name)).flatten()
     }
 
     fn add_key(&mut self, key: &str) {
@@ -657,7 +665,7 @@ impl ColumnProvider for TestColumnProvider {
 #[test]
 fn test_evaluate_column() {
     let mut column_provider = TestColumnProvider::new();
-    column_provider.add_column("x", Value::Int(1337));
+    column_provider.add_column(ColumnScope::Table, "x", Value::Int(1337));
 
     let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
 

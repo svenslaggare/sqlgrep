@@ -1,5 +1,6 @@
 use crate::model::{Value, ValueType, Float, NullableCompareOperator, BooleanOperator};
 use crate::data_model::{JsonAccess, ColumnParsing, RegexResultReference, RegexMode};
+use crate::execution::ColumnScope;
 use crate::parsing::tokenizer::{ParserErrorType, Token, Keyword, ParserToken, tokenize, ParserError, TokenLocation};
 use crate::parsing::operator::{BinaryOperators, UnaryOperators, Operator};
 
@@ -31,6 +32,7 @@ impl ParserExpressionTree {
 pub enum ParserExpressionTreeData {
     Value(Value),
     ColumnAccess(String),
+    ScopedColumnAccess(ColumnScope, String),
     Wildcard,
     BinaryOperator { operator: Operator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     BooleanOperation { operator: BooleanOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
@@ -55,6 +57,7 @@ impl ParserExpressionTreeData {
         match self {
             ParserExpressionTreeData::Value(_) => {}
             ParserExpressionTreeData::ColumnAccess(_) => {}
+            ParserExpressionTreeData::ScopedColumnAccess(_, _) => {}
             ParserExpressionTreeData::Wildcard => {}
             ParserExpressionTreeData::BinaryOperator { left, right, .. } => {
                 left.tree.visit(f)?;
@@ -1164,6 +1167,14 @@ impl ParserExpressionTreeDataVisualizer {
             }
             ParserExpressionTreeData::ColumnAccess(name) => {
                 write!(f, "{}", name)
+            }
+            ParserExpressionTreeData::ScopedColumnAccess(scope, name) => {
+                match scope {
+                    ColumnScope::Table => write!(f, "{}", name),
+                    ColumnScope::AggregationValue => write!(f, "AggregationValue({})", name),
+                    ColumnScope::GroupKey => write!(f, "GroupKey({})", name),
+                    ColumnScope::GroupValue => write!(f, "GroupValue({})", name)
+                }
             }
             ParserExpressionTreeData::Wildcard => {
                 write!(f, "*")

@@ -6,6 +6,7 @@ use std::iter::FromIterator;
 use lazy_static::lazy_static;
 
 use crate::data_model::{ColumnDefinition, RegexMode, TableDefinition};
+use crate::execution::ColumnScope;
 use crate::helpers::{IterExt, tuple_result};
 use crate::model::{Aggregate, AggregateStatement, AggregateStatementPart, ArithmeticOperator, CompareOperator, ExpressionTree, JoinClause, SelectStatement, UnaryArithmeticOperator};
 use crate::parsing::parser::{ParserOperationTree, ParserExpressionTreeData, ParserColumnDefinition, ParserJoinClause, ParserExpressionTree};
@@ -368,6 +369,15 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
                 Ok(ExpressionTree::ColumnAccess(name))
             }
         }
+        ParserExpressionTreeData::ScopedColumnAccess(scope, name) => {
+            if state.allow_aggregates {
+                let aggregate_index = state.next_aggregate_index;
+                state.next_aggregate_index += 1;
+                Ok(ExpressionTree::Aggregate(aggregate_index, Box::new(Aggregate::GroupKey(ExpressionTree::ScopedColumnAccess(scope, name)))))
+            } else {
+                Ok(ExpressionTree::ScopedColumnAccess(scope, name))
+            }
+        }
         ParserExpressionTreeData::Wildcard => Ok(ExpressionTree::Wildcard),
         ParserExpressionTreeData::BinaryOperator { operator, left, right } => {
             let left = Box::new(transform_expression(*left, state)?);
@@ -493,7 +503,7 @@ fn transform_aggregate(mut tree: ParserExpressionTree, aggregate_index: usize) -
 fn extract_aggregate(tree: &mut ParserExpressionTree) -> (Option<ParserExpressionTreeData>, bool) {
     let tree_location = tree.location.clone();
     let create_agg_access = || {
-        ParserExpressionTreeData::ColumnAccess("$agg".to_owned()).with_location(tree_location.clone())
+        ParserExpressionTreeData::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned()).with_location(tree_location.clone())
     };
 
     match &mut tree.tree {

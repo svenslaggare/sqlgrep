@@ -5,7 +5,7 @@ use std::ops::Add;
 use fnv::FnvHasher;
 
 use crate::data_model::Row;
-use crate::execution::{ColumnProvider, ExecutionError, ExecutionResult, ExpressionTreeHash, ResultRow};
+use crate::execution::{ColumnProvider, ColumnScope, ExecutionError, ExecutionResult, ExpressionTreeHash, ResultRow};
 use crate::execution::column_providers::{HashMapOwnedKeyColumnProvider, SingleColumnProvider};
 use crate::execution::expression_execution::{ExpressionExecutionEngine};
 use crate::execution::helpers::DistinctValues;
@@ -134,7 +134,7 @@ impl AggregateExecutionEngine {
                 }
 
                 let (mut valid, column_value) = if let Some(column) = column {
-                    let column_value = row.get(column).ok_or_else(|| ExecutionError::ColumnNotFound(column.clone()))?;
+                    let column_value = row.get(ColumnScope::Table, column).ok_or_else(|| ExecutionError::ColumnNotFound(column.clone()))?;
                     (column_value.is_not_null(), Some(column_value))
                 } else {
                     (true, None)
@@ -290,7 +290,7 @@ impl AggregateExecutionEngine {
 
             let transform_value = |value: Value| {
                 if let Some(transform) = &aggregate.transform {
-                    let columns = SingleColumnProvider::new("$agg", &value);
+                    let columns = SingleColumnProvider::new(ColumnScope::AggregationValue, "$value", &value);
                     ExpressionExecutionEngine::new(&columns).evaluate(transform)
                 } else {
                     Ok(value)
@@ -520,10 +520,12 @@ fn accept_group<'a>(group_key_mapping: &HashMap<ExpressionTreeHash, usize>,
                     group_value: &HashMap<usize, Value>,
                     aggregate_statement: &AggregateStatement,
                     having: &ExpressionTree) -> ExecutionResult<bool> {
-    let mut columns = HashMap::new();
+    let mut group_key_columns = HashMap::new();
+    let mut group_value_columns = HashMap::new();
+
     for (group_key_part, group_key_part_index) in group_key_mapping {
-        columns.insert(
-            format!("$group_key_{}", group_key_part),
+        group_key_columns.insert(
+            group_key_part.to_string(),
             &group_key_value.0[*group_key_part_index]
         );
     }
@@ -533,11 +535,15 @@ fn accept_group<'a>(group_key_mapping: &HashMap<ExpressionTreeHash, usize>,
         aggregate.hash(&mut hasher);
         let hash = hasher.finish();
 
-        columns.insert(
-            format!("$group_value_{}_{}", aggregate_id, hash),
+        group_value_columns.insert(
+            format!("{}_{}", aggregate_id, hash),
             &group_value[&(aggregate_statement.aggregates.len() + having_aggregate_index)]
         );
     }
+
+    let mut columns = HashMap::new();
+    columns.insert(ColumnScope::GroupKey, group_key_columns);
+    columns.insert(ColumnScope::GroupValue, group_value_columns);
 
     let row = HashMapOwnedKeyColumnProvider::new(columns);
     let expression_execution_engine = ExpressionExecutionEngine::new(&row);

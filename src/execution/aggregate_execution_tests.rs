@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::execution::aggregate_execution::AggregateExecutionEngine;
 use crate::execution::column_providers::HashMapColumnProvider;
+use crate::execution::ColumnScope;
 use crate::model::{Aggregate, AggregateStatement, AggregateStatementPart, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Float, Function, Value, ValueType};
 
 fn create_test_columns<'a>(names: Vec<&'a str>, values: &'a Vec<Value>) -> HashMap<&'a str, &'a Value> {
@@ -33,7 +34,7 @@ fn test_group_by_and_count() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -43,7 +44,7 @@ fn test_group_by_and_count() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -61,7 +62,7 @@ fn test_group_by_and_count() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -98,7 +99,7 @@ fn test_group_by_and_count2() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -111,7 +112,7 @@ fn test_group_by_and_count2() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -145,7 +146,7 @@ fn test_group_by_and_count3() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -158,7 +159,7 @@ fn test_group_by_and_count3() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -203,7 +204,7 @@ fn test_group_by_and_count_and_filter() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -215,7 +216,7 @@ fn test_group_by_and_count_and_filter() {
     let column_values = vec![Value::Int(2000)];
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -251,7 +252,7 @@ fn test_group_by_and_max() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -266,7 +267,7 @@ fn test_group_by_and_max() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -305,7 +306,7 @@ fn test_group_by_and_min() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -320,7 +321,7 @@ fn test_group_by_and_min() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -358,7 +359,7 @@ fn test_group_by_and_min_null() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -373,7 +374,7 @@ fn test_group_by_and_min_null() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -388,7 +389,7 @@ fn test_group_by_and_min_null() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -428,7 +429,7 @@ fn test_group_by_and_count_and_max() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -443,7 +444,7 @@ fn test_group_by_and_count_and_max() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -484,7 +485,7 @@ fn test_group_by_and_average() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -499,7 +500,7 @@ fn test_group_by_and_average() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -537,7 +538,7 @@ fn test_group_by_and_average_with_null() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -552,7 +553,7 @@ fn test_group_by_and_average_with_null() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -567,7 +568,7 @@ fn test_group_by_and_average_with_null() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -606,7 +607,7 @@ fn test_group_by_and_sum() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -621,7 +622,7 @@ fn test_group_by_and_sum() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -660,7 +661,7 @@ fn test_group_by_and_stddev1() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -675,7 +676,7 @@ fn test_group_by_and_stddev1() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -714,7 +715,7 @@ fn test_group_by_and_stddev2() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -729,7 +730,7 @@ fn test_group_by_and_stddev2() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -767,7 +768,7 @@ fn test_group_by_and_stddev_with_null() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -782,7 +783,7 @@ fn test_group_by_and_stddev_with_null() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -797,7 +798,7 @@ fn test_group_by_and_stddev_with_null() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -828,7 +829,7 @@ fn test_group_by_and_sum_and_transform() {
                     transform: Some(
                         ExpressionTree::Arithmetic {
                             operator: ArithmeticOperator::Multiply,
-                            left: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+                            left: Box::new(ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())),
                             right: Box::new(ExpressionTree::Value(Value::Int(2)))
                         }
                     )
@@ -848,7 +849,7 @@ fn test_group_by_and_sum_and_transform() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -863,7 +864,7 @@ fn test_group_by_and_sum_and_transform() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -920,7 +921,7 @@ fn test_group_by_expression_and_average() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
         );
 
         assert!(result.is_ok());
@@ -935,7 +936,7 @@ fn test_group_by_expression_and_average() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x", "name"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -970,7 +971,7 @@ fn test_count() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -980,7 +981,7 @@ fn test_count() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1020,7 +1021,7 @@ fn test_group_by_and_count_and_having1() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1030,7 +1031,7 @@ fn test_group_by_and_count_and_having1() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1042,7 +1043,7 @@ fn test_group_by_and_count_and_having1() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -1083,7 +1084,7 @@ fn test_group_by_and_count_and_having2() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1093,7 +1094,7 @@ fn test_group_by_and_count_and_having2() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1105,7 +1106,7 @@ fn test_group_by_and_count_and_having2() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -1146,7 +1147,7 @@ fn test_group_by_and_count_and_having3() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1156,7 +1157,7 @@ fn test_group_by_and_count_and_having3() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1168,7 +1169,7 @@ fn test_group_by_and_count_and_having3() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -1182,7 +1183,7 @@ fn test_group_by_and_count_and_having3() {
     for _ in 0..3 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1192,7 +1193,7 @@ fn test_group_by_and_count_and_having3() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1243,7 +1244,7 @@ fn test_group_by_and_count_and_having4() {
     for _ in 0..5 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1253,7 +1254,7 @@ fn test_group_by_and_count_and_having4() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1265,7 +1266,7 @@ fn test_group_by_and_count_and_having4() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(create_test_columns(vec!["x"], &column_values))
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x"], &column_values))
     );
 
     assert!(result.is_ok());
@@ -1279,7 +1280,7 @@ fn test_group_by_and_count_and_having4() {
     for _ in 0..3 {
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1289,7 +1290,7 @@ fn test_group_by_and_count_and_having4() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1322,7 +1323,7 @@ fn test_group_by_array_agg1() {
         let columns = create_test_columns(vec!["x", "y"], &column_values);
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1336,7 +1337,7 @@ fn test_group_by_array_agg1() {
         let columns = create_test_columns(vec!["x", "y"], &column_values);
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone())
+            HashMapColumnProvider::from_table_scope(columns.clone())
         );
 
         assert!(result.is_ok());
@@ -1348,7 +1349,7 @@ fn test_group_by_array_agg1() {
     let columns = create_test_columns(vec!["x", "y"], &column_values);
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1384,7 +1385,7 @@ fn test_group_by_array_agg2() {
                 transform: Some(
                     ExpressionTree::Function {
                         function: Function::ArrayUnique,
-                        arguments: vec![ExpressionTree::ColumnAccess("$agg".to_owned())]
+                        arguments: vec![ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())]
                     }
                 ),
             }
@@ -1401,7 +1402,7 @@ fn test_group_by_array_agg2() {
             let columns = create_test_columns(vec!["x", "y"], &column_values);
             let result = aggregate_execution_engine.execute(
                 &aggregate_statement,
-                HashMapColumnProvider::new(columns.clone())
+                HashMapColumnProvider::from_table_scope(columns.clone())
             );
 
             assert!(result.is_ok());
@@ -1417,7 +1418,7 @@ fn test_group_by_array_agg2() {
             let columns = create_test_columns(vec!["x", "y"], &column_values);
             let result = aggregate_execution_engine.execute(
                 &aggregate_statement,
-                HashMapColumnProvider::new(columns.clone())
+                HashMapColumnProvider::from_table_scope(columns.clone())
             );
 
             assert!(result.is_ok());
@@ -1430,7 +1431,7 @@ fn test_group_by_array_agg2() {
     let columns = create_test_columns(vec!["x", "y"], &column_values);
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone())
+        HashMapColumnProvider::from_table_scope(columns.clone())
     );
 
     assert!(result.is_ok());
@@ -1471,7 +1472,7 @@ fn test_count_distinct() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone()),
+            HashMapColumnProvider::from_table_scope(columns.clone()),
         );
 
         assert!(result.is_ok());
@@ -1485,7 +1486,7 @@ fn test_count_distinct() {
 
         let result = aggregate_execution_engine.execute(
             &aggregate_statement,
-            HashMapColumnProvider::new(columns.clone()),
+            HashMapColumnProvider::from_table_scope(columns.clone()),
         );
 
         assert!(result.is_ok());
@@ -1498,7 +1499,7 @@ fn test_count_distinct() {
 
     let result = aggregate_execution_engine.execute(
         &aggregate_statement,
-        HashMapColumnProvider::new(columns.clone()),
+        HashMapColumnProvider::from_table_scope(columns.clone()),
     );
 
     assert!(result.is_ok());

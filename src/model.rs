@@ -9,6 +9,7 @@ use itertools::Itertools;
 use chrono::{NaiveDate, NaiveTime, NaiveDateTime, DateTime, Local, TimeZone, Duration};
 
 use crate::data_model::TableDefinition;
+use crate::execution::ColumnScope;
 
 #[derive(Debug, Hash, Default)]
 pub struct SelectStatement {
@@ -639,6 +640,7 @@ pub enum Aggregate {
 pub enum ExpressionTree {
     Value(Value),
     ColumnAccess(String),
+    ScopedColumnAccess(ColumnScope, String),
     Wildcard,
     Compare { operator: CompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
     NullableCompare { operator: NullableCompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
@@ -657,6 +659,7 @@ impl ExpressionTree {
         match self {
             ExpressionTree::Value(_) => {}
             ExpressionTree::ColumnAccess(_) => {}
+            ExpressionTree::ScopedColumnAccess(_, _) => {}
             ExpressionTree::Wildcard => {}
             ExpressionTree::Compare { left, right, .. } => {
                 left.visit(f)?;

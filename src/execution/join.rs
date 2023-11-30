@@ -155,7 +155,11 @@ fn create_joined_column_mapping<'a>(table_definition: &'a TableDefinition,
         columns_mapping.insert(&joined_table_data.fully_qualified_column_names[index], value);
     }
 
-    let mut column_provider = HashMapColumnProvider::with_table_keys(columns_mapping, table_definition);
+    let mut column_provider = HashMapColumnProvider::with_table_keys(
+        HashMapColumnProvider::create_table_scope(columns_mapping),
+        table_definition
+    );
+
     let keys = HashSet::<String>::from_iter(column_provider.keys().iter().cloned());
     for (column_index, column_name) in joined_table_data.column_names.iter().enumerate() {
         if keys.contains(column_name) {

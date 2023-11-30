@@ -1,4 +1,5 @@
 use crate::data_model::{ColumnParsing, RegexResultReference};
+use crate::execution::ColumnScope;
 
 use crate::model::{Aggregate, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Function, JoinClause, UnaryArithmeticOperator, Value, ValueType};
 
@@ -535,7 +536,7 @@ fn test_transform_aggregate_statement1() {
     assert_eq!(
         Some(ExpressionTree::Arithmetic {
             operator: ArithmeticOperator::Multiply,
-            left: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+            left: Box::new(ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())),
             right: Box::new(ExpressionTree::Value(Value::Int(2)))
         }),
         statement.aggregates[0].transform
@@ -561,7 +562,7 @@ fn test_transform_aggregate_statement2() {
         Some(ExpressionTree::Arithmetic {
             operator: ArithmeticOperator::Multiply,
             left: Box::new(ExpressionTree::Value(Value::Int(2))),
-            right: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+            right: Box::new(ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())),
         }),
         statement.aggregates[0].transform
     );
@@ -585,7 +586,7 @@ fn test_transform_aggregate_statement3() {
     assert_eq!(
         Some(ExpressionTree::Function {
             function: Function::Sqrt,
-            arguments: vec![ExpressionTree::ColumnAccess("$agg".to_owned())]
+            arguments: vec![ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())]
         }),
         statement.aggregates[0].transform
     );
@@ -619,7 +620,7 @@ fn test_transform_aggregate_statement5() {
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
     assert_eq!(
         Some(ExpressionTree::TypeConversion {
-            operand: Box::new(ExpressionTree::ColumnAccess("$agg".to_owned())),
+            operand: Box::new(ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())),
             convert_to_type: ValueType::Float,
         }),
         statement.aggregates[0].transform

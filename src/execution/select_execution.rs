@@ -82,7 +82,7 @@ fn test_project1() {
             from: "test".to_owned(),
             ..Default::default()
         },
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -124,7 +124,7 @@ fn test_project2() {
             from: "test".to_owned(),
             ..Default::default()
         },
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -170,7 +170,7 @@ fn test_project3() {
             from: "test".to_owned(),
             ..Default::default()
         },
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -217,7 +217,10 @@ fn test_project4() {
             from: "test".to_owned(),
             ..Default::default()
         },
-        HashMapColumnProvider::with_table_keys(columns, tables.get("test").unwrap())
+        HashMapColumnProvider::with_table_keys(
+            HashMapColumnProvider::create_table_scope(columns),
+            tables.get("test").unwrap()
+        )
     );
 
     assert!(result.is_ok());
@@ -261,7 +264,7 @@ fn test_filter1() {
             ),
             ..Default::default()
         },
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -298,7 +301,7 @@ fn test_filter2() {
             ),
             ..Default::default()
         },
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -335,7 +338,7 @@ fn test_distinct1() {
 
     let result = select_execution_engine.execute(
         &select_statement,
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -356,7 +359,7 @@ fn test_distinct1() {
 
     let result = select_execution_engine.execute(
         &select_statement,
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -374,7 +377,7 @@ fn test_distinct1() {
 
     let result = select_execution_engine.execute(
         &select_statement,
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -416,7 +419,7 @@ fn test_distinct2() {
 
     let result = select_execution_engine.execute(
         &select_statement,
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -440,7 +443,7 @@ fn test_distinct2() {
 
     let result = select_execution_engine.execute(
         &select_statement,
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
@@ -460,7 +463,7 @@ fn test_distinct2() {
 
     let result = select_execution_engine.execute(
         &select_statement,
-        HashMapColumnProvider::new(columns)
+        HashMapColumnProvider::from_table_scope(columns)
     );
 
     assert!(result.is_ok());
