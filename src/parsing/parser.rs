@@ -1148,7 +1148,6 @@ impl std::fmt::Display for ParserOperationTree {
     }
 }
 
-
 impl std::fmt::Display for ParserExpressionTreeData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         ParserExpressionTreeDataVisualizer {}.fmt(self, f)

@@ -327,8 +327,7 @@ impl AggregateExecutionEngine {
             }
             Some(group_by) => {
                 if !group_by.iter().any(|part| part == group_part) {
-                    //TODO: fix
-                    return Err(ExecutionError::GroupKeyNotAvailable(Some(format!("{:?}", group_part))));
+                    return Err(ExecutionError::GroupKeyNotAvailable(Some(format!("{}", group_part))));
                 }
             }
         }

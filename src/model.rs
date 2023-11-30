@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
-use std::ops::Add;
+use std::ops::{Add};
 
 use itertools::Itertools;
 
@@ -510,6 +510,19 @@ pub enum CompareOperator {
     LessThanOrEqual
 }
 
+impl std::fmt::Display for CompareOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CompareOperator::Equal => write!(f, "="),
+            CompareOperator::NotEqual => write!(f, "!="),
+            CompareOperator::GreaterThan => write!(f, ">"),
+            CompareOperator::GreaterThanOrEqual => write!(f, ">="),
+            CompareOperator::LessThan => write!(f, "<"),
+            CompareOperator::LessThanOrEqual => write!(f, "<=")
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum NullableCompareOperator {
     Equal,
@@ -532,6 +545,18 @@ pub enum ArithmeticOperator {
     Multiply,
     Divide
 }
+
+impl std::fmt::Display for ArithmeticOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ArithmeticOperator::Add => write!(f, "+"),
+            ArithmeticOperator::Subtract => write!(f, "-"),
+            ArithmeticOperator::Multiply => write!(f, "*"),
+            ArithmeticOperator::Divide => write!(f, "/"),
+        }
+    }
+}
+
 
 #[derive(Debug, PartialEq, Hash, Clone)]
 pub enum BooleanOperator {
@@ -727,6 +752,168 @@ impl ExpressionTree {
 
         f(self)?;
         Ok(())
+    }
+}
+
+impl std::fmt::Display for ExpressionTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        ExpressionTreeVisualizer {}.fmt(self, f)
+    }
+}
+
+struct ExpressionTreeVisualizer {
+
+}
+
+impl ExpressionTreeVisualizer {
+    fn fmt(&self, value: &ExpressionTree, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match value {
+            ExpressionTree::Value(value) => {
+                write!(f, "{}", value)
+            }
+            ExpressionTree::ColumnAccess(name) => {
+                write!(f, "{}", name)
+            }
+            ExpressionTree::ScopedColumnAccess(scope, name) => {
+                match scope {
+                    ColumnScope::Table => write!(f, "{}", name),
+                    ColumnScope::AggregationValue => write!(f, "AggregationValue({})", name),
+                    ColumnScope::GroupKey => write!(f, "GroupKey({})", name),
+                    ColumnScope::GroupValue => write!(f, "GroupValue({})", name)
+                }
+            }
+            ExpressionTree::Wildcard => {
+                write!(f, "*")
+            }
+            ExpressionTree::Arithmetic { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ExpressionTree::BooleanOperation { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ExpressionTree::UnaryArithmetic { operator, operand } => {
+                write!(f, "{}", operator)?;
+                self.fmt(&operand, f)?;
+                Ok(())
+            }
+            ExpressionTree::Compare { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ExpressionTree::NullableCompare { operator, left, right } => {
+                write!(f, "(")?;
+                self.fmt(&left, f)?;
+                write!(f, " {} ", operator)?;
+                self.fmt(&right, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ExpressionTree::Function { function, arguments } => {
+                write!(f, "{}", function)?;
+                write!(f, "(")?;
+                let mut is_first = true;
+                for argument in arguments {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    } else {
+                        is_first = false;
+                    }
+
+                    self.fmt(&argument, f)?;
+                }
+
+                write!(f, ")")?;
+                Ok(())
+            }
+            ExpressionTree::ArrayElementAccess { array, index } => {
+                self.fmt(&array, f)?;
+                write!(f, "[")?;
+                self.fmt(&index, f)?;
+                write!(f, "]")?;
+                Ok(())
+            }
+            ExpressionTree::TypeConversion { operand, convert_to_type } => {
+                self.fmt(&operand, f)?;
+                write!(f, "::{}", convert_to_type)?;
+                Ok(())
+            }
+            ExpressionTree::Case { clauses, else_clause } => {
+                write!(f, "(CASE ")?;
+                for clause in clauses {
+                    write!(f, "WHEN ")?;
+                    self.fmt(&clause.0, f)?;
+                    write!(f, " THEN ")?;
+                    self.fmt(&clause.1, f)?;
+                    write!(f, " ")?;
+                }
+                write!(f, "ELSE ")?;
+                self.fmt(&else_clause, f)?;
+                write!(f, " END)")?;
+                Ok(())
+            }
+            ExpressionTree::Aggregate(_, aggregate) => {
+                match aggregate.as_ref() {
+                    Aggregate::GroupKey(expression) => self.fmt(&expression, f),
+                    Aggregate::Count(name, distinct) => {
+                        if *distinct {
+                            write!(f, "COUNT(DISTINCT {})", name.as_ref().unwrap_or(&String::new()))
+                        } else {
+                            write!(f, "COUNT({})", name.as_ref().unwrap_or(&String::new()))
+                        }
+                    }
+                    Aggregate::Min(expression) => {
+                        write!(f, "MIN(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::Max(expression) => {
+                        write!(f, "MAX(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::Sum(expression) => {
+                        write!(f, "SUM(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::Average(expression) => {
+                        write!(f, "AVG(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::StandardDeviation(expression) => {
+                        write!(f, "STDDEV(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::CollectArray(expression) => {
+                        write!(f, "ARRAY_AGG(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                }
+            }
+        }
     }
 }
 
