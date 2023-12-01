@@ -23,10 +23,10 @@ ctrlc = "3.0"
 rustyline = "12.0.0"
 rustyline-derive = "0.9.0"
 fnv = "1.0"
-itertools = "0.11"
+itertools = "0.12.0"
 serde_json = { version = "1", features = ["preserve_order"] }
 chrono = "0.4"
-pyo3 = { version = "0.19", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.20.0", features = ["extension-module"], optional = true }
 
 [target.'cfg(unix)'.dependencies]
 cursive = { version = "0.20" }
