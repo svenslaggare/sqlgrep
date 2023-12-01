@@ -25,8 +25,8 @@ pub struct AggregateExecutionEngine {
 impl AggregateExecutionEngine {
     pub fn new() -> AggregateExecutionEngine {
         AggregateExecutionEngine {
-            group_aggregators: BTreeMap::new(),
-            group_values: BTreeMap::new(),
+            group_aggregators: Groups::new(),
+            group_values: Groups::new(),
             distinct_values: DistinctValues::new()
         }
     }
