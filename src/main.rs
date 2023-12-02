@@ -28,6 +28,8 @@ struct CommandLineInput {
     head: bool,
     #[structopt(short, long, help="Executes the given query.")]
     command: Option<String>,
+    #[structopt(long, help="Executes the given query defined in the given file.")]
+    command_file: Option<String>,
     #[structopt(long, help="Displays the execution statistics of queries.")]
     show_run_stats: bool,
     #[structopt(long, help="The input data is given on stdin.")]
@@ -83,6 +85,9 @@ fn main_normal(command_line_input: CommandLineInput) {
     }).expect("Error setting Ctrl-C handler");
 
     if let Some(command) = command_line_input.command.clone() {
+        execute(&command_line_input, &mut tables, running.clone(), command, true);
+    } else if let Some(command_file) = command_line_input.command_file.clone() {
+        let command = std::fs::read_to_string(command_file).expect("Failed to read command file.");
         execute(&command_line_input, &mut tables, running.clone(), command, true);
     } else {
         let mut line_editor = Editor::new().unwrap();
