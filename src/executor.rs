@@ -340,6 +340,7 @@ fn test_file_executor_select1() {
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
     use crate::parsing::parse;
+    use crate::integration_tests::CapturedPrinter;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -363,19 +364,20 @@ fn test_file_executor_select1() {
 
     let statement = parse("SELECT ip, hostname, year, month, day, hour, minute, second FROM connections WHERE day >= 15").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executor.execute();
+    executor.execute().unwrap();
+    assert_eq!(584, executor.statistics().total_result_rows);
 
-    if let Err(err) = result {
-        println!("{:?}", err);
-        assert!(false);
-    }
+    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', year: 2005, month: 'Jun', day: 17, hour: 7, minute: 7, second: 0", executor.output_printer().printer().lines()[0]);
+    assert_eq!("ip: '207.30.238.8', hostname: 'host8.topspot.net', year: 2005, month: 'Jul', day: 17, hour: 12, minute: 31, second: 0", executor.output_printer().printer().lines()[292]);
+    assert_eq!("ip: '218.38.58.3', hostname: NULL, year: 2005, month: 'Jul', day: 27, hour: 10, minute: 59, second: 53", executor.output_printer().printer().lines()[583]);
 }
 
 #[test]
@@ -384,6 +386,7 @@ fn test_file_executor_aggregate1() {
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
     use crate::parsing::parse;
+    use crate::integration_tests::CapturedPrinter;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -407,19 +410,35 @@ fn test_file_executor_aggregate1() {
 
     let statement = parse("SELECT hour, COUNT(*) AS count, MAX(minute) AS max_minute FROM connections WHERE day >= 15 GROUP BY hour").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executor.execute();
+    executor.execute().unwrap();
+    assert_eq!(18, executor.statistics().total_result_rows);
 
-    if let Err(err) = result {
-        println!("{:?}", err);
-        assert!(false);
-    }
+    assert_eq!("hour: 2, count: 38, max_minute: 38", executor.output_printer().printer().lines()[0]);
+    assert_eq!("hour: 3, count: 56, max_minute: 40", executor.output_printer().printer().lines()[1]);
+    assert_eq!("hour: 4, count: 2, max_minute: 6", executor.output_printer().printer().lines()[2]);
+    assert_eq!("hour: 5, count: 23, max_minute: 47", executor.output_printer().printer().lines()[3]);
+    assert_eq!("hour: 6, count: 53, max_minute: 39", executor.output_printer().printer().lines()[4]);
+    assert_eq!("hour: 7, count: 8, max_minute: 7", executor.output_printer().printer().lines()[5]);
+    assert_eq!("hour: 8, count: 46, max_minute: 14", executor.output_printer().printer().lines()[6]);
+    assert_eq!("hour: 9, count: 73, max_minute: 44", executor.output_printer().printer().lines()[7]);
+    assert_eq!("hour: 10, count: 24, max_minute: 59", executor.output_printer().printer().lines()[8]);
+    assert_eq!("hour: 12, count: 23, max_minute: 31", executor.output_printer().printer().lines()[9]);
+    assert_eq!("hour: 13, count: 42, max_minute: 46", executor.output_printer().printer().lines()[10]);
+    assert_eq!("hour: 14, count: 30, max_minute: 44", executor.output_printer().printer().lines()[11]);
+    assert_eq!("hour: 15, count: 23, max_minute: 9", executor.output_printer().printer().lines()[12]);
+    assert_eq!("hour: 18, count: 13, max_minute: 55", executor.output_printer().printer().lines()[13]);
+    assert_eq!("hour: 19, count: 36, max_minute: 29", executor.output_printer().printer().lines()[14]);
+    assert_eq!("hour: 20, count: 7, max_minute: 55", executor.output_printer().printer().lines()[15]);
+    assert_eq!("hour: 21, count: 23, max_minute: 23", executor.output_printer().printer().lines()[16]);
+    assert_eq!("hour: 23, count: 64, max_minute: 42", executor.output_printer().printer().lines()[17]);
 }
 
 #[test]
@@ -428,6 +447,7 @@ fn test_file_executor_aggregate2() {
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
     use crate::parsing::parse;
+    use crate::integration_tests::CapturedPrinter;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -451,19 +471,18 @@ fn test_file_executor_aggregate2() {
 
     let statement = parse("SELECT COUNT(*) AS count, MAX(minute) AS max_minute FROM connections WHERE day >= 15").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executor.execute();
+    executor.execute().unwrap();
+    assert_eq!(1, executor.statistics().total_result_rows);
 
-    if let Err(err) = result {
-        println!("{:?}", err);
-        assert!(false);
-    }
+    assert_eq!("count: 584, max_minute: 59", executor.output_printer().printer().lines()[0]);
 }
 
 #[test]
@@ -472,6 +491,7 @@ fn test_file_executor_aggregate3() {
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
     use crate::parsing::parse;
+    use crate::integration_tests::CapturedPrinter;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -495,19 +515,26 @@ fn test_file_executor_aggregate3() {
 
     let statement = parse("SELECT hostname, COUNT(*) AS count, MAX(day) AS last_day FROM connections GROUP BY hostname").unwrap();
 
-    let mut ingester = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = ingester.execute();
+    executor.execute().unwrap();
+    assert_eq!(9, executor.statistics().total_result_rows);
 
-    if let Err(err) = result {
-        println!("{:?}", err);
-        assert!(false);
-    }
+    assert_eq!("hostname: NULL, count: 453, last_day: 29", executor.output_printer().printer().lines()[0]);
+    assert_eq!("hostname: '24-54-76-216.bflony.adelphia.net', count: 8, last_day: 17", executor.output_printer().printer().lines()[1]);
+    assert_eq!("hostname: '82-68-222-194.dsl.in-addr.zen.co.uk', count: 23, last_day: 17", executor.output_printer().printer().lines()[2]);
+    assert_eq!("hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', count: 23, last_day: 17", executor.output_printer().printer().lines()[3]);
+    assert_eq!("hostname: 'aml-sfh-3310b.adsl.wanadoo.nl', count: 32, last_day: 17", executor.output_printer().printer().lines()[4]);
+    assert_eq!("hostname: 'dsl-082-083-227-067.arcor-ip.net', count: 23, last_day: 10", executor.output_printer().printer().lines()[5]);
+    assert_eq!("hostname: 'dsl-Chn-static-059.45.101.203.touchtelindia.net', count: 23, last_day: 17", executor.output_printer().printer().lines()[6]);
+    assert_eq!("hostname: 'host8.topspot.net', count: 46, last_day: 17", executor.output_printer().printer().lines()[7]);
+    assert_eq!("hostname: 'lns-vlq-45-tou-82-252-162-81.adsl.proxad.net', count: 22, last_day: 18", executor.output_printer().printer().lines()[8]);
 }
 
 #[test]
@@ -516,6 +543,7 @@ fn test_file_executor_aggregate4() {
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
     use crate::parsing::parse;
+    use crate::integration_tests::CapturedPrinter;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -541,19 +569,20 @@ fn test_file_executor_aggregate4() {
         "SELECT hostname, hour, COUNT(*) AS count, MAX(minute) AS max_minute FROM connections GROUP BY hostname, hour WHERE day >= 15"
     ).unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executor.execute();
+    executor.execute().unwrap();
+    assert_eq!(22, executor.statistics().total_result_rows);
 
-    if let Err(err) = result {
-        println!("{:?}", err);
-        assert!(false);
-    }
+    assert_eq!("hostname: NULL, hour: 2, count: 23, max_minute: 38", executor.output_printer().printer().lines()[0]);
+    assert_eq!("hostname: NULL, hour: 19, count: 36, max_minute: 29", executor.output_printer().printer().lines()[10]);
+    assert_eq!("hostname: 'lns-vlq-45-tou-82-252-162-81.adsl.proxad.net', hour: 20, count: 7, max_minute: 55", executor.output_printer().printer().lines()[21]);
 }
 
 #[test]
@@ -562,6 +591,7 @@ fn test_file_executor_aggregate5() {
     use crate::execution::execution_engine::{ExecutionEngine};
     use crate::model::{ValueType};
     use crate::parsing::parse;
+    use crate::integration_tests::CapturedPrinter;
 
     let table_definition = TableDefinition::new(
         "connections",
@@ -587,17 +617,17 @@ fn test_file_executor_aggregate5() {
         "SELECT hostname, COUNT(*) AS count, MAX(day) AS last_day FROM connections GROUP BY hostname HAVING hostname IS NOT NULL AND COUNT(*) >= 30"
     ).unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &statement)
     ).unwrap();
 
-    let result = executor.execute();
+    executor.execute().unwrap();
+    assert_eq!(2, executor.statistics().total_result_rows);
 
-    if let Err(err) = result {
-        println!("{:?}", err);
-        assert!(false);
-    }
+    assert_eq!("hostname: 'aml-sfh-3310b.adsl.wanadoo.nl', count: 32, last_day: 17", executor.output_printer().printer().lines()[0]);
+    assert_eq!("hostname: 'host8.topspot.net', count: 46, last_day: 17", executor.output_printer().printer().lines()[1]);
 }

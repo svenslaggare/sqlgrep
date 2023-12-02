@@ -487,6 +487,10 @@ impl CapturedPrinter {
             lines: Vec::new()
         }
     }
+
+    pub fn lines(&self) -> &Vec<String> {
+        &self.lines
+    }
 }
 
 impl Printer for CapturedPrinter {
