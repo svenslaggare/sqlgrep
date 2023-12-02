@@ -5,6 +5,7 @@ use std::fs::File;
 use crate::data_model::{Tables};
 use crate::execution::execution_engine::ExecutionEngine;
 use crate::executor::{DisplayOptions, FileExecutor, Printer};
+use crate::model::{ExpressionTree, NullableCompareOperator, Value};
 use crate::parsing;
 
 fn create_tables(filename: &str) -> Tables {
@@ -37,6 +38,8 @@ fn test_ssh1() {
 
     assert_eq!("hostname: '5.36.59.76.dynamic-dsl-ip.omantel.net.om', username: 'root'", executor.output_printer().printer().lines[0]);
     assert_eq!("hostname: '183.62.140.253', username: 'root'", executor.output_printer().printer().lines[385]);
+
+    assert_eq!(vec![("p0".to_owned(), ExpressionTree::Wildcard)], query.extract_select().unwrap().projections)
 }
 
 #[test]
@@ -91,6 +94,17 @@ fn test_ftpd1() {
 
     assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', year: 2005, month: 'Jun', day: 17, hour: 7, minute: 7, second: 0", executor.output_printer().printer().lines[0]);
     assert_eq!("ip: '82.68.222.195', hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', year: 2005, month: 'Jul', day: 17, hour: 23, minute: 21, second: 54", executor.output_printer().printer().lines[199]);
+
+    assert_eq!(
+        Some(
+            ExpressionTree::NullableCompare {
+                operator: NullableCompareOperator::NotEqual,
+                left: Box::new(ExpressionTree::ColumnAccess("hostname".to_owned())),
+                right: Box::new(ExpressionTree::Value(Value::Null)),
+            }
+        ),
+        query.extract_select().unwrap().filter
+    )
 }
 
 #[test]

@@ -7,7 +7,7 @@ use regex::Regex;
 
 use fnv::FnvHasher;
 
-use chrono::{Local, Datelike, Timelike, DurationRound, Duration};
+use chrono::{Local, Datelike, Timelike, DurationRound, Duration, TimeZone};
 
 use itertools::Itertools;
 
@@ -208,8 +208,8 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
-                            |_, _| None,
-                            |_, _| None,
+                            |x, y| Some(Value::Timestamp(x.max(y))),
+                            |x, y| Some(Value::Interval(x.max(y))),
                         ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Least if arguments.len() == 2 => {
@@ -224,8 +224,8 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_, _| None,
                             |_, _| None,
                             |_, _| None,
-                            |_, _| None,
-                            |_, _| None,
+                            |x, y| Some(Value::Timestamp(x.min(y))),
+                            |x, y| Some(Value::Interval(x.min(y))),
                         ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Abs if arguments.len() == 1 => {
@@ -239,7 +239,7 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                             |_| None,
                             |_| None,
                             |_| None,
-                            |_| None,
+                            |x| Some(x.abs()),
                         ).ok_or(EvaluationError::UndefinedFunction(function.clone(), executed_arguments_types))
                     }
                     Function::Sqrt if arguments.len() == 1 => {
@@ -859,6 +859,22 @@ fn test_arithmetic1() {
 
 #[test]
 fn test_arithmetic2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Float(Float(3.0))),
+        expression_execution_engine.evaluate(&ExpressionTree::Arithmetic {
+            left: Box::new(ExpressionTree::Value(Value::Float(Float(4.0)))),
+            right: Box::new(ExpressionTree::Value(Value::Float(Float(1.0)))),
+            operator: ArithmeticOperator::Subtract
+        })
+    );
+}
+
+#[test]
+fn test_arithmetic3() {
     use crate::model::IntervalType;
 
     let column_provider = TestColumnProvider::new();
@@ -919,6 +935,23 @@ fn test_function1() {
             arguments: vec![
                 ExpressionTree::Value(Value::Int(-1000)),
                 ExpressionTree::Value(Value::Int(5000))
+            ]
+        })
+    );
+}
+
+#[test]
+fn test_function2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Int(1000)),
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
+            function: Function::Abs,
+            arguments: vec![
+                ExpressionTree::Value(Value::Int(-1000))
             ]
         })
     );
@@ -1194,6 +1227,24 @@ fn test_in_operator2() {
                 ExpressionTree::Value(Value::Int(1)),
                 ExpressionTree::Value(Value::Int(3))
             ],
+        })
+    );
+}
+
+#[test]
+fn test_truncate_timestamp() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Timestamp(Local.with_ymd_and_hms(2023, 12, 1, 0, 0, 0).unwrap())),
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
+            function: Function::TruncateTimestamp,
+            arguments: vec![
+                ExpressionTree::Value(Value::String("day".to_owned())),
+                ExpressionTree::Value(Value::Timestamp(Local.with_ymd_and_hms(2023, 12, 1, 12, 0, 0).unwrap()))
+            ]
         })
     );
 }
