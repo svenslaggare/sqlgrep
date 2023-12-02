@@ -193,6 +193,18 @@ fn test_parse_expression13() {
 }
 
 #[test]
+fn test_parse_call1() {
+    let tree = parse_expression_str("f(4, a)").unwrap();
+    assert_eq!("f(4, a)", tree.tree.to_string());
+}
+
+#[test]
+fn test_parse_call2() {
+    let tree = parse_expression_str("f(g(b, c), a)").unwrap();
+    assert_eq!("f(g(b, c), a)", tree.tree.to_string());
+}
+
+#[test]
 fn test_parse_type_convert1() {
     let tree = parse_expression_str("'2022-10-11 22:00:00'::timestamp").unwrap();
     assert_eq!("'2022-10-11 22:00:00'::timestamp", tree.tree.to_string());
@@ -214,6 +226,18 @@ fn test_parse_case_expression1() {
 fn test_parse_case_expression2() {
     let tree = parse_expression_str("CASE WHEN x > 10 THEN 2 WHEN x > 5 THEN 1 ELSE 0 END").unwrap();
     assert_eq!("(CASE WHEN (x > 10) THEN 2 WHEN (x > 5) THEN 1 ELSE 0 END)", tree.tree.to_string());
+}
+
+#[test]
+fn test_parse_in_operator1() {
+    let tree = parse_expression_str("x IN ('a', 'aa', 'ab')").unwrap();
+    assert_eq!("(x IN ('a', 'aa', 'ab'))", tree.tree.to_string());
+}
+
+#[test]
+fn test_parse_in_operator2() {
+    let tree = parse_expression_str("x NOT IN ('a', 'aa', 'ab')").unwrap();
+    assert_eq!("(x NOT IN ('a', 'aa', 'ab'))", tree.tree.to_string());
 }
 
 #[test]
@@ -256,6 +280,18 @@ fn test_parse_select_and_filter3() {
 fn test_parse_select_and_filter4() {
     let tree = parse_str("SELECT MAX(x) * 2 FROM test WHERE x > 4").unwrap();
     assert_eq!("SELECT (MAX(x) * 2) FROM test WHERE (x > 4)", tree.to_string());
+}
+
+#[test]
+fn test_parse_select_and_filter5() {
+    let tree = parse_str("SELECT x FROM test WHERE 4 < ABS(x)").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (4 < ABS(x))", tree.to_string());
+}
+
+#[test]
+fn test_parse_select_and_filter6() {
+    let tree = parse_str("SELECT x FROM test WHERE x IN ('a', 'b', 'c')").unwrap();
+    assert_eq!("SELECT x FROM test WHERE (x IN ('a', 'b', 'c'))", tree.to_string());
 }
 
 #[test]

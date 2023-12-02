@@ -34,11 +34,13 @@ pub enum ParserExpressionTreeData {
     ColumnAccess(String),
     ScopedColumnAccess(ColumnScope, String),
     Wildcard,
+    Tuple { values: Vec<ParserExpressionTree> },
     BinaryOperator { operator: Operator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     BooleanOperation { operator: BooleanOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
     UnaryOperator { operator: Operator, operand: Box<ParserExpressionTree>},
     Invert { operand: Box<ParserExpressionTree> },
     NullableCompare { operator: NullableCompareOperator, left: Box<ParserExpressionTree>, right: Box<ParserExpressionTree> },
+    In { is_not: bool, operand: Box<ParserExpressionTree>, values: Vec<ParserExpressionTree> },
     Call { name: String, arguments: Vec<ParserExpressionTree>, distinct: Option<bool> },
     ArrayElementAccess { array: Box<ParserExpressionTree>, index: Box<ParserExpressionTree> },
     TypeConversion { operand: Box<ParserExpressionTree>, convert_to_type: ValueType },
@@ -59,6 +61,11 @@ impl ParserExpressionTreeData {
             ParserExpressionTreeData::ColumnAccess(_) => {}
             ParserExpressionTreeData::ScopedColumnAccess(_, _) => {}
             ParserExpressionTreeData::Wildcard => {}
+            ParserExpressionTreeData::Tuple { values: arguments } => {
+                for arg in arguments {
+                    arg.tree.visit(f)?;
+                }
+            }
             ParserExpressionTreeData::BinaryOperator { left, right, .. } => {
                 left.tree.visit(f)?;
                 right.tree.visit(f)?;
@@ -76,6 +83,12 @@ impl ParserExpressionTreeData {
             ParserExpressionTreeData::NullableCompare { left, right, .. } => {
                 left.tree.visit(f)?;
                 right.tree.visit(f)?;
+            }
+            ParserExpressionTreeData::In { operand, values, .. } => {
+                operand.tree.visit(f)?;
+                for value in values {
+                    value.tree.visit(f)?;
+                }
             }
             ParserExpressionTreeData::Call { arguments, .. } => {
                 for arg in arguments {
@@ -686,7 +699,7 @@ impl<'a> Parser<'a> {
         let mut type_value = self.consume_identifier()?;
         while self.current() == &Token::LeftSquareParentheses {
             self.next()?;
-            self.expect_and_consume_token(Token::RightSquareParentheses, ParserErrorType::ExpectedRightParentheses)?;
+            self.expect_and_consume_token(Token::RightSquareParentheses, ParserErrorType::ExpectedRightSquareParentheses)?;
             type_value += "[]";
         }
 
@@ -755,6 +768,32 @@ impl<'a> Parser<'a> {
                         ParserExpressionTreeData::NullableCompare { operator: NullableCompareOperator::NotEqual, left: Box::new(lhs), right: Box::new(rhs) }
                     );
                 }
+                Token::Keyword(Keyword::In) => {
+                    let values = match rhs.tree {
+                        ParserExpressionTreeData::Tuple { values } => {
+                            values
+                        }
+                        _ => { return Err(ParserError::new(op_location, ParserErrorType::ExpectedTuple)); }
+                    };
+
+                    lhs = ParserExpressionTree::new(
+                        op_location,
+                        ParserExpressionTreeData::In { is_not: false, operand: Box::new(lhs), values}
+                    );
+                }
+                Token::Keyword(Keyword::NotIn) => {
+                    let values = match rhs.tree {
+                        ParserExpressionTreeData::Tuple { values } => {
+                            values
+                        }
+                        _ => { return Err(ParserError::new(op_location, ParserErrorType::ExpectedTuple)); }
+                    };
+
+                    lhs = ParserExpressionTree::new(
+                        op_location,
+                        ParserExpressionTreeData::In { is_not: true, operand: Box::new(lhs), values }
+                    );
+                }
                 Token::Keyword(Keyword::And) => {
                     lhs = ParserExpressionTree::new(
                         op_location,
@@ -787,6 +826,8 @@ impl<'a> Parser<'a> {
             Token::DoubleColon => Ok(7),
             Token::Keyword(Keyword::Is) => Ok(2),
             Token::Keyword(Keyword::IsNot) => Ok(2),
+            Token::Keyword(Keyword::In) => Ok(2),
+            Token::Keyword(Keyword::NotIn) => Ok(2),
             Token::Keyword(Keyword::And) => Ok(1),
             Token::Keyword(Keyword::Or) => Ok(1),
             Token::LeftSquareParentheses => Ok(1),
@@ -826,12 +867,33 @@ impl<'a> Parser<'a> {
                 self.next()?;
                 let expression = self.parse_expression_internal();
 
-                self.expect_and_consume_token(
-                    Token::RightParentheses,
-                    ParserErrorType::ExpectedRightParentheses
-                )?;
+                if self.current() == &Token::Comma {
+                    self.next()?;
 
-                expression
+                    let mut arguments = vec![expression?];
+
+                    loop {
+                        arguments.push(self.parse_expression_internal()?);
+                        match self.current() {
+                            Token::RightParentheses => { break; }
+                            Token::Comma => {}
+                            _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
+                        }
+
+                        self.next()?;
+                    }
+
+                    self.next()?;
+
+                    Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Tuple { values: arguments }))
+                } else {
+                    self.expect_and_consume_token(
+                        Token::RightParentheses,
+                        ParserErrorType::ExpectedRightParentheses
+                    )?;
+
+                    expression
+                }
             }
             Token::Keyword(Keyword::Extract) => {
                 self.parse_extract_expression()
@@ -865,27 +927,8 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let mut arguments = Vec::<ParserExpressionTree>::new();
-
         if !is_create_array {
-            match self.current() {
-                Token::RightParentheses => (),
-                _ => {
-                    loop {
-                        arguments.push(self.parse_expression_internal()?);
-                        match self.current() {
-                            Token::RightParentheses => { break; }
-                            Token::Comma => {}
-                            _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
-                        }
-
-                        self.next()?;
-                    }
-                }
-            }
-
-            self.next()?;
-
+            let arguments = self.parse_arguments()?;
             Ok(
                 ParserExpressionTree::new(
                     token_location,
@@ -893,6 +936,8 @@ impl<'a> Parser<'a> {
                 )
             )
         } else {
+            let mut arguments = Vec::<ParserExpressionTree>::new();
+
             match self.current() {
                 Token::RightSquareParentheses => (),
                 _ => {
@@ -1006,6 +1051,30 @@ impl<'a> Parser<'a> {
                 );
             }
         }
+    }
+
+    fn parse_arguments(&mut self) -> ParserResult<Vec<ParserExpressionTree>> {
+        let mut arguments = Vec::<ParserExpressionTree>::new();
+
+        match self.current() {
+            Token::RightParentheses => (),
+            _ => {
+                loop {
+                    arguments.push(self.parse_expression_internal()?);
+                    match self.current() {
+                        Token::RightParentheses => { break; }
+                        Token::Comma => {}
+                        _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
+                    }
+
+                    self.next()?;
+                }
+            }
+        }
+
+        self.next()?;
+
+        Ok(arguments)
     }
 
     fn consume_identifier(&mut self) -> ParserResult<String> {
@@ -1178,6 +1247,21 @@ impl ParserExpressionTreeDataVisualizer {
             ParserExpressionTreeData::Wildcard => {
                 write!(f, "*")
             }
+            ParserExpressionTreeData::Tuple { values: arguments } => {
+                write!(f, "((")?;
+                let mut is_first = true;
+                for argument in arguments {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    } else {
+                        is_first = false;
+                    }
+
+                    self.fmt(&argument.tree, f)?;
+                }
+                write!(f, "))")?;
+                Ok(())
+            }
             ParserExpressionTreeData::BinaryOperator { operator, left, right } => {
                 write!(f, "(")?;
                 self.fmt(&left.tree, f)?;
@@ -1209,6 +1293,31 @@ impl ParserExpressionTreeDataVisualizer {
                 self.fmt(&left.tree, f)?;
                 write!(f, " {} ", operator)?;
                 self.fmt(&right.tree, f)?;
+                write!(f, ")")?;
+                Ok(())
+            }
+            ParserExpressionTreeData::In { is_not, operand, values } => {
+                write!(f, "(")?;
+                self.fmt(&operand.tree, f)?;
+                if *is_not {
+                    write!(f, " NOT IN ")?;
+                } else {
+                    write!(f, " IN ")?;
+                }
+
+                write!(f, "(")?;
+                let mut is_first = true;
+                for value in values {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    } else {
+                        is_first = false;
+                    }
+
+                    self.fmt(&value.tree, f)?;
+                }
+                write!(f, ")")?;
+
                 write!(f, ")")?;
                 Ok(())
             }

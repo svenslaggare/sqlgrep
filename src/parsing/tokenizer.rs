@@ -24,6 +24,8 @@ pub enum Keyword {
     Not,
     Is,
     IsNot,
+    In,
+    NotIn,
     Having,
     Inner,
     Outer,
@@ -198,6 +200,7 @@ pub enum ParserErrorType {
     ExpectedInt,
     ExpectedOperator,
     ExpectedSpecificOperator(Operator),
+    ExpectedTuple,
     ExpectedColon,
     ExpectedDoubleColon,
     ExpectedRightArrow,
@@ -243,6 +246,7 @@ impl std::fmt::Display for ParserErrorType {
             ParserErrorType::ExpectedInt => { write!(f, "Expected an integer") }
             ParserErrorType::ExpectedOperator => { write!(f, "Expected an operator") }
             ParserErrorType::ExpectedSpecificOperator(operator) => { write!(f, "Expected '{}' operator", operator) }
+            ParserErrorType::ExpectedTuple => { write!(f, "Expected tuple expression") }
             ParserErrorType::ExpectedColon => { write!(f, "Expected ':'") }
             ParserErrorType::ExpectedDoubleColon => { write!(f, "Expected '::'") }
             ParserErrorType::ExpectedRightArrow => { write!(f, "Expected '=>'") }
@@ -279,6 +283,7 @@ lazy_static! {
             ("table".to_owned(), Keyword::Table),
             ("not".to_owned(), Keyword::Not),
             ("is".to_owned(), Keyword::Is),
+            ("in".to_owned(), Keyword::In),
             ("having".to_owned(), Keyword::Having),
             ("inner".to_owned(), Keyword::Inner),
             ("outer".to_owned(), Keyword::Outer),
@@ -404,10 +409,16 @@ pub fn tokenize(text: &str) -> Result<Vec<ParserToken>, ParserError> {
             }
 
             if let Some(keyword) = KEYWORDS.get(&identifier.to_lowercase()) {
-                if keyword == &Keyword::Not && state.tokens.last().map(|t| &t.token) == Some(Token::Keyword(Keyword::Is)).as_ref() {
-                    state.tokens.last_mut().unwrap().token = Token::Keyword(Keyword::IsNot);
-                } else {
-                    state.add(Token::Keyword(keyword.clone()));
+                match (keyword, state.tokens.last().map(|t| &t.token)) {
+                    (Keyword::Not, Some(Token::Keyword(Keyword::Is))) => {
+                        state.tokens.last_mut().unwrap().token = Token::Keyword(Keyword::IsNot);
+                    }
+                    (Keyword::In, Some(Token::Keyword(Keyword::Not))) => {
+                        state.tokens.last_mut().unwrap().token = Token::Keyword(Keyword::NotIn);
+                    }
+                    _ => {
+                        state.add(Token::Keyword(keyword.clone()));
+                    }
                 }
             } else if identifier.to_lowercase() == "null" {
                 state.add(Token::Null);

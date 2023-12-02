@@ -224,7 +224,19 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     BooleanOperator::Or => Ok(Value::Bool(self.evaluate(left)?.bool() || self.evaluate(right)?.bool()))
                 }
             }
-            ExpressionTree::Function { function, arguments } => {
+            ExpressionTree::In { is_not, operand, values } => {
+                let executed_operand = self.evaluate(operand)?;
+
+                for value in values {
+                    let expected_value = self.evaluate(value)?;
+                    if executed_operand == expected_value {
+                        return Ok(Value::Bool(!is_not));
+                    }
+                }
+
+                Ok(Value::Bool(*is_not))
+            }
+            ExpressionTree::FunctionCall { function, arguments } => {
                 let mut executed_arguments = Vec::new();
                 for argument in arguments {
                     executed_arguments.push(self.evaluate(argument)?);
@@ -901,7 +913,7 @@ fn test_function1() {
 
     assert_eq!(
         Ok(Value::Int(5000)),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::Greatest,
             arguments: vec![
                 ExpressionTree::Value(Value::Int(-1000)),
@@ -950,7 +962,7 @@ fn test_regex1() {
 
     assert_eq!(
         Ok(Value::Bool(true)),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::RegexMatches,
             arguments: vec![
                 ExpressionTree::Value(Value::String("HELLO MY NAME".to_owned())),
@@ -961,7 +973,7 @@ fn test_regex1() {
 
     assert_eq!(
         Ok(Value::Bool(false)),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::RegexMatches,
             arguments: vec![
                 ExpressionTree::Value(Value::String("HELLO me NAME".to_owned())),
@@ -1009,7 +1021,7 @@ fn test_create_array1() {
 
     assert_eq!(
         Ok(Value::Array(ValueType::Int, vec![Value::Int(1337), Value::Int(4711)])),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::CreateArray,
             arguments: vec![ExpressionTree::Value(Value::Int(1337)), ExpressionTree::Value(Value::Int(4711))]
         })
@@ -1024,7 +1036,7 @@ fn test_create_array2() {
 
     assert_eq!(
         Ok(Value::Array(ValueType::Int, vec![Value::Int(1337), Value::Null])),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::CreateArray,
             arguments: vec![ExpressionTree::Value(Value::Int(1337)), ExpressionTree::Value(Value::Null)]
         })
@@ -1039,7 +1051,7 @@ fn test_create_array3() {
 
     assert_eq!(
         Err(EvaluationError::ExpectedArrayElementType),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::CreateArray,
             arguments: vec![ExpressionTree::Value(Value::Null)]
         })
@@ -1054,7 +1066,7 @@ fn test_array_cat() {
 
     assert_eq!(
         Ok(Value::Array(ValueType::Int, vec![Value::Int(1), Value::Int(2), Value::Int(3), Value::Int(4), Value::Int(5)])),
-        expression_execution_engine.evaluate(&ExpressionTree::Function {
+        expression_execution_engine.evaluate(&ExpressionTree::FunctionCall {
             function: Function::ArrayCat,
             arguments: vec![
                 ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(1), Value::Int(2)])),
@@ -1115,6 +1127,72 @@ fn test_case_expression() {
                 (ExpressionTree::Value(Value::Bool(false)), ExpressionTree::Value(Value::Int(1)))
             ],
             else_clause: Box::new(ExpressionTree::Value(Value::Int(0)))
+        })
+    );
+}
+
+#[test]
+fn test_in_operator1() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Bool(true)),
+        expression_execution_engine.evaluate(&ExpressionTree::In {
+            is_not: false,
+            operand: Box::new(ExpressionTree::Value(Value::Int(1))),
+            values: vec![
+                ExpressionTree::Value(Value::Int(2)),
+                ExpressionTree::Value(Value::Int(1)),
+                ExpressionTree::Value(Value::Int(3))
+            ],
+        })
+    );
+
+    assert_eq!(
+        Ok(Value::Bool(false)),
+        expression_execution_engine.evaluate(&ExpressionTree::In {
+            is_not: true,
+            operand: Box::new(ExpressionTree::Value(Value::Int(1))),
+            values: vec![
+                ExpressionTree::Value(Value::Int(2)),
+                ExpressionTree::Value(Value::Int(1)),
+                ExpressionTree::Value(Value::Int(3))
+            ],
+        })
+    );
+}
+
+#[test]
+fn test_in_operator2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Bool(false)),
+        expression_execution_engine.evaluate(&ExpressionTree::In {
+            is_not: false,
+            operand: Box::new(ExpressionTree::Value(Value::Int(5))),
+            values: vec![
+                ExpressionTree::Value(Value::Int(2)),
+                ExpressionTree::Value(Value::Int(1)),
+                ExpressionTree::Value(Value::Int(3))
+            ],
+        })
+    );
+
+    assert_eq!(
+        Ok(Value::Bool(true)),
+        expression_execution_engine.evaluate(&ExpressionTree::In {
+            is_not: true,
+            operand: Box::new(ExpressionTree::Value(Value::Int(5))),
+            values: vec![
+                ExpressionTree::Value(Value::Int(2)),
+                ExpressionTree::Value(Value::Int(1)),
+                ExpressionTree::Value(Value::Int(3))
+            ],
         })
     );
 }

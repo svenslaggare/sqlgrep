@@ -501,6 +501,114 @@ impl From<f64> for Float {
 }
 
 #[derive(Debug, PartialEq, Hash, Clone)]
+pub enum ExpressionTree {
+    Value(Value),
+    ColumnAccess(String),
+    ScopedColumnAccess(ColumnScope, String),
+    Wildcard,
+    Compare { operator: CompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    NullableCompare { operator: NullableCompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    BooleanOperation { operator: BooleanOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
+    UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
+    In { is_not: bool, operand: Box<ExpressionTree>, values: Vec<ExpressionTree> },
+    FunctionCall { function: Function, arguments: Vec<ExpressionTree> },
+    ArrayElementAccess { array: Box<ExpressionTree>, index: Box<ExpressionTree> },
+    TypeConversion { operand: Box<ExpressionTree>, convert_to_type: ValueType },
+    Case { clauses: Vec<(ExpressionTree, ExpressionTree)>, else_clause: Box<ExpressionTree> },
+    Aggregate(usize, Box<Aggregate>)
+}
+
+impl ExpressionTree {
+    pub fn visit<'a, E, F: FnMut(&'a ExpressionTree) -> Result<(), E>>(&'a self, f: &mut F) -> Result<(), E> {
+        match self {
+            ExpressionTree::Value(_) => {}
+            ExpressionTree::ColumnAccess(_) => {}
+            ExpressionTree::ScopedColumnAccess(_, _) => {}
+            ExpressionTree::Wildcard => {}
+            ExpressionTree::Compare { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::NullableCompare { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::Arithmetic { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::BooleanOperation { left, right, .. } => {
+                left.visit(f)?;
+                right.visit(f)?;
+            }
+            ExpressionTree::UnaryArithmetic { operand, .. } => {
+                operand.visit(f)?;
+            }
+            ExpressionTree::In { operand, values, .. } => {
+                operand.visit(f)?;
+
+                for value in values {
+                    value.visit(f)?;
+                }
+            }
+            ExpressionTree::FunctionCall { arguments, .. } => {
+                for arg in arguments {
+                    arg.visit(f)?;
+                }
+            }
+            ExpressionTree::ArrayElementAccess { array, index } => {
+                array.visit(f)?;
+                index.visit(f)?;
+            }
+            ExpressionTree::TypeConversion { operand, .. } => {
+                operand.visit(f)?;
+            }
+            ExpressionTree::Case { clauses, else_clause } => {
+                for clause in clauses {
+                    clause.0.visit(f)?;
+                    clause.1.visit(f)?;
+                }
+
+                else_clause.visit(f)?;
+            }
+            ExpressionTree::Aggregate(_, aggregate) => {
+                match aggregate.as_ref() {
+                    Aggregate::GroupKey(_) | Aggregate::Count(_, _) => {}
+                    Aggregate::Min(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::Max(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::Average(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::Sum(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::StandardDeviation(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::CollectArray(expression) => {
+                        expression.visit(f)?;
+                    }
+                }
+            }
+        }
+
+        f(self)?;
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for ExpressionTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        ExpressionTreeVisualizer {}.fmt(self, f)
+    }
+}
+
+#[derive(Debug, PartialEq, Hash, Clone)]
 pub enum CompareOperator {
     Equal,
     NotEqual,
@@ -661,106 +769,6 @@ pub enum Aggregate {
     CollectArray(ExpressionTree)
 }
 
-#[derive(Debug, PartialEq, Hash, Clone)]
-pub enum ExpressionTree {
-    Value(Value),
-    ColumnAccess(String),
-    ScopedColumnAccess(ColumnScope, String),
-    Wildcard,
-    Compare { operator: CompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    NullableCompare { operator: NullableCompareOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    Arithmetic { operator: ArithmeticOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    BooleanOperation { operator: BooleanOperator, left: Box<ExpressionTree>, right: Box<ExpressionTree> },
-    UnaryArithmetic { operator: UnaryArithmeticOperator, operand: Box<ExpressionTree> },
-    Function { function: Function, arguments: Vec<ExpressionTree> },
-    ArrayElementAccess { array: Box<ExpressionTree>, index: Box<ExpressionTree> },
-    TypeConversion { operand: Box<ExpressionTree>, convert_to_type: ValueType },
-    Case { clauses: Vec<(ExpressionTree, ExpressionTree)>, else_clause: Box<ExpressionTree> },
-    Aggregate(usize, Box<Aggregate>)
-}
-
-impl ExpressionTree {
-    pub fn visit<'a, E, F: FnMut(&'a ExpressionTree) -> Result<(), E>>(&'a self, f: &mut F) -> Result<(), E> {
-        match self {
-            ExpressionTree::Value(_) => {}
-            ExpressionTree::ColumnAccess(_) => {}
-            ExpressionTree::ScopedColumnAccess(_, _) => {}
-            ExpressionTree::Wildcard => {}
-            ExpressionTree::Compare { left, right, .. } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::NullableCompare { left, right, .. } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::Arithmetic { left, right, .. } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::BooleanOperation { left, right, .. } => {
-                left.visit(f)?;
-                right.visit(f)?;
-            }
-            ExpressionTree::UnaryArithmetic { operand, .. } => {
-                operand.visit(f)?;
-            }
-            ExpressionTree::Function { arguments, .. } => {
-                for arg in arguments {
-                    arg.visit(f)?;
-                }
-            }
-            ExpressionTree::ArrayElementAccess { array, index } => {
-                array.visit(f)?;
-                index.visit(f)?;
-            }
-            ExpressionTree::TypeConversion { operand, .. } => {
-                operand.visit(f)?;
-            }
-            ExpressionTree::Case { clauses, else_clause } => {
-                for clause in clauses {
-                    clause.0.visit(f)?;
-                    clause.1.visit(f)?;
-                }
-
-                else_clause.visit(f)?;
-            }
-            ExpressionTree::Aggregate(_, aggregate) => {
-                match aggregate.as_ref() {
-                    Aggregate::GroupKey(_) | Aggregate::Count(_, _) => {}
-                    Aggregate::Min(expression) => {
-                        expression.visit(f)?;
-                    }
-                    Aggregate::Max(expression) => {
-                        expression.visit(f)?;
-                    }
-                    Aggregate::Average(expression) => {
-                        expression.visit(f)?;
-                    }
-                    Aggregate::Sum(expression) => {
-                        expression.visit(f)?;
-                    }
-                    Aggregate::StandardDeviation(expression) => {
-                        expression.visit(f)?;
-                    }
-                    Aggregate::CollectArray(expression) => {
-                        expression.visit(f)?;
-                    }
-                }
-            }
-        }
-
-        f(self)?;
-        Ok(())
-    }
-}
-
-impl std::fmt::Display for ExpressionTree {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        ExpressionTreeVisualizer {}.fmt(self, f)
-    }
-}
-
 struct ExpressionTreeVisualizer {
 
 }
@@ -822,7 +830,32 @@ impl ExpressionTreeVisualizer {
                 write!(f, ")")?;
                 Ok(())
             }
-            ExpressionTree::Function { function, arguments } => {
+            ExpressionTree::In { is_not, operand, values } => {
+                write!(f, "(")?;
+                self.fmt(&operand, f)?;
+                if *is_not {
+                    write!(f, " NOT IN ")?;
+                } else {
+                    write!(f, " IN ")?;
+                }
+
+                write!(f, "(")?;
+                let mut is_first = true;
+                for value in values {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    } else {
+                        is_first = false;
+                    }
+
+                    self.fmt(&value, f)?;
+                }
+                write!(f, ")")?;
+
+                write!(f, ")")?;
+                Ok(())
+            }
+            ExpressionTree::FunctionCall { function, arguments } => {
                 write!(f, "{}", function)?;
                 write!(f, "(")?;
                 let mut is_first = true;

@@ -168,7 +168,7 @@ fn test_select_statement7() {
     assert_eq!(1, statement.projections.len());
     assert_eq!("p0", statement.projections[0].0.as_str());
     assert_eq!(
-        &ExpressionTree::Function {
+        &ExpressionTree::FunctionCall {
             function: Function::Greatest,
             arguments: vec![ExpressionTree::ColumnAccess("x".to_owned()), ExpressionTree::ColumnAccess("y".to_owned())]
         },
@@ -233,6 +233,43 @@ fn test_select_statement_distinct1() {
 
     assert_eq!("test", statement.from);
     assert_eq!(true, statement.distinct);
+}
+
+#[test]
+fn test_select_in_operator1() {
+    let tree = parse_str("SELECT x FROM test WHERE x IN ('a', 'b', 'c')").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_select();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.projections.len());
+    assert_eq!("x", statement.projections[0].0.as_str());
+    assert_eq!(
+        &ExpressionTree::ColumnAccess("x".to_owned()),
+        &statement.projections[0].1
+    );
+
+    assert_eq!("test", statement.from);
+
+    assert_eq!(
+        &Some(
+            ExpressionTree::In {
+                is_not: false,
+                operand: Box::new(ExpressionTree::ColumnAccess("x".to_owned())),
+                values: vec![
+                    ExpressionTree::Value(Value::String("a".to_owned())),
+                    ExpressionTree::Value(Value::String("b".to_owned())),
+                    ExpressionTree::Value(Value::String("c".to_owned()))
+                ],
+            }
+        ),
+        &statement.filter
+    );
 }
 
 #[test]
@@ -584,7 +621,7 @@ fn test_transform_aggregate_statement3() {
     assert_eq!("max0", statement.aggregates[0].name);
     assert_eq!(Aggregate::Max(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
     assert_eq!(
-        Some(ExpressionTree::Function {
+        Some(ExpressionTree::FunctionCall {
             function: Function::Sqrt,
             arguments: vec![ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())]
         }),

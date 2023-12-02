@@ -36,6 +36,7 @@ pub enum ConvertParserTreeErrorType {
     ExpectedArgument,
     TooManyArguments,
     ExpectedColumnAccess,
+    UnexpectedTuple,
     UndefinedAggregate,
     TooManyAggregates,
     UndefinedStatement,
@@ -60,6 +61,7 @@ impl std::fmt::Display for ConvertParserTreeErrorType {
             ConvertParserTreeErrorType::ExpectedArgument => { write!(f, "Expected an argument") }
             ConvertParserTreeErrorType::TooManyArguments => { write!(f, "Too many arguments") }
             ConvertParserTreeErrorType::ExpectedColumnAccess => { write!(f, "Expected column access") }
+            ConvertParserTreeErrorType::UnexpectedTuple => { write!(f, "Tuple not expected here") }
             ConvertParserTreeErrorType::UndefinedAggregate => { write!(f, "Undefined aggregate") }
             ConvertParserTreeErrorType::TooManyAggregates => { write!(f, "Too many aggregates") }
             ConvertParserTreeErrorType::UndefinedStatement => { write!(f, "Undefined statement") }
@@ -379,6 +381,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
             }
         }
         ParserExpressionTreeData::Wildcard => Ok(ExpressionTree::Wildcard),
+        ParserExpressionTreeData::Tuple { .. } => { return Err(ConvertParserTreeErrorType::UnexpectedTuple.with_location(tree.location)); }
         ParserExpressionTreeData::BinaryOperator { operator, left, right } => {
             let left = Box::new(transform_expression(*left, state)?);
             let right = Box::new(transform_expression(*right, state)?);
@@ -421,6 +424,12 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
 
             Ok(ExpressionTree::NullableCompare { operator, left, right })
         }
+        ParserExpressionTreeData::In { is_not, operand, values } => {
+            let operand = Box::new(transform_expression(*operand, state)?);
+            let transformed_values = values.consume_result_vec(|value| transform_expression(value, state))?;
+
+            Ok(ExpressionTree::In { is_not, operand, values: transformed_values, })
+        }
         ParserExpressionTreeData::Call { name, arguments, distinct } => {
             if state.allow_aggregates {
                 match transform_call_aggregate(tree.location.clone(), &name, arguments.clone(), distinct, 0) {
@@ -441,7 +450,7 @@ pub fn transform_expression(tree: ParserExpressionTree, state: &mut TransformExp
             let transformed_arguments = arguments.consume_result_vec(|argument| transform_expression(argument, state))?;
             FUNCTIONS.get(&name.to_lowercase())
                 .map(|function| {
-                    ExpressionTree::Function { function: function.clone(), arguments: transformed_arguments }
+                    ExpressionTree::FunctionCall { function: function.clone(), arguments: transformed_arguments }
                 })
                 .ok_or(ConvertParserTreeErrorType::UndefinedFunction(name).with_location(tree.location.clone()))
         }

@@ -1383,7 +1383,7 @@ fn test_group_by_array_agg2() {
                 name: "ys".to_string(),
                 aggregate: (Aggregate::CollectArray(ExpressionTree::ColumnAccess("y".to_owned()))),
                 transform: Some(
-                    ExpressionTree::Function {
+                    ExpressionTree::FunctionCall {
                         function: Function::ArrayUnique,
                         arguments: vec![ExpressionTree::ScopedColumnAccess(ColumnScope::AggregationValue, "$value".to_owned())]
                     }
