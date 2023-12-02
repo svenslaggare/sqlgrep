@@ -1,7 +1,7 @@
 use crate::data_model::{ColumnParsing, RegexResultReference};
 use crate::execution::ColumnScope;
 
-use crate::model::{Aggregate, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Function, JoinClause, UnaryArithmeticOperator, Value, ValueType};
+use crate::model::{Aggregate, ArithmeticOperator, BooleanOperator, CompareOperator, ExpressionTree, Float, Function, JoinClause, UnaryArithmeticOperator, Value, ValueType};
 
 use crate::parsing::parser::{parse_str};
 use crate::parsing::parser_tree_converter::{ConvertParserTreeErrorType, transform_statement};
@@ -570,6 +570,23 @@ fn test_aggregate_statement4() {
     assert_eq!(1, statement.aggregates.len());
     assert_eq!("variance0", statement.aggregates[0].name);
     assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned()), true), statement.aggregates[0].aggregate);
+}
+
+#[test]
+fn test_aggregate_statement5() {
+    let tree = parse_str("SELECT PERCENTILE(x, 0.99) FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("percentile0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::Percentile(ExpressionTree::ColumnAccess("x".to_owned()), Float(0.99)), statement.aggregates[0].aggregate);
 }
 
 #[test]

@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use crate::data_model::{ColumnDefinition, RegexMode, TableDefinition};
 use crate::execution::ColumnScope;
 use crate::helpers::{IterExt, tuple_result};
-use crate::model::{Aggregate, AggregateStatement, AggregateStatementAggregation, ArithmeticOperator, CompareOperator, ExpressionTree, JoinClause, SelectStatement, UnaryArithmeticOperator};
+use crate::model::{Aggregate, AggregateStatement, AggregateStatementAggregation, ArithmeticOperator, CompareOperator, ExpressionTree, Float, JoinClause, SelectStatement, UnaryArithmeticOperator, Value};
 use crate::parsing::parser::{ParserOperationTree, ParserExpressionTreeData, ParserColumnDefinition, ParserJoinClause, ParserExpressionTree};
 use crate::parsing::operator::Operator;
 use crate::parsing::tokenizer::TokenLocation;
@@ -45,7 +45,8 @@ pub enum ConvertParserTreeErrorType {
     InvalidPattern,
     HavingClauseNotPossible,
     InvalidOnJoin,
-    InvalidJoinerTable(String)
+    InvalidJoinerTable(String),
+    ExpectedFloat
 }
 
 impl ConvertParserTreeErrorType {
@@ -71,6 +72,7 @@ impl std::fmt::Display for ConvertParserTreeErrorType {
             ConvertParserTreeErrorType::HavingClauseNotPossible => { write!(f, "Having clause only available for aggregate expressions") },
             ConvertParserTreeErrorType::InvalidOnJoin => { write!(f, "Left or right join side does not exist") },
             ConvertParserTreeErrorType::InvalidJoinerTable(table) => { write!(f, "Expected left or right side to be {}", table) },
+            ConvertParserTreeErrorType::ExpectedFloat => { write!(f, "Expected floating point value") },
         }
     }
 }
@@ -298,6 +300,7 @@ lazy_static! {
             "avg".to_owned(),
             "stddev".to_owned(),
             "variance".to_owned(),
+            "percentile".to_owned(),
             "array_agg".to_owned(),
          ].into_iter()
     );
@@ -678,8 +681,25 @@ fn transform_call_aggregate(location: TokenLocation,
                 "avg" => Aggregate::Average(expression),
                 "stddev" => Aggregate::StandardDeviation(expression, false),
                 "variance" => Aggregate::StandardDeviation(expression, true),
+                "percentile" => { return Err(ConvertParserTreeErrorType::ExpectedArgument.with_location(location)); }
                 "array_agg" => Aggregate::CollectArray(expression),
                 _ => { panic!("should not happen") }
+            };
+
+            Ok((Some(format!("{}{}", name_lowercase, index)), aggregate, None))
+        } else if arguments.len() == 2 {
+            let expression = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
+
+            let percentile = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
+            let percentile = if let ExpressionTree::Value(Value::Float(percentile)) = percentile {
+                percentile.0
+            } else {
+                return Err(ConvertParserTreeErrorType::ExpectedFloat.with_location(location));
+            };
+
+            let aggregate = match name_lowercase.as_str() {
+                "percentile" => Aggregate::Percentile(expression, Float(percentile.clamp(0.0, 1.0))),
+                _ => { return Err(ConvertParserTreeErrorType::TooManyArguments.with_location(location)); }
             };
 
             Ok((Some(format!("{}{}", name_lowercase, index)), aggregate, None))

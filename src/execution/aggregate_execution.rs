@@ -186,7 +186,7 @@ impl AggregateExecutionEngine {
                     self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
                 }
             }
-            Aggregate::Sum(ref expression) | Aggregate::Average(ref expression) | Aggregate::StandardDeviation(ref expression, _) => {
+            Aggregate::Sum(ref expression) | Aggregate::Average(ref expression) | Aggregate::StandardDeviation(ref expression, _) | Aggregate::Percentile(ref expression, _) => {
                 let column_value = expression_execution_engine.evaluate(expression)?;
 
                 let aggregator = self.get_group_aggregator(
@@ -224,6 +224,20 @@ impl AggregateExecutionEngine {
     }
 
     pub fn execute_result(&mut self, aggregate_statement: &AggregateStatement) -> ExecutionResult<ResultRow> {
+        for (group_key, subgroups) in self.group_aggregators.iter_mut() {
+            for (aggregate_index, group_aggregator) in subgroups.iter_mut() {
+                if let Some(value) = group_aggregator.update_value()? {
+                    let entry = AggregateExecutionEngine::get_group(
+                        &mut self.group_values,
+                        group_key.clone(),
+                        *aggregate_index,
+                        || Ok(value.clone())
+                    )?;
+                    *entry = value.clone();
+                }
+            }
+        }
+
         let mut group_key_mapping = HashMap::new();
         if let Some(group_key) = aggregate_statement.group_by.as_ref() {
             for (index, part) in group_key.iter().enumerate() {
@@ -376,6 +390,7 @@ enum GroupAggregator {
     Sum(Value),
     Average { sum: Value, count: i64 },
     StandardDeviation { sum: Value, sum_square: Value, count: i64, is_variance: bool },
+    Percentile { values: Vec<Value>, percentile: f64 },
     CountDistinct(HashSet<Value>)
 }
 
@@ -397,6 +412,10 @@ impl GroupAggregator {
                 sum_square: column_value.default_value(),
                 count: 0,
                 is_variance: *is_variance
+            },
+            Aggregate::Percentile(_, percentile) => GroupAggregator::Percentile {
+                values: Vec::new(),
+                percentile: percentile.0,
             },
             Aggregate::CollectArray(_) => { unimplemented!(); }
         }
@@ -482,9 +501,26 @@ impl GroupAggregator {
 
                 Ok(value)
             }
+            GroupAggregator::Percentile { values, .. } => {
+                values.push(column_value);
+                Ok(None)
+            }
             GroupAggregator::CountDistinct(values) => {
                 Ok(Some(Value::Bool(values.insert(column_value))))
             }
+        }
+    }
+
+    pub fn update_value(&mut self) -> ExecutionResult<Option<Value>> {
+        match self {
+            GroupAggregator::Sum(_) => Ok(None),
+            GroupAggregator::Average { .. } => Ok(None),
+            GroupAggregator::StandardDeviation { .. } => Ok(None),
+            GroupAggregator::Percentile { values, percentile } => {
+                values.sort();
+                Ok(values.get((*percentile * values.len() as f64) as usize).cloned())
+            }
+            GroupAggregator::CountDistinct(_) => Ok(None)
         }
     }
 
@@ -493,6 +529,7 @@ impl GroupAggregator {
             GroupAggregator::Sum(sum) => sum.is_null(),
             GroupAggregator::Average { sum, .. } => sum.is_null(),
             GroupAggregator::StandardDeviation { sum, sum_square, .. } => sum.is_null() || sum_square.is_null(),
+            GroupAggregator::Percentile { .. } => false,
             GroupAggregator::CountDistinct(_) => false
         }
     }

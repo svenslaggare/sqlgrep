@@ -590,6 +590,9 @@ impl ExpressionTree {
                     Aggregate::StandardDeviation(expression, _) => {
                         expression.visit(f)?;
                     }
+                    Aggregate::Percentile(expression, _) => {
+                        expression.visit(f)?;
+                    }
                     Aggregate::CollectArray(expression) => {
                         expression.visit(f)?;
                     }
@@ -766,6 +769,7 @@ pub enum Aggregate {
     Sum(ExpressionTree),
     Average(ExpressionTree),
     StandardDeviation(ExpressionTree, bool),
+    Percentile(ExpressionTree, Float),
     CollectArray(ExpressionTree)
 }
 
@@ -940,6 +944,12 @@ impl ExpressionTreeVisualizer {
                         }
                         self.fmt(&expression, f)?;
                         write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::Percentile(expression, percentile) => {
+                        write!(f, "PERCENTILE(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ", {})", percentile)?;
                         Ok(())
                     }
                     Aggregate::CollectArray(expression) => {

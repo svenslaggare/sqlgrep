@@ -66,6 +66,7 @@ Supported aggregates:
 * `avg(x)`
 * `stddev(x)`
 * `variance(x)`
+* `percentile(x, p)`: calculates the `p` percentile of x where `p` in interval `[0.0, 1.0]`
 * `array_agg(x)`
 
 Supported functions:
