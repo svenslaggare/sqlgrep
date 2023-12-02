@@ -24,15 +24,19 @@ fn test_ssh1() {
 
     let query = parsing::parse("SELECT * FROM ssh").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ssh_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(386, executor.statistics().total_result_rows);
+
+    assert_eq!("hostname: '5.36.59.76.dynamic-dsl-ip.omantel.net.om', username: 'root'", executor.output_printer().printer().lines[0]);
+    assert_eq!("hostname: '183.62.140.253', username: 'root'", executor.output_printer().printer().lines[385]);
 }
 
 #[test]
@@ -74,15 +78,19 @@ fn test_ftpd1() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(200, executor.statistics().total_result_rows);
+
+    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', year: 2005, month: 'Jun', day: 17, hour: 7, minute: 7, second: 0", executor.output_printer().printer().lines[0]);
+    assert_eq!("ip: '82.68.222.195', hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', year: 2005, month: 'Jul', day: 17, hour: 23, minute: 21, second: 54", executor.output_printer().printer().lines[199]);
 }
 
 #[test]
@@ -197,15 +205,19 @@ fn test_ftpd6() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(200, executor.statistics().total_result_rows);
+
+    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', timestamp: {'2005', 'Jun', '17', '07', '07', '00'}", executor.output_printer().printer().lines[0]);
+    assert_eq!("ip: '82.68.222.195', hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', timestamp: {'2005', 'Jul', '17', '23', '21', '54'}", executor.output_printer().printer().lines[199]);
 }
 
 #[test]
@@ -214,15 +226,19 @@ fn test_ftpd7() {
 
     let query = parsing::parse("SELECT ip, hostname, timestamp, EXTRACT(EPOCH FROM timestamp) FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(200, executor.statistics().total_result_rows);
+
+    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', timestamp: 2005-06-17 07:07:00 +02:00, p3: 1118984820.00", executor.output_printer().printer().lines[0]);
+    assert_eq!("ip: '82.68.222.195', hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', timestamp: 2005-07-17 23:21:54 +02:00, p3: 1121635314.00", executor.output_printer().printer().lines[199]);
 }
 
 #[test]
@@ -231,15 +247,19 @@ fn test_ftpd8() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE ip IS NOT NULL").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(653, executor.statistics().total_result_rows);
+
+    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', year: 2005, month: 'Jun', day: 17, hour: 7, minute: 7, second: 0", executor.output_printer().printer().lines[0]);
+    assert_eq!("ip: '218.38.58.3', hostname: 'unknown', year: 2005, month: 'Jul', day: 27, hour: 10, minute: 59, second: 53", executor.output_printer().printer().lines[652]);
 }
 
 #[test]
@@ -337,15 +357,19 @@ fn test_ftpd_csv1() {
 
     let query = parsing::parse("SELECT * FROM connections WHERE hostname IS NOT NULL").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/ftpd_data_csv.txt").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(200, executor.statistics().total_result_rows);
+
+    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', year: 2005, month: 'Jun', day: 17, hour: 7, minute: 7, second: 0", executor.output_printer().printer().lines[0]);
+    assert_eq!("ip: '82.68.222.195', hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', year: 2005, month: 'Jul', day: 17, hour: 23, minute: 21, second: 54", executor.output_printer().printer().lines[199]);
 }
 
 #[test]
@@ -354,15 +378,19 @@ fn test_client1() {
 
     let query = parsing::parse("SELECT * FROM clients WHERE device_id >= 180;").unwrap();
 
-    let mut executor = FileExecutor::new(
+    let mut executor = FileExecutor::with_output_printer(
         Arc::new(AtomicBool::new(true)),
         vec![File::open("testdata/clients_data.json").unwrap()],
         Default::default(),
+        CapturedPrinter::new(),
         ExecutionEngine::new(&tables, &query)
     ).unwrap();
 
     executor.execute().unwrap();
     assert_eq!(232, executor.statistics().total_result_rows);
+
+    assert_eq!("timestamp: 1609790687065, device_id: 189, mac_address: '10:41:11:98:05:52', events: NULL", executor.output_printer().printer().lines[0]);
+    assert_eq!("timestamp: 1609799887613, device_id: 256, mac_address: '10:41:11:98:0b:7e', events: NULL", executor.output_printer().printer().lines[231]);
 }
 
 #[test]
