@@ -326,8 +326,8 @@ impl Value {
             Value::Bool(value) => serde_json::Value::Bool(*value),
             Value::String(value) => serde_json::Value::String(value.clone()),
             Value::Array(_, value) => serde_json::Value::Array(value.iter().map(|x| x.json_value()).collect()),
-            Value::Timestamp(value) => serde_json::Value::String(value.to_string()),
-            Value::Interval(value) => serde_json::Value::String(value.to_string())
+            Value::Timestamp(_) => serde_json::Value::String(self.to_string()),
+            Value::Interval(_) => serde_json::Value::String(self.to_string())
         }
     }
 }
