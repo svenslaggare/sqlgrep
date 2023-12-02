@@ -870,22 +870,10 @@ impl<'a> Parser<'a> {
                 if self.current() == &Token::Comma {
                     self.next()?;
 
-                    let mut arguments = vec![expression?];
+                    let mut values = vec![expression?];
+                    self.parse_list(Token::RightParentheses, &mut values)?;
 
-                    loop {
-                        arguments.push(self.parse_expression_internal()?);
-                        match self.current() {
-                            Token::RightParentheses => { break; }
-                            Token::Comma => {}
-                            _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
-                        }
-
-                        self.next()?;
-                    }
-
-                    self.next()?;
-
-                    Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Tuple { values: arguments }))
+                    Ok(ParserExpressionTree::new(token_location, ParserExpressionTreeData::Tuple { values }))
                 } else {
                     self.expect_and_consume_token(
                         Token::RightParentheses,
@@ -927,42 +915,19 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if !is_create_array {
-            let arguments = self.parse_arguments()?;
-            Ok(
-                ParserExpressionTree::new(
-                    token_location,
-                    ParserExpressionTreeData::Call { name: identifier, arguments, distinct }
-                )
-            )
+        let (name, right_parentheses_token) = if !is_create_array {
+            (identifier, Token::RightParentheses)
         } else {
-            let mut arguments = Vec::<ParserExpressionTree>::new();
+            ("create_array".to_owned(), Token::RightSquareParentheses)
+        };
 
-            match self.current() {
-                Token::RightSquareParentheses => (),
-                _ => {
-                    loop {
-                        arguments.push(self.parse_expression_internal()?);
-                        match self.current() {
-                            Token::RightSquareParentheses => { break; }
-                            Token::Comma => {}
-                            _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
-                        }
-
-                        self.next()?;
-                    }
-                }
-            }
-
-            self.next()?;
-
-            Ok(
-                ParserExpressionTree::new(
-                    token_location,
-                    ParserExpressionTreeData::Call { name: "create_array".to_owned(), arguments, distinct }
-                )
+        let arguments = self.parse_arguments(right_parentheses_token)?;
+        Ok(
+            ParserExpressionTree::new(
+                token_location,
+                ParserExpressionTreeData::Call { name, arguments, distinct }
             )
-        }
+        )
     }
 
     fn parse_unary_operator(&mut self) -> ParserResult<ParserExpressionTree> {
@@ -1053,28 +1018,41 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_arguments(&mut self) -> ParserResult<Vec<ParserExpressionTree>> {
+    fn parse_arguments(&mut self, right_parentheses_token: Token) -> ParserResult<Vec<ParserExpressionTree>> {
         let mut arguments = Vec::<ParserExpressionTree>::new();
 
         match self.current() {
-            Token::RightParentheses => (),
+            token if token == &right_parentheses_token => {
+                self.next()?;
+            }
             _ => {
-                loop {
-                    arguments.push(self.parse_expression_internal()?);
-                    match self.current() {
-                        Token::RightParentheses => { break; }
-                        Token::Comma => {}
-                        _ => return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
-                    }
-
-                    self.next()?;
-                }
+                self.parse_list(right_parentheses_token, &mut arguments)?;
             }
         }
 
-        self.next()?;
-
         Ok(arguments)
+    }
+
+    fn parse_list(&mut self,
+                  right_parentheses_token: Token,
+                  list: &mut Vec<ParserExpressionTree>) -> ParserResult<()> {
+        loop {
+            list.push(self.parse_expression_internal()?);
+            match self.current() {
+                token if token == &right_parentheses_token => {
+                    self.next()?;
+                    break;
+                }
+                Token::Comma => {}
+                _ => {
+                    return Err(self.create_error(ParserErrorType::ExpectedArgumentListContinuation))
+                }
+            }
+
+            self.next()?;
+        }
+
+        Ok(())
     }
 
     fn consume_identifier(&mut self) -> ParserResult<String> {
