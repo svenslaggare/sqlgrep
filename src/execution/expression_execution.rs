@@ -14,54 +14,6 @@ use itertools::Itertools;
 use crate::model::{ExpressionTree, Value, CompareOperator, ArithmeticOperator, UnaryArithmeticOperator, Function, Aggregate, ValueType, value_type_to_string, Float, create_timestamp, NullableCompareOperator, BooleanOperator};
 use crate::execution::{ColumnProvider, ColumnScope, ExpressionTreeHash};
 
-#[derive(Debug, PartialEq)]
-pub enum EvaluationError {
-    ColumnNotFound(String),
-    ExpectedNonNull,
-    TypeError(ValueType, ValueType),
-    GroupKeyNotFound,
-    GroupValueNotFound,
-    UndefinedOperation,
-    UndefinedFunction(Function, Vec<Option<ValueType>>),
-    InvalidRegex(String),
-    ExpectedArray(Option<ValueType>),
-    ExpectedArrayIndexingToBeInt(Option<ValueType>),
-    ExpectedArrayElementType,
-    FailedToTruncate,
-    InvalidTruncatePart,
-    FailedToParseTimestamp,
-    FailedToConvert
-}
-
-impl std::fmt::Display for EvaluationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            EvaluationError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name) }
-            EvaluationError::ExpectedNonNull => { write!(f, "Expected non-null value") }
-            EvaluationError::TypeError(expected, actual) => { write!(f, "Expected type '{}' but got type {}", expected, actual) }
-            EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
-            EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
-            EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
-            EvaluationError::UndefinedFunction(function, arguments) => {
-                write!(
-                    f,
-                    "Undefined function {:?}({})",
-                    function,
-                    arguments.iter().map(|arg| arg.as_ref().map(|x| x.to_string()).unwrap_or("NULL".to_owned())).join(", ")
-                )
-            },
-            EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
-            EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
-            EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
-            EvaluationError::ExpectedArrayElementType => { write!(f, "Expected an element with type") }
-            EvaluationError::FailedToTruncate => { write!(f, "Failed to truncate timestamp") }
-            EvaluationError::InvalidTruncatePart => { write!(f, "Not a valid part to truncate") },
-            EvaluationError::FailedToParseTimestamp => { write!(f, "Failed to parse timestamp") },
-            EvaluationError::FailedToConvert => { write!(f, "Failed to convert to type") }
-        }
-    }
-}
-
 pub type EvaluationResult = Result<Value, EvaluationError>;
 
 pub struct ExpressionExecutionEngine<'a, T: ColumnProvider> {
@@ -631,6 +583,55 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
         }
     }
 }
+
+#[derive(Debug, PartialEq)]
+pub enum EvaluationError {
+    ColumnNotFound(String),
+    ExpectedNonNull,
+    TypeError(ValueType, ValueType),
+    GroupKeyNotFound,
+    GroupValueNotFound,
+    UndefinedOperation,
+    UndefinedFunction(Function, Vec<Option<ValueType>>),
+    InvalidRegex(String),
+    ExpectedArray(Option<ValueType>),
+    ExpectedArrayIndexingToBeInt(Option<ValueType>),
+    ExpectedArrayElementType,
+    FailedToTruncate,
+    InvalidTruncatePart,
+    FailedToParseTimestamp,
+    FailedToConvert
+}
+
+impl std::fmt::Display for EvaluationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EvaluationError::ColumnNotFound(name) => { write!(f, "Column '{}' not found", name) }
+            EvaluationError::ExpectedNonNull => { write!(f, "Expected non-null value") }
+            EvaluationError::TypeError(expected, actual) => { write!(f, "Expected type '{}' but got type {}", expected, actual) }
+            EvaluationError::GroupKeyNotFound => { write!(f, "Group key not found") }
+            EvaluationError::GroupValueNotFound => { write!(f, "Group value not found") }
+            EvaluationError::UndefinedOperation => { write!(f, "Undefined operation") }
+            EvaluationError::UndefinedFunction(function, arguments) => {
+                write!(
+                    f,
+                    "Undefined function {}({})",
+                    function,
+                    arguments.iter().map(|arg| arg.as_ref().map(|x| x.to_string()).unwrap_or("NULL".to_owned())).join(", ")
+                )
+            },
+            EvaluationError::InvalidRegex(error) => { write!(f, "Invalid regex: {}", error) },
+            EvaluationError::ExpectedArray(other_type) => { write!(f, "Expected value to be of array type but got {}", value_type_to_string(other_type)) },
+            EvaluationError::ExpectedArrayIndexingToBeInt(other_type) => { write!(f, "Expected array indexing to be of type 'int' but got {}", value_type_to_string(other_type)) },
+            EvaluationError::ExpectedArrayElementType => { write!(f, "Expected an element with type") }
+            EvaluationError::FailedToTruncate => { write!(f, "Failed to truncate timestamp") }
+            EvaluationError::InvalidTruncatePart => { write!(f, "Not a valid part to truncate") },
+            EvaluationError::FailedToParseTimestamp => { write!(f, "Failed to parse timestamp") },
+            EvaluationError::FailedToConvert => { write!(f, "Failed to convert to type") }
+        }
+    }
+}
+
 
 pub fn unique_values(values: &mut Vec<Value>) {
     let unique_values = std::mem::take(values);
