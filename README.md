@@ -59,13 +59,14 @@ Supported features:
 * Case expressions.
 
 Supported aggregates:
-* `count`
-* `min`
-* `max`
-* `sum`
-* `avg`
-* `stddev`
-* `array_agg`
+* `count(x)`
+* `min(x)`
+* `max(x)`
+* `sum(x)`
+* `avg(x)`
+* `stddev(x)`
+* `variance(x)`
+* `array_agg(x)`
 
 Supported functions:
 * `least(INT|REAL, INT|REAL) => INT|REAL`
@@ -79,7 +80,7 @@ Supported functions:
 * `lower(TEXT) => TEXT`
 * `array_unique(ARRAY) => ARRAY`
 * `array_length(ARRAY) => INT`
-* `array_cat(ARRAY) => ARRAY`
+* `array_cat(ARRAY, ARRAY) => ARRAY`
 * `array_append(ARRAY, ANY) => ARRAY`
 * `array_prepend(ANY, ARRAY) => ARRAY`
 * `now() => TIMESTAMP`

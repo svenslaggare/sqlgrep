@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 use crate::data_model::{ColumnDefinition, RegexMode, TableDefinition};
 use crate::execution::ColumnScope;
 use crate::helpers::{IterExt, tuple_result};
-use crate::model::{Aggregate, AggregateStatement, AggregateStatementPart, ArithmeticOperator, CompareOperator, ExpressionTree, JoinClause, SelectStatement, UnaryArithmeticOperator};
+use crate::model::{Aggregate, AggregateStatement, AggregateStatementAggregation, ArithmeticOperator, CompareOperator, ExpressionTree, JoinClause, SelectStatement, UnaryArithmeticOperator};
 use crate::parsing::parser::{ParserOperationTree, ParserExpressionTreeData, ParserColumnDefinition, ParserJoinClause, ParserExpressionTree};
 use crate::parsing::operator::Operator;
 use crate::parsing::tokenizer::TokenLocation;
@@ -155,7 +155,7 @@ fn create_aggregate_statement(location: TokenLocation,
         let name = name.or(default_name).unwrap_or(format!("p{}", projection_index));
 
         transformed_aggregates.push(
-            AggregateStatementPart {
+            AggregateStatementAggregation {
                 name,
                 aggregate,
                 transform,
@@ -297,6 +297,7 @@ lazy_static! {
             "sum".to_owned(),
             "avg".to_owned(),
             "stddev".to_owned(),
+            "variance".to_owned(),
             "array_agg".to_owned(),
          ].into_iter()
     );
@@ -675,7 +676,8 @@ fn transform_call_aggregate(location: TokenLocation,
                 "min" => Aggregate::Min(expression),
                 "sum" => Aggregate::Sum(expression),
                 "avg" => Aggregate::Average(expression),
-                "stddev" => Aggregate::StandardDeviation(expression),
+                "stddev" => Aggregate::StandardDeviation(expression, false),
+                "variance" => Aggregate::StandardDeviation(expression, true),
                 "array_agg" => Aggregate::CollectArray(expression),
                 _ => { panic!("should not happen") }
             };

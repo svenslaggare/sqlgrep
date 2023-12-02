@@ -29,7 +29,7 @@ impl SelectStatement {
 }
 
 #[derive(Debug, Hash)]
-pub struct AggregateStatementPart {
+pub struct AggregateStatementAggregation {
     pub name: String,
     pub aggregate: Aggregate,
     pub transform: Option<ExpressionTree>
@@ -37,7 +37,7 @@ pub struct AggregateStatementPart {
 
 #[derive(Debug, Hash, Default)]
 pub struct AggregateStatement {
-    pub aggregates: Vec<AggregateStatementPart>,
+    pub aggregates: Vec<AggregateStatementAggregation>,
     pub from: String,
     pub filename: Option<String>,
     pub filter: Option<ExpressionTree>,
@@ -587,7 +587,7 @@ impl ExpressionTree {
                     Aggregate::Sum(expression) => {
                         expression.visit(f)?;
                     }
-                    Aggregate::StandardDeviation(expression) => {
+                    Aggregate::StandardDeviation(expression, _) => {
                         expression.visit(f)?;
                     }
                     Aggregate::CollectArray(expression) => {
@@ -765,7 +765,7 @@ pub enum Aggregate {
     Max(ExpressionTree),
     Sum(ExpressionTree),
     Average(ExpressionTree),
-    StandardDeviation(ExpressionTree),
+    StandardDeviation(ExpressionTree, bool),
     CollectArray(ExpressionTree)
 }
 
@@ -932,8 +932,12 @@ impl ExpressionTreeVisualizer {
                         write!(f, ")")?;
                         Ok(())
                     }
-                    Aggregate::StandardDeviation(expression) => {
-                        write!(f, "STDDEV(")?;
+                    Aggregate::StandardDeviation(expression, is_variance) => {
+                        if *is_variance {
+                            write!(f, "VARIANCE(")?;
+                        } else {
+                            write!(f, "STDDEV(")?;
+                        }
                         self.fmt(&expression, f)?;
                         write!(f, ")")?;
                         Ok(())

@@ -5,7 +5,7 @@ use std::fs::File;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use sqlgrep::data_model::{TableDefinition, ColumnDefinition, Tables, RegexMode};
-use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate, AggregateStatementPart};
+use sqlgrep::model::{ValueType, SelectStatement, ExpressionTree, CompareOperator, Value, Statement, AggregateStatement, Aggregate, AggregateStatementAggregation};
 use sqlgrep::executor::{FileExecutor, DisplayOptions};
 use sqlgrep::execution::execution_engine::ExecutionEngine;
 
@@ -49,7 +49,8 @@ fn filtering() {
             operator: CompareOperator::GreaterThanOrEqual
         }),
         join: None,
-        limit: None
+        limit: None,
+        distinct: false,
     });
 
     let mut display_options = DisplayOptions::default();
@@ -92,9 +93,9 @@ fn aggregate() {
 
     let statement = Statement::Aggregate(AggregateStatement {
         aggregates: vec![
-            AggregateStatementPart { name: "hour".to_string(), aggregate: Aggregate::GroupKey("hour".to_owned()), transform: None },
-            AggregateStatementPart { name: "count".to_string(), aggregate: Aggregate::Count(None, false), transform: None },
-            AggregateStatementPart { name: "max_minute".to_string(), aggregate: Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), transform: None }
+            AggregateStatementAggregation { name: "hour".to_string(), aggregate: Aggregate::GroupKey(ExpressionTree::ColumnAccess("hour".to_owned())), transform: None },
+            AggregateStatementAggregation { name: "count".to_string(), aggregate: Aggregate::Count(None, false), transform: None },
+            AggregateStatementAggregation { name: "max_minute".to_string(), aggregate: Aggregate::Max(ExpressionTree::ColumnAccess("minute".to_owned())), transform: None }
         ],
         from: "connections".to_string(),
         filename: None,
@@ -103,10 +104,11 @@ fn aggregate() {
             right: Box::new(ExpressionTree::Value(Value::Int(15))),
             operator: CompareOperator::GreaterThanOrEqual
         }),
-        group_by: Some(vec!["hour".to_owned()]),
+        group_by: Some(vec![ExpressionTree::ColumnAccess("hour".to_owned())]),
         having: None,
         join: None,
-        limit: None
+        limit: None,
+        distinct: false,
     });
 
     let mut display_options = DisplayOptions::default();

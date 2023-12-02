@@ -552,7 +552,24 @@ fn test_aggregate_statement3() {
 
     assert_eq!(1, statement.aggregates.len());
     assert_eq!("stddev0", statement.aggregates[0].name);
-    assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned())), statement.aggregates[0].aggregate);
+    assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned()), false), statement.aggregates[0].aggregate);
+}
+
+#[test]
+fn test_aggregate_statement4() {
+    let tree = parse_str("SELECT VARIANCE(x) FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("variance0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::StandardDeviation(ExpressionTree::ColumnAccess("x".to_owned()), true), statement.aggregates[0].aggregate);
 }
 
 #[test]

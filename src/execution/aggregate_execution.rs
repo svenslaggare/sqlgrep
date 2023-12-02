@@ -186,7 +186,7 @@ impl AggregateExecutionEngine {
                     self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
                 }
             }
-            Aggregate::Sum(ref expression) | Aggregate::Average(ref expression) | Aggregate::StandardDeviation(ref expression) => {
+            Aggregate::Sum(ref expression) | Aggregate::Average(ref expression) | Aggregate::StandardDeviation(ref expression, _) => {
                 let column_value = expression_execution_engine.evaluate(expression)?;
 
                 let aggregator = self.get_group_aggregator(
@@ -375,7 +375,7 @@ impl AggregateExecutionEngine {
 enum GroupAggregator {
     Sum(Value),
     Average { sum: Value, count: i64 },
-    StandardDeviation { sum: Value, sum_square: Value, count: i64 },
+    StandardDeviation { sum: Value, sum_square: Value, count: i64, is_variance: bool },
     CountDistinct(HashSet<Value>)
 }
 
@@ -392,10 +392,11 @@ impl GroupAggregator {
                 count: 0,
             },
             Aggregate::Sum(_) => GroupAggregator::Sum(column_value.default_value()),
-            Aggregate::StandardDeviation(_) => GroupAggregator::StandardDeviation {
+            Aggregate::StandardDeviation(_, is_variance) => GroupAggregator::StandardDeviation {
                 sum: column_value.default_value(),
                 sum_square: column_value.default_value(),
                 count: 0,
+                is_variance: *is_variance
             },
             Aggregate::CollectArray(_) => { unimplemented!(); }
         }
@@ -431,7 +432,7 @@ impl GroupAggregator {
 
                 Ok(average)
             }
-            GroupAggregator::StandardDeviation { sum, sum_square, count } => {
+            GroupAggregator::StandardDeviation { sum, sum_square, count, is_variance } => {
                 let squared_column_value = column_value.map_numeric(
                     |x| Some(x * x),
                     |x| Some(x * x),
@@ -460,21 +461,26 @@ impl GroupAggregator {
 
                 *count += 1;
 
-                let calculate_std = |sum: f64, sum_square: f64, n: f64| {
-                    ((sum_square - (sum * sum) / n) / n).sqrt()
+                let calculate = |sum: f64, sum_square: f64, n: f64| {
+                    let variance = (sum_square - (sum * sum) / n) / n;
+                    if *is_variance {
+                        variance
+                    } else {
+                        variance.sqrt()
+                    }
                 };
 
-                let std = match (sum, sum_square) {
+                let value = match (sum, sum_square) {
                     (Value::Int(sum), Value::Int(sum_square)) => {
-                        Some(Value::Float(Float(calculate_std(*sum as f64, *sum_square as f64, *count as f64))))
+                        Some(Value::Float(Float(calculate(*sum as f64, *sum_square as f64, *count as f64))))
                     }
                     (Value::Float(sum), Value::Float(sum_square)) => {
-                        Some(Value::Float(Float(calculate_std(sum.0, sum_square.0, *count as f64))))
+                        Some(Value::Float(Float(calculate(sum.0, sum_square.0, *count as f64))))
                     }
                     _ => None
                 };
 
-                Ok(std)
+                Ok(value)
             }
             GroupAggregator::CountDistinct(values) => {
                 Ok(Some(Value::Bool(values.insert(column_value))))
