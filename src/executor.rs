@@ -299,9 +299,7 @@ impl<T: Printer> OutputPrinter<T> {
                     }
                 }
             }
-        }
 
-        if !result_row.data.is_empty() {
             self.first_line = false;
         }
 
