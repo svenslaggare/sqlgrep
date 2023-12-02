@@ -341,7 +341,7 @@ impl std::fmt::Display for Value {
             Value::Bool(x) => write!(f, "{}", x),
             Value::String(x) => write!(f, "'{}'", x),
             Value::Array(_, x) => write!(f, "{{{}}}", x.iter().map(|x| format!("{}", x)).join(", ")),
-            Value::Timestamp(x) => write!(f, "{}", x),
+            Value::Timestamp(x) => write!(f, "{}", x.format("%Y-%m-%d %H:%M:%S.%3f")),
             Value::Interval(x) => {
                 let seconds = x.num_seconds() % 60;
                 let minutes = (x.num_seconds() / 60) % 60;
