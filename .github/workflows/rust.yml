@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -21,7 +21,7 @@ jobs:
   release-build:
     runs-on: ubuntu-20.04
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Release Build
       run: cargo build --release --verbose
     - name: Build Debian package
@@ -43,7 +43,7 @@ jobs:
   build-windows:
     runs-on: windows-2019
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Build
         run: cargo build --verbose
       - name: Run tests
@@ -51,7 +51,7 @@ jobs:
   release-build-windows:
     runs-on: windows-2019
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Release Build
         run: cargo build --release --verbose
       - uses: actions/upload-artifact@v2
