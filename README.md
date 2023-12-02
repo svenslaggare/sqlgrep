@@ -70,9 +70,9 @@ Supported aggregates:
 * `array_agg(x)`
 
 Supported functions:
-* `least(INT|REAL, INT|REAL) => INT|REAL`
-* `greatest(INT|REAL, INT|REAL) => INT|REAL`
-* `abs(INT|REAL) => INT|REAL`
+* `least(INT|REAL|INTERVAL, INT|REAL|INTERVAL) => INT|REAL|INTERVAL`
+* `greatest(INT|REAL|INTERVAL, INT|REAL|INTERVAL) => INT|REAL|INTERVAL`
+* `abs(INT|REAL|INTERVAL) => INT|REAL|INTERVAL`
 * `sqrt(REAL) => REAL`
 * `pow(REAL, REAL) => REAL`
 * `regex_matches(TEXT, TEXT) => BOOLEAN`
@@ -125,7 +125,7 @@ Multiple tables can be defined in the same file.
 * `TEXT`: String type.
 * `INT`: 64-bits integer type.
 * `REAL`: 64-bits float type.
-* `BOOLEAN`: True/false type. When extracting data, it means the _existence_ of a group.
+* `BOOLEAN`: Boolean type. When extracting data, it means the _existence_ of a group.
 * `<element type>[]`: Array types such as `real[]`.
 * `TIMESTAMP`: Timestamp type.
 * `INTERVAL`: Interval type.
