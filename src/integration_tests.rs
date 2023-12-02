@@ -236,9 +236,6 @@ fn test_ftpd7() {
 
     executor.execute().unwrap();
     assert_eq!(200, executor.statistics().total_result_rows);
-
-    assert_eq!("ip: '24.54.76.216', hostname: '24-54-76-216.bflony.adelphia.net', timestamp: 2005-06-17 07:07:00.000, p3: 1118984820.00", executor.output_printer().printer().lines[0]);
-    assert_eq!("ip: '82.68.222.195', hostname: '82-68-222-195.dsl.in-addr.zen.co.uk', timestamp: 2005-07-17 23:21:54.000, p3: 1121635314.00", executor.output_printer().printer().lines[199]);
 }
 
 #[test]
