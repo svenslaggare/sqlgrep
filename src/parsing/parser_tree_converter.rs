@@ -301,6 +301,8 @@ lazy_static! {
             "stddev".to_owned(),
             "variance".to_owned(),
             "percentile".to_owned(),
+            "bool_and".to_owned(),
+            "bool_or".to_owned(),
             "array_agg".to_owned(),
          ].into_iter()
     );
@@ -682,6 +684,8 @@ fn transform_call_aggregate(location: TokenLocation,
                 "stddev" => Aggregate::StandardDeviation(expression, false),
                 "variance" => Aggregate::StandardDeviation(expression, true),
                 "percentile" => { return Err(ConvertParserTreeErrorType::ExpectedArgument.with_location(location)); }
+                "bool_and" => Aggregate::BoolAnd(expression),
+                "bool_or" => Aggregate::BoolOr(expression),
                 "array_agg" => Aggregate::CollectArray(expression),
                 _ => { panic!("should not happen") }
             };

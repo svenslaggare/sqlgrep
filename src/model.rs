@@ -593,6 +593,12 @@ impl ExpressionTree {
                     Aggregate::Percentile(expression, _) => {
                         expression.visit(f)?;
                     }
+                    Aggregate::BoolAnd(expression) => {
+                        expression.visit(f)?;
+                    }
+                    Aggregate::BoolOr(expression) => {
+                        expression.visit(f)?;
+                    }
                     Aggregate::CollectArray(expression) => {
                         expression.visit(f)?;
                     }
@@ -770,6 +776,8 @@ pub enum Aggregate {
     Average(ExpressionTree),
     StandardDeviation(ExpressionTree, bool),
     Percentile(ExpressionTree, Float),
+    BoolAnd(ExpressionTree),
+    BoolOr(ExpressionTree),
     CollectArray(ExpressionTree)
 }
 
@@ -950,6 +958,18 @@ impl ExpressionTreeVisualizer {
                         write!(f, "PERCENTILE(")?;
                         self.fmt(&expression, f)?;
                         write!(f, ", {})", percentile)?;
+                        Ok(())
+                    }
+                    Aggregate::BoolAnd(expression) => {
+                        write!(f, "BOOL_AND(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::BoolOr(expression) => {
+                        write!(f, "BOOL_OR(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ")")?;
                         Ok(())
                     }
                     Aggregate::CollectArray(expression) => {

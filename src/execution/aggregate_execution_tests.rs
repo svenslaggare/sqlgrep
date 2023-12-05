@@ -967,6 +967,130 @@ fn test_group_by_and_percentile1() {
 }
 
 #[test]
+fn test_group_by_and_bool_and1() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            AggregateStatementAggregation {
+                name: "name".to_owned(),
+                aggregate: Aggregate::GroupKey(ExpressionTree::ColumnAccess("name".to_owned())),
+                transform: None
+            },
+            AggregateStatementAggregation {
+                name: "all".to_owned(),
+                aggregate: Aggregate::BoolAnd(ExpressionTree::ColumnAccess("x".to_owned())),
+                transform: None
+            },
+        ],
+        from: "test".to_owned(),
+        group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
+        ..Default::default()
+    };
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Bool(i % 2 == 0),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Bool(true),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Bool(false), result.data[0].columns[1]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Bool(true), result.data[1].columns[1]);
+}
+
+#[test]
+fn test_group_by_and_bool_or1() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            AggregateStatementAggregation {
+                name: "name".to_owned(),
+                aggregate: Aggregate::GroupKey(ExpressionTree::ColumnAccess("name".to_owned())),
+                transform: None
+            },
+            AggregateStatementAggregation {
+                name: "all".to_owned(),
+                aggregate: Aggregate::BoolOr(ExpressionTree::ColumnAccess("x".to_owned())),
+                transform: None
+            },
+        ],
+        from: "test".to_owned(),
+        group_by: Some(vec![ExpressionTree::ColumnAccess("name".to_owned())]),
+        ..Default::default()
+    };
+
+    for i in 1..6 {
+        let column_values = vec![
+            Value::Bool(i % 2 == 0),
+            Value::String("test".to_owned())
+        ];
+
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![
+        Value::Bool(false),
+        Value::String("test2".to_owned())
+    ];
+
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::from_table_scope(create_test_columns(vec!["x", "name"], &column_values))
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+
+    assert!(result.is_some());
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::String("test".to_owned()), result.data[0].columns[0]);
+    assert_eq!(Value::Bool(true), result.data[0].columns[1]);
+
+    assert_eq!(Value::String("test2".to_owned()), result.data[1].columns[0]);
+    assert_eq!(Value::Bool(false), result.data[1].columns[1]);
+}
+
+#[test]
 fn test_group_by_and_sum_and_transform() {
     let mut aggregate_execution_engine = AggregateExecutionEngine::new();
 

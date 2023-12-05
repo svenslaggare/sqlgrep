@@ -186,7 +186,11 @@ impl AggregateExecutionEngine {
                     self.get_group_value(group_key.clone(), aggregate_index, || Ok(Value::Null))?;
                 }
             }
-            Aggregate::Sum(ref expression) | Aggregate::Average(ref expression) | Aggregate::StandardDeviation(ref expression, _) | Aggregate::Percentile(ref expression, _) => {
+            Aggregate::Sum(ref expression)
+            | Aggregate::Average(ref expression)
+            | Aggregate::StandardDeviation(ref expression, _)
+            | Aggregate::Percentile(ref expression, _)
+            | Aggregate::BoolAnd(ref expression) | Aggregate::BoolOr(ref expression) => {
                 let column_value = expression_execution_engine.evaluate(expression)?;
 
                 let aggregator = self.get_group_aggregator(
@@ -391,6 +395,8 @@ enum GroupAggregator {
     Average { sum: Value, count: i64 },
     StandardDeviation { sum: Value, sum_square: Value, count: i64, is_variance: bool },
     Percentile { values: Vec<Value>, percentile: f64 },
+    BoolAnd { value: Option<bool> },
+    BoolOr { value: Option<bool> },
     CountDistinct(HashSet<Value>)
 }
 
@@ -416,6 +422,12 @@ impl GroupAggregator {
             Aggregate::Percentile(_, percentile) => GroupAggregator::Percentile {
                 values: Vec::new(),
                 percentile: percentile.0,
+            },
+            Aggregate::BoolAnd(_) => GroupAggregator::BoolAnd {
+                value: None
+            },
+            Aggregate::BoolOr(_) => GroupAggregator::BoolOr {
+                value: None
             },
             Aggregate::CollectArray(_) => { unimplemented!(); }
         }
@@ -505,6 +517,34 @@ impl GroupAggregator {
                 values.push(column_value);
                 Ok(None)
             }
+            GroupAggregator::BoolAnd { value } => {
+                if let Value::Bool(column_value) = column_value {
+                    if let Some(current_value) = value {
+                        let new_value = *current_value && column_value;
+                        *value = Some(new_value);
+                        Ok(Some(Value::Bool(new_value)))
+                    } else {
+                        *value = Some(column_value);
+                        Ok(Some(Value::Bool(column_value)))
+                    }
+                } else {
+                    Err(ExecutionError::ExpectedBoolValue)
+                }
+            }
+            GroupAggregator::BoolOr { value } => {
+                if let Value::Bool(column_value) = column_value {
+                    if let Some(current_value) = value {
+                        let new_value = *current_value || column_value;
+                        *value = Some(new_value);
+                        Ok(Some(Value::Bool(new_value)))
+                    } else {
+                        *value = Some(column_value);
+                        Ok(Some(Value::Bool(column_value)))
+                    }
+                } else {
+                    Err(ExecutionError::ExpectedBoolValue)
+                }
+            }
             GroupAggregator::CountDistinct(values) => {
                 Ok(Some(Value::Bool(values.insert(column_value))))
             }
@@ -520,6 +560,8 @@ impl GroupAggregator {
                 values.sort();
                 Ok(values.get((*percentile * values.len() as f64) as usize).cloned())
             }
+            GroupAggregator::BoolAnd { .. } => Ok(None),
+            GroupAggregator::BoolOr { .. } => Ok(None),
             GroupAggregator::CountDistinct(_) => Ok(None)
         }
     }
@@ -530,6 +572,8 @@ impl GroupAggregator {
             GroupAggregator::Average { sum, .. } => sum.is_null(),
             GroupAggregator::StandardDeviation { sum, sum_square, .. } => sum.is_null() || sum_square.is_null(),
             GroupAggregator::Percentile { .. } => false,
+            GroupAggregator::BoolAnd { .. } => false,
+            GroupAggregator::BoolOr { .. } => false,
             GroupAggregator::CountDistinct(_) => false
         }
     }

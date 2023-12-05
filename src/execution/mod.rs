@@ -25,6 +25,7 @@ pub enum ExecutionError {
     ColumnNotFound(String),
     GroupKeyNotAvailable(Option<String>),
     ExpectedNumericValue,
+    ExpectedBoolValue,
     NotSupportedOperation,
     JoinNotSupported,
     FailOpenFile(String),
@@ -56,6 +57,7 @@ impl std::fmt::Display for ExecutionError {
                 }
             }
             ExecutionError::ExpectedNumericValue => { write!(f, "Expected a numeric value") }
+            ExecutionError::ExpectedBoolValue => { write!(f, "Expected a bool value") }
             ExecutionError::NotSupportedOperation => { write!(f, "Not a supported operation") }
             ExecutionError::JoinNotSupported => { write!(f, "Join clause not supported") },
             ExecutionError::FailOpenFile(err) => { write!(f, "Failed open file due to: {}", err) },
