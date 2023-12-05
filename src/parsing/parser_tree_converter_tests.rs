@@ -607,6 +607,23 @@ fn test_aggregate_statement6() {
 }
 
 #[test]
+fn test_aggregate_statement7() {
+    let tree = parse_str("SELECT STRING_AGG(x, ', ') FROM test").unwrap();
+
+    let statement = transform_statement(tree);
+    assert!(statement.is_ok());
+    let statement = statement.unwrap();
+
+    let statement = statement.extract_aggregate();
+    assert!(statement.is_some());
+    let statement = statement.unwrap();
+
+    assert_eq!(1, statement.aggregates.len());
+    assert_eq!("string_agg0", statement.aggregates[0].name);
+    assert_eq!(Aggregate::CollectString(ExpressionTree::ColumnAccess("x".to_owned()), ", ".to_owned()), statement.aggregates[0].aggregate);
+}
+
+#[test]
 fn test_transform_aggregate_statement1() {
     let tree = parse_str("SELECT MAX(x) * 2 FROM test").unwrap();
 

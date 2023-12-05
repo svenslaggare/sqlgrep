@@ -542,6 +542,12 @@ impl<'a, T: ColumnProvider> ExpressionExecutionEngine<'a, T> {
                     Value::Interval(interval) if convert_to_type == &ValueType::Float => {
                         Ok(Value::Float(Float(interval.num_milliseconds() as f64 / 1000.0)))
                     }
+                    operand if operand.value_type() == Some(convert_to_type.clone()) => {
+                        Ok(operand.clone())
+                    }
+                    operand if convert_to_type == &ValueType::String => {
+                        Ok(Value::String(operand.to_string()))
+                    }
                     _ => {
                         return if let Some(operand_type) = operand.value_type() {
                             Err(EvaluationError::TypeError(ValueType::String, operand_type))
@@ -1121,6 +1127,36 @@ fn test_type_convert1() {
         expression_execution_engine.evaluate(&ExpressionTree::TypeConversion {
             operand: Box::new(ExpressionTree::Value(Value::String("2022-10-14 22:11:12".to_owned()))),
             convert_to_type: ValueType::Timestamp
+        })
+    );
+}
+
+#[test]
+fn test_type_convert2() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::Array(ValueType::Int, vec![Value::Int(100), Value::Int(200)])),
+        expression_execution_engine.evaluate(&ExpressionTree::TypeConversion {
+            operand: Box::new(ExpressionTree::Value(Value::Array(ValueType::Int, vec![Value::Int(100), Value::Int(200)]))),
+            convert_to_type: ValueType::Array(Box::new(ValueType::Int))
+        })
+    );
+}
+
+#[test]
+fn test_type_convert3() {
+    let column_provider = TestColumnProvider::new();
+
+    let expression_execution_engine = ExpressionExecutionEngine::new(&column_provider);
+
+    assert_eq!(
+        Ok(Value::String("1337".to_owned())),
+        expression_execution_engine.evaluate(&ExpressionTree::TypeConversion {
+            operand: Box::new(ExpressionTree::Value(Value::Int(1337))),
+            convert_to_type: ValueType::String
         })
     );
 }

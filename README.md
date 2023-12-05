@@ -70,6 +70,7 @@ Supported aggregates:
 * `bool_and(x)`
 * `bool_or(x)`
 * `array_agg(x)`
+* `string_agg(x, delimiter)`
 
 Supported functions:
 * `least(INT|REAL|INTERVAL, INT|REAL|INTERVAL) => INT|REAL|INTERVAL`

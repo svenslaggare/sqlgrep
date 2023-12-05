@@ -222,6 +222,29 @@ impl AggregateExecutionEngine {
                     array.push(column_value.clone());
                 }
             }
+            Aggregate::CollectString(ref expression, delimiter) => {
+                let column_value = expression_execution_engine.evaluate(expression)?;
+
+                if let Value::String(column_value) = column_value {
+                    let group_value = self.get_group_value(
+                        group_key.clone(),
+                        aggregate_index,
+                        || {
+                            Ok(Value::String(String::new()))
+                        }
+                    )?;
+
+                    if let Value::String(group_value) = group_value {
+                        if !group_value.is_empty() {
+                            group_value.push_str(delimiter);
+                        }
+
+                        group_value.push_str(&column_value);
+                    }
+                } else if column_value.is_not_null() {
+                    return Err(ExecutionError::ExpectedStringValue);
+                }
+            }
         }
 
         Ok(())
@@ -430,6 +453,7 @@ impl GroupAggregator {
                 value: None
             },
             Aggregate::CollectArray(_) => { unimplemented!(); }
+            Aggregate::CollectString(_, _) => { unimplemented!(); }
         }
     }
 

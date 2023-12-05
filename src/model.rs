@@ -602,6 +602,9 @@ impl ExpressionTree {
                     Aggregate::CollectArray(expression) => {
                         expression.visit(f)?;
                     }
+                    Aggregate::CollectString(expression, _) => {
+                        expression.visit(f)?;
+                    }
                 }
             }
         }
@@ -778,7 +781,8 @@ pub enum Aggregate {
     Percentile(ExpressionTree, Float),
     BoolAnd(ExpressionTree),
     BoolOr(ExpressionTree),
-    CollectArray(ExpressionTree)
+    CollectArray(ExpressionTree),
+    CollectString(ExpressionTree, String)
 }
 
 struct ExpressionTreeVisualizer {
@@ -976,6 +980,12 @@ impl ExpressionTreeVisualizer {
                         write!(f, "ARRAY_AGG(")?;
                         self.fmt(&expression, f)?;
                         write!(f, ")")?;
+                        Ok(())
+                    }
+                    Aggregate::CollectString(expression, delimiter) => {
+                        write!(f, "STRING_AGG(")?;
+                        self.fmt(&expression, f)?;
+                        write!(f, ", {})", delimiter)?;
                         Ok(())
                     }
                 }

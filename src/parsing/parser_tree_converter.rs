@@ -46,7 +46,8 @@ pub enum ConvertParserTreeErrorType {
     HavingClauseNotPossible,
     InvalidOnJoin,
     InvalidJoinerTable(String),
-    ExpectedFloat
+    ExpectedFloat,
+    ExpectedString
 }
 
 impl ConvertParserTreeErrorType {
@@ -73,6 +74,7 @@ impl std::fmt::Display for ConvertParserTreeErrorType {
             ConvertParserTreeErrorType::InvalidOnJoin => { write!(f, "Left or right join side does not exist") },
             ConvertParserTreeErrorType::InvalidJoinerTable(table) => { write!(f, "Expected left or right side to be {}", table) },
             ConvertParserTreeErrorType::ExpectedFloat => { write!(f, "Expected floating point value") },
+            ConvertParserTreeErrorType::ExpectedString => { write!(f, "Expected string value") },
         }
     }
 }
@@ -304,6 +306,7 @@ lazy_static! {
             "bool_and".to_owned(),
             "bool_or".to_owned(),
             "array_agg".to_owned(),
+            "string_agg".to_owned(),
          ].into_iter()
     );
 
@@ -693,16 +696,27 @@ fn transform_call_aggregate(location: TokenLocation,
             Ok((Some(format!("{}{}", name_lowercase, index)), aggregate, None))
         } else if arguments.len() == 2 {
             let expression = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
-
-            let percentile = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
-            let percentile = if let ExpressionTree::Value(Value::Float(percentile)) = percentile {
-                percentile.0
-            } else {
-                return Err(ConvertParserTreeErrorType::ExpectedFloat.with_location(location));
-            };
+            let argument = transform_expression(arguments.remove(0), &mut TransformExpressionState::default())?;
 
             let aggregate = match name_lowercase.as_str() {
-                "percentile" => Aggregate::Percentile(expression, Float(percentile.clamp(0.0, 1.0))),
+                "percentile" => {
+                    let percentile = if let ExpressionTree::Value(Value::Float(percentile)) = argument {
+                        percentile.0
+                    } else {
+                        return Err(ConvertParserTreeErrorType::ExpectedFloat.with_location(location));
+                    };
+
+                    Aggregate::Percentile(expression, Float(percentile.clamp(0.0, 1.0)))
+                },
+                "string_agg" => {
+                    let delimiter = if let ExpressionTree::Value(Value::String(delimiter)) = argument {
+                        delimiter
+                    } else {
+                        return Err(ConvertParserTreeErrorType::ExpectedString.with_location(location));
+                    };
+
+                    Aggregate::CollectString(expression, delimiter)
+                }
                 _ => { return Err(ConvertParserTreeErrorType::TooManyArguments.with_location(location)); }
             };
 

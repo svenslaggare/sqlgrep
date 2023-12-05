@@ -1730,6 +1730,166 @@ fn test_group_by_array_agg2() {
 }
 
 #[test]
+fn test_group_by_string_agg1() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            AggregateStatementAggregation {
+                name: "x".to_owned(),
+                aggregate: Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned())),
+                transform: None
+            },
+            AggregateStatementAggregation {
+                name: "ys".to_owned(),
+                aggregate: Aggregate::CollectString(ExpressionTree::ColumnAccess("y".to_owned()), ", ".to_owned()),
+                transform: None
+            },
+        ],
+        from: "test".to_owned(),
+        group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
+        ..Default::default()
+    };
+
+    // Add first group
+    for i in 0..5 {
+        let column_values = vec![Value::Int(1000), Value::String((100 + i).to_string())];
+        let columns = create_test_columns(vec!["x", "y"], &column_values);
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::from_table_scope(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    // Add second group
+    for i in 0..4 {
+        let column_values = vec![Value::Int(2000), Value::String((300 + i).to_string())];
+        let columns = create_test_columns(vec!["x", "y"], &column_values);
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::from_table_scope(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![Value::Int(2000), Value::String((300 + 4).to_string())];
+    let columns = create_test_columns(vec!["x", "y"], &column_values);
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::from_table_scope(columns.clone())
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+    assert!(result.is_some());
+
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::Int(1000), result.data[0].columns[0]);
+    assert_eq!(
+        Value::String("100, 101, 102, 103, 104".to_owned()),
+        result.data[0].columns[1]
+    );
+
+    assert_eq!(Value::Int(2000), result.data[1].columns[0]);
+    assert_eq!(
+        Value::String("300, 301, 302, 303, 304".to_owned()),
+        result.data[1].columns[1]
+    );
+}
+
+#[test]
+fn test_group_by_string_agg2() {
+    let mut aggregate_execution_engine = AggregateExecutionEngine::new();
+
+    let aggregate_statement = AggregateStatement {
+        aggregates: vec![
+            AggregateStatementAggregation {
+                name: "x".to_owned(),
+                aggregate: Aggregate::GroupKey(ExpressionTree::ColumnAccess("x".to_owned())),
+                transform: None
+            },
+            AggregateStatementAggregation {
+                name: "ys".to_owned(),
+                aggregate: Aggregate::CollectString(
+                    ExpressionTree::TypeConversion {
+                        operand: Box::new(ExpressionTree::ColumnAccess("y".to_owned())),
+                        convert_to_type: ValueType::String
+                    },
+                    ", ".to_owned()
+                ),
+                transform: None
+            },
+        ],
+        from: "test".to_owned(),
+        group_by: Some(vec![ExpressionTree::ColumnAccess("x".to_owned())]),
+        ..Default::default()
+    };
+
+    // Add first group
+    for i in 0..5 {
+        let column_values = vec![Value::Int(1000), Value::Int(100 + i)];
+        let columns = create_test_columns(vec!["x", "y"], &column_values);
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::from_table_scope(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    // Add second group
+    for i in 0..4 {
+        let column_values = vec![Value::Int(2000), Value::Int(300 + i)];
+        let columns = create_test_columns(vec!["x", "y"], &column_values);
+        let result = aggregate_execution_engine.execute(
+            &aggregate_statement,
+            HashMapColumnProvider::from_table_scope(columns.clone())
+        );
+
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.is_some());
+    }
+
+    let column_values = vec![Value::Int(2000), Value::Int(300 + 4)];
+    let columns = create_test_columns(vec!["x", "y"], &column_values);
+    let result = aggregate_execution_engine.execute(
+        &aggregate_statement,
+        HashMapColumnProvider::from_table_scope(columns.clone())
+    );
+
+    assert!(result.is_ok());
+    let result = result.unwrap();
+    assert!(result.is_some());
+
+    let result = result.unwrap();
+
+    assert_eq!(2, result.data.len());
+    assert_eq!(Value::Int(1000), result.data[0].columns[0]);
+    assert_eq!(
+        Value::String("100, 101, 102, 103, 104".to_owned()),
+        result.data[0].columns[1]
+    );
+
+    assert_eq!(Value::Int(2000), result.data[1].columns[0]);
+    assert_eq!(
+        Value::String("300, 301, 302, 303, 304".to_owned()),
+        result.data[1].columns[1]
+    );
+}
+
+#[test]
 fn test_count_distinct() {
     let mut aggregate_execution_engine = AggregateExecutionEngine::new();
 
