@@ -28,15 +28,15 @@ jobs:
       run: cargo install cargo-deb && cargo deb
     - name: Build Python interface
       run: cargo build --release --features python_wrapper --verbose
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: sqlgrep_linux_x86_64
         path: target/release/sqlgrep
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: sqlgrep_linux_x86_64_debian
         path: target/debian/
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: libsqlgrep_linux_x86_64
         path: target/release/libsqlgrep.so
@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Release Build
         run: cargo build --release --verbose
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v4
         with:
           name: sqlgrep_windows_2019_x86_64
           path: target/release/sqlgrep.exe
